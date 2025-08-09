@@ -1,0 +1,592 @@
+"""
+Lógica de processamento em tempo real para o BTG AlphaFeed.
+Implementa clusterização dinâmica e análise de notícias.
+"""
+
+import os
+import json
+import numpy as np
+import hashlib
+from typing import Dict, Any, Optional, List, Tuple
+from datetime import datetime
+
+import google.generativeai as genai
+from sqlalchemy.orm import Session
+
+try:
+    from .models import Noticia
+    from .prompts import PROMPT_EXTRACAO_PERMISSIVO_V8, PROMPT_DECISAO_CLUSTER_DETALHADO_V1, PROMPT_RESUMO_FINAL_V3
+    from .utils import (
+        extrair_json_da_resposta,
+        corrigir_tag_invalida,
+        corrigir_prioridade_invalida,
+        migrar_noticia_cache_legado,
+        get_date_brasil_str,
+    )
+    from .crud import (
+        get_artigo_by_id, update_artigo_processado, update_artigo_status,
+        get_active_clusters_today, create_cluster, associate_artigo_to_cluster,
+        update_cluster_embedding, create_log, get_artigos_by_cluster, get_cluster_by_id
+    )
+    from .database import ClusterEvento
+except ImportError:
+    # Fallback para import absoluto quando executado diretamente
+    from models import Noticia
+    from prompts import PROMPT_EXTRACAO_PERMISSIVO_V8, PROMPT_DECISAO_CLUSTER_DETALHADO_V1, PROMPT_RESUMO_FINAL_V3
+    from utils import extrair_json_da_resposta, corrigir_tag_invalida, corrigir_prioridade_invalida, migrar_noticia_cache_legado, get_date_brasil_str
+    from crud import (
+        get_artigo_by_id, update_artigo_processado, update_artigo_status,
+        get_active_clusters_today, create_cluster, associate_artigo_to_cluster,
+        update_cluster_embedding, create_log, get_artigos_by_cluster, get_cluster_by_id
+    )
+    from database import ClusterEvento
+
+
+# ==============================================================================
+# EMBEDDINGS SIMPLES (Casca vazia - sem dependências externas)
+# ==============================================================================
+
+def gerar_embedding_simples(texto: str) -> bytes:
+    """
+    Gera um embedding simples baseado no hash do texto.
+    Usado como fallback quando sentence-transformers não está disponível.
+    
+    Args:
+        texto: Texto para gerar embedding
+        
+    Returns:
+        Embedding como bytes (384 dimensões para compatibilidade)
+    """
+    try:
+        # Gera hash do texto
+        hash_obj = hashlib.md5(texto.encode('utf-8'))
+        hash_bytes = hash_obj.digest()
+        
+        # Cria um vetor de 384 dimensões baseado no hash
+        # Usa os bytes do hash para inicializar um array numpy
+        np.random.seed(int.from_bytes(hash_bytes[:4], 'big'))
+        
+        # Gera vetor de 384 dimensões (mesmo tamanho do all-MiniLM-L6-v2)
+        embedding = np.random.randn(384).astype(np.float32)
+        
+        # Normaliza o vetor
+        norm = np.linalg.norm(embedding)
+        if norm > 0:
+            embedding = embedding / norm
+        
+        return embedding.tobytes()
+        
+    except Exception as e:
+        print(f"❌ Erro ao gerar embedding simples: {e}")
+        # Retorna vetor zero como fallback
+        return np.zeros(384, dtype=np.float32).tobytes()
+
+
+def gerar_embedding(texto: str) -> bytes:
+    """
+    Converte um texto em um vetor de embedding e retorna como bytes.
+    Usa implementação simples sem dependências externas.
+    
+    Args:
+        texto: Texto para gerar embedding
+        
+    Returns:
+        Embedding como bytes para armazenamento no banco
+    """
+    try:
+        # Usa implementação simples
+        return gerar_embedding_simples(texto)
+    except Exception as e:
+        print(f"❌ Erro ao gerar embedding: {e}")
+        return np.zeros(384, dtype=np.float32).tobytes()
+
+
+def bytes_to_embedding(embedding_bytes: bytes) -> np.ndarray:
+    """
+    Converte bytes de volta para array numpy.
+    
+    Args:
+        embedding_bytes: Embedding como bytes
+        
+    Returns:
+        Array numpy do embedding
+    """
+    try:
+        return np.frombuffer(embedding_bytes, dtype=np.float32)
+    except Exception as e:
+        print(f"❌ Erro ao converter embedding bytes: {e}")
+        return np.array([])
+
+
+def calcular_similaridade_cosseno(embedding1: np.ndarray, embedding2: np.ndarray) -> float:
+    """
+    Calcula a similaridade de cosseno entre dois embeddings.
+    
+    Args:
+        embedding1: Primeiro embedding
+        embedding2: Segundo embedding
+        
+    Returns:
+        Similaridade de cosseno (0 a 1)
+    """
+    try:
+        # Verifica se os arrays têm o mesmo tamanho
+        if embedding1.shape != embedding2.shape:
+            print(f"⚠️ Embeddings com tamanhos diferentes: {embedding1.shape} vs {embedding2.shape}")
+            return 0.0
+        
+        # Normaliza os vetores
+        norm1 = np.linalg.norm(embedding1)
+        norm2 = np.linalg.norm(embedding2)
+        
+        if norm1 == 0 or norm2 == 0:
+            return 0.0
+        
+        # Calcula a similaridade de cosseno
+        similaridade = np.dot(embedding1, embedding2) / (norm1 * norm2)
+        return float(similaridade)
+    except Exception as e:
+        print(f"❌ Erro ao calcular similaridade: {e}")
+        return 0.0
+
+
+# ==============================================================================
+# FUNÇÕES DE CLUSTERIZAÇÃO
+# ==============================================================================
+
+def find_or_create_cluster(
+    db: Session, 
+    artigo_analisado: Dict[str, Any], 
+    embedding_artigo: bytes,
+    client
+) -> int:
+    """
+    Encontra um cluster existente ou cria um novo para o artigo.
+    Usa similaridade de embeddings para agrupamento.
+    
+    Args:
+        db: Sessão do banco de dados
+        artigo_analisado: Dados do artigo processado
+        embedding_artigo: Embedding do artigo
+        client: Cliente do Gemini
+        
+    Returns:
+        ID do cluster (existente ou novo)
+    """
+    try:
+        # Busca clusters ativos hoje
+        clusters_ativos = get_active_clusters_today(db)
+        
+        if not clusters_ativos:
+            # Cria primeiro cluster do dia
+            return _create_new_cluster(db, artigo_analisado, embedding_artigo)
+        
+        # Converte embedding para array
+        embedding_artigo_array = bytes_to_embedding(embedding_artigo)
+        
+        # Busca cluster mais similar
+        melhor_cluster = None
+        melhor_similaridade = 0.0
+        
+        for cluster in clusters_ativos:
+            # Verifica se é da mesma tag
+            if cluster.tag != artigo_analisado['tag']:
+                continue
+            
+            # Calcula similaridade
+            if cluster.embedding_medio:
+                embedding_cluster = bytes_to_embedding(cluster.embedding_medio)
+                similaridade = calcular_similaridade_cosseno(embedding_artigo_array, embedding_cluster)
+                
+                if similaridade > melhor_similaridade:
+                    melhor_similaridade = similaridade
+                    melhor_cluster = cluster
+        
+        # Se encontrou cluster similar (threshold 0.7)
+        if melhor_cluster and melhor_similaridade > 0.7:
+            # Consulta LLM para confirmar se deve agrupar
+            decisao = _consultar_llm_para_clusterizacao(db, artigo_analisado, melhor_cluster, client)
+            
+            if decisao.lower() == 'sim':
+                # Atualiza embedding médio do cluster
+                embeddings = [embedding_artigo_array]
+                if melhor_cluster.embedding_medio:
+                    embeddings.append(bytes_to_embedding(melhor_cluster.embedding_medio))
+                
+                embedding_medio = np.mean(embeddings, axis=0)
+                update_cluster_embedding(db, melhor_cluster.id, embedding_medio.tobytes())
+                
+                return melhor_cluster.id
+        
+        # Cria novo cluster
+        return _create_new_cluster(db, artigo_analisado, embedding_artigo)
+        
+    except Exception as e:
+        print(f"❌ Erro ao encontrar/criar cluster: {e}")
+        # Fallback: cria novo cluster
+        return _create_new_cluster(db, artigo_analisado, embedding_artigo)
+
+
+def _create_new_cluster(
+    db: Session, 
+    artigo_analisado: Dict[str, Any], 
+    embedding_artigo: bytes
+) -> int:
+    """
+    Cria um novo cluster para o artigo.
+    
+    Args:
+        db: Sessão do banco de dados
+        artigo_analisado: Dados do artigo processado
+        embedding_artigo: Embedding do artigo
+        
+    Returns:
+        ID do cluster criado
+    """
+    try:
+        try:
+            from .models import ClusterEventoCreate
+        except ImportError:
+            # Fallback para import absoluto quando executado diretamente
+            from models import ClusterEventoCreate
+        
+        cluster_data = ClusterEventoCreate(
+            titulo_cluster=artigo_analisado['titulo'],
+            resumo_cluster=artigo_analisado['texto_completo'],
+            tag=artigo_analisado['tag'],
+            prioridade=artigo_analisado['prioridade'],
+            embedding_medio=embedding_artigo
+        )
+        
+        cluster = create_cluster(db, cluster_data)
+        return cluster.id
+        
+    except Exception as e:
+        print(f"❌ Erro ao criar cluster: {e}")
+        return -1
+
+
+def _consultar_llm_para_clusterizacao(
+    db: Session,
+    artigo_analisado: Dict[str, Any],
+    cluster_existente: ClusterEvento,
+    client
+) -> str:
+    """
+    Consulta o LLM para decidir se um artigo pertence a um cluster existente.
+    
+    Args:
+        db: Sessão do banco de dados
+        artigo_analisado: Dados do artigo analisado
+        cluster_existente: Cluster existente para comparação
+        client: Cliente do Gemini
+        
+    Returns:
+        Resposta do LLM (sim/não)
+    """
+    try:
+        # Monta o prompt para decisão de clusterização
+        prompt = PROMPT_DECISAO_CLUSTER_DETALHADO_V1.format(
+            titulo_artigo=artigo_analisado['titulo'],
+            jornal_artigo=artigo_analisado['jornal'],
+            texto_artigo=artigo_analisado['texto_completo'][:1000],  # Primeiros 1000 chars
+            titulo_cluster=cluster_existente.titulo_cluster,
+            resumo_cluster=cluster_existente.resumo_cluster or "Sem resumo",
+            tag_cluster=cluster_existente.tag
+        )
+        
+        print(f"    🤖 Consultando LLM para clusterização...")
+        
+        # Usa a API correta do Gemini
+        response = client.generate_content(
+            prompt,
+            generation_config={
+                'temperature': 0.3,
+                'top_p': 0.9,
+                'max_output_tokens': 512
+            }
+        )
+        
+        resposta = response.text.strip().lower()
+        print(f"    📥 Resposta do LLM: {resposta}")
+        
+        # Interpreta a resposta
+        if 'sim' in resposta or 'yes' in resposta or 'true' in resposta:
+            return 'sim'
+        elif 'não' in resposta or 'no' in resposta or 'false' in resposta:
+            return 'não'
+        else:
+            # Se não conseguiu interpretar, assume que não pertence
+            print(f"    ⚠️ Resposta ambígua do LLM, assumindo 'não'")
+            return 'não'
+            
+    except Exception as e:
+        print(f"    ❌ Erro na consulta LLM: {e}")
+        # Em caso de erro, assume que não pertence
+        return 'não'
+
+
+def recalcular_embedding_cluster(db: Session, cluster_id: int) -> bool:
+    """
+    Recalcula o embedding médio de um cluster baseado nos artigos associados.
+    
+    Args:
+        db: Sessão do banco de dados
+        cluster_id: ID do cluster
+        
+    Returns:
+        True se recalculado com sucesso
+    """
+    try:
+        # Busca artigos do cluster
+        artigos = get_artigos_by_cluster(db, cluster_id)
+        
+        if not artigos:
+            return False
+        
+        # Coleta embeddings dos artigos
+        embeddings = []
+        for artigo in artigos:
+            if artigo.embedding:
+                embedding_array = bytes_to_embedding(artigo.embedding)
+                if len(embedding_array) > 0:
+                    embeddings.append(embedding_array)
+        
+        if not embeddings:
+            return False
+        
+        # Calcula embedding médio
+        embedding_medio = np.mean(embeddings, axis=0)
+        
+        # Atualiza no banco
+        return update_cluster_embedding(db, cluster_id, embedding_medio.tobytes())
+        
+    except Exception as e:
+        print(f"❌ Erro ao recalcular embedding do cluster: {e}")
+        return False
+
+
+# ==============================================================================
+# PIPELINE PRINCIPAL
+# ==============================================================================
+
+def processar_artigo_pipeline(db: Session, id_artigo: int, client) -> bool:
+    """
+    Pipeline principal de processamento de um artigo.
+    Orquestra todo o fluxo desde a análise até a clusterização.
+    
+    Args:
+        db: Sessão do banco de dados
+        id_artigo: ID do artigo a ser processado
+        client: Cliente do Gemini
+        
+    Returns:
+        True se processado com sucesso, False caso contrário
+    """
+    try:
+        # ETAPA 1: Buscar dados brutos do artigo
+        artigo = get_artigo_by_id(db, id_artigo)
+        if not artigo:
+            create_log(db, "ERROR", "processor", f"Artigo {id_artigo} não encontrado")
+            return False
+        
+        create_log(db, "INFO", "processor", 
+                  f"Iniciando processamento do artigo {id_artigo}",
+                  {"fonte": artigo.fonte_coleta})
+        
+        # ETAPA 2: Verificar se já tem metadados estruturados
+        metadados = artigo.metadados or {}
+        
+        # Se já tem dados estruturados (JSON), usa diretamente
+        if metadados.get('titulo') and metadados.get('jornal'):
+            print(f"    📄 Artigo já estruturado, usando metadados existentes")
+            
+            noticia_data = {
+                'titulo': metadados.get('titulo', 'Sem título'),
+                'texto_completo': artigo.texto_bruto,
+                'jornal': metadados.get('jornal', 'Fonte desconhecida'),
+                'autor': metadados.get('autor', 'N/A'),
+                'pagina': metadados.get('pagina'),
+                'data': metadados.get('data'),
+                'categoria': metadados.get('categoria'),
+                'tag': metadados.get('tag', 'Economia e Tecnologia'),
+                'prioridade': metadados.get('prioridade', 'P3_MONITORAMENTO')
+            }
+            
+        else:
+            # Para PDFs ou artigos sem estrutura, faz extração básica
+            print(f"    📄 Artigo sem estrutura, fazendo extração básica")
+            
+            # Extração básica sem LLM
+            linhas = artigo.texto_bruto.split('\n')
+            titulo = linhas[0].strip() if linhas else "Sem título"
+            
+            # Tenta identificar jornal/fonte dos metadados
+            jornal = metadados.get('jornal') or metadados.get('fonte_original') or 'Fonte desconhecida'
+            
+            noticia_data = {
+                'titulo': titulo,
+                'texto_completo': artigo.texto_bruto,
+                'jornal': jornal,
+                'autor': metadados.get('autor', 'N/A'),
+                'pagina': metadados.get('pagina', '1'),
+                'data': metadados.get('data') or get_date_brasil_str(),
+                'categoria': metadados.get('categoria', 'Geral'),
+                'tag': metadados.get('tag', 'Economia e Tecnologia'),
+                'prioridade': metadados.get('prioridade', 'P3_MONITORAMENTO')
+            }
+        
+        # ETAPA 3: Migração e correção de dados
+        noticia_data = migrar_noticia_cache_legado(noticia_data)
+        
+        # Corrige a tag e prioridade se necessário
+        if 'tag' in noticia_data:
+            noticia_data['tag'] = corrigir_tag_invalida(noticia_data['tag'])
+        if 'prioridade' in noticia_data:
+            noticia_data['prioridade'] = corrigir_prioridade_invalida(noticia_data['prioridade'])
+        
+        # ETAPA 4: Validação com Pydantic
+        try:
+            print(f"    🔍 Validando dados com Pydantic...")
+            print(f"    📋 Dados para validação: {noticia_data}")
+            
+            noticia_obj = Noticia(**noticia_data)
+            noticia_validada = noticia_obj.model_dump()
+            print(f"    ✅ Validação Pydantic bem-sucedida")
+        except Exception as e:
+            print(f"    ❌ Erro de validação Pydantic: {e}")
+            print(f"    📋 Dados que falharam: {noticia_data}")
+            create_log(db, "ERROR", "processor", 
+                      f"Erro de validação Pydantic do artigo {id_artigo}: {e}")
+            update_artigo_status(db, id_artigo, 'erro')
+            return False
+        
+        # ETAPA 5: Gerar embedding
+        texto_para_embedding = f"{noticia_validada['titulo']} {noticia_validada['texto_completo']}"
+        embedding_artigo = gerar_embedding(texto_para_embedding)
+        
+        if not embedding_artigo:
+            create_log(db, "WARNING", "processor", 
+                      f"Falha ao gerar embedding do artigo {id_artigo}")
+            embedding_artigo = np.zeros(384, dtype=np.float32).tobytes()
+        
+        # ETAPA 6: Atualizar artigo com dados processados
+        dados_processados = {
+            'titulo': noticia_validada['titulo'],
+            'texto_completo': noticia_validada['texto_completo'],
+            'jornal': noticia_validada['jornal'],
+            'autor': noticia_validada['autor'],
+            'pagina': noticia_validada['pagina'],
+            'data': noticia_validada['data'],
+            'categoria': noticia_validada['categoria'],
+            'tag': noticia_validada['tag'],
+            'prioridade': noticia_validada['prioridade'],
+            'relevance_score': noticia_validada.get('relevance_score'),
+            'relevance_reason': noticia_validada.get('relevance_reason')
+        }
+        
+        update_artigo_processado(db, id_artigo, dados_processados, embedding_artigo)
+        
+        # ETAPA 7: Clusterização (aqui sim usa LLM se necessário)
+        cluster_id = find_or_create_cluster(db, noticia_validada, embedding_artigo, client)
+        
+        if cluster_id:
+            create_log(db, "INFO", "processor", 
+                      f"Artigo {id_artigo} processado e associado ao cluster {cluster_id}")
+            return True
+        else:
+            create_log(db, "ERROR", "processor", 
+                      f"Falha na clusterização do artigo {id_artigo}")
+            return False
+            
+    except Exception as e:
+        print(f"    ❌ Erro geral no pipeline: {e}")
+        import traceback
+        traceback.print_exc()
+        create_log(db, "ERROR", "processor", 
+                  f"Erro geral no pipeline do artigo {id_artigo}: {e}")
+        update_artigo_status(db, id_artigo, 'erro')
+        return False
+
+
+def gerar_resumo_cluster(db: Session, cluster_id: int, client) -> bool:
+    """
+    Gera resumo para um cluster específico.
+    
+    Args:
+        db: Sessão do banco de dados
+        cluster_id: ID do cluster
+        client: Cliente do Gemini
+        
+    Returns:
+        True se resumo gerado com sucesso
+    """
+    try:
+        # Busca cluster
+        cluster = get_cluster_by_id(db, cluster_id)
+        if not cluster:
+            return False
+        
+        # Busca artigos do cluster
+        artigos = get_artigos_by_cluster(db, cluster_id)
+        if not artigos:
+            return False
+        
+        # Prepara dados para o prompt
+        dados_grupo = []
+        for artigo in artigos:
+            dados_grupo.append({
+                'titulo': artigo.titulo_extraido,
+                'jornal': artigo.jornal,
+                'pagina': artigo.pagina,
+                'prioridade': artigo.prioridade
+            })
+        
+        # Monta o prompt
+        prompt = PROMPT_RESUMO_FINAL_V3.format(
+            NIVEL_DE_DETALHE=cluster.prioridade,
+            DADOS_DO_GRUPO=json.dumps(dados_grupo, ensure_ascii=False)
+        )
+        
+        print(f"    🤖 Gerando resumo para cluster {cluster_id}...")
+        
+        # Usa a API correta do Gemini
+        response = client.generate_content(
+            prompt,
+            generation_config={
+                'temperature': 0.3,
+                'top_p': 0.9,
+                'max_output_tokens': 2048
+            }
+        )
+        
+        print(f"    📥 Resposta do LLM: {len(response.text)} caracteres")
+        
+        # Extrai JSON da resposta
+        resumo_data = extrair_json_da_resposta(response.text)
+        if not resumo_data or not isinstance(resumo_data, dict):
+            print(f"    ❌ Falha na extração do JSON do resumo")
+            return False
+        
+        # Atualiza cluster com resumo
+        cluster.resumo_cluster = resumo_data.get('resumo_final', '')
+        db.commit()
+        
+        print(f"    ✅ Resumo gerado com sucesso")
+        create_log(db, "INFO", "processor", 
+                  f"Resumo gerado para cluster {cluster_id}")
+        return True
+        
+    except Exception as e:
+        print(f"    ❌ Erro ao gerar resumo do cluster {cluster_id}: {e}")
+        create_log(db, "ERROR", "processor", 
+                  f"Erro ao gerar resumo do cluster {cluster_id}: {e}")
+        return False
+
+
+def inicializar_processamento():
+    """
+    Inicializa o sistema de processamento.
+    """
+    print("✅ Sistema de processamento inicializado com embeddings simples")
+    print("💡 Para usar embeddings reais, instale sentence-transformers e configure SSL")

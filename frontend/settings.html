@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BTG AlphaFeed - Settings</title>
+    <link rel="stylesheet" href="style.css?v=1.0.2">
+    <style>
+        .settings-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .settings-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        .settings-nav {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+        
+        .nav-tab {
+            padding: 12px 24px;
+            background: #f5f5f5;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-tab.active {
+            background: #007bff;
+            color: white;
+        }
+        
+        .nav-tab:hover {
+            background: #0056b3;
+            color: white;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .data-table th,
+        .data-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .data-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .data-table tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .btn-edit,
+        .btn-delete {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-edit {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-edit:hover {
+            background: #218838;
+        }
+        
+        .btn-delete {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-delete:hover {
+            background: #c82333;
+        }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .pagination button {
+            padding: 8px 16px;
+            border: 1px solid #ddd;
+            background: white;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        
+        .pagination button:hover {
+            background: #f8f9fa;
+        }
+        
+        .pagination button.active {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .close:hover {
+            color: #000;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #495057;
+        }
+        
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .form-group textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+        
+        .btn-save {
+            background: #28a745;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .btn-cancel {
+            background: #6c757d;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .status-pendente { background: #fff3cd; color: #856404; }
+        .status-processado { background: #d4edda; color: #155724; }
+        .status-ativo { background: #d4edda; color: #155724; }
+        .status-arquivado { background: #f8d7da; color: #721c24; }
+        
+        .priority-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .P1_CRITICO { background: #f8d7da; color: #721c24; }
+        .P2_ESTRATEGICO { background: #fff3cd; color: #856404; }
+        .P3_MONITORAMENTO { background: #d1ecf1; color: #0c5460; }
+        
+        .tag-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+            background: #e9ecef;
+            color: #495057;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        
+        /* Upload Section Styles */
+        .upload-section, .processing-section {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        
+        .upload-section h3, .processing-section h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: #495057;
+        }
+        
+        .upload-section p, .processing-section p {
+            color: #6c757d;
+            margin-bottom: 20px;
+        }
+        
+        .upload-area {
+            text-align: center;
+            padding: 40px;
+            border: 2px dashed #dee2e6;
+            border-radius: 8px;
+            background: #f8f9fa;
+            margin-bottom: 20px;
+        }
+        
+        .upload-area:hover {
+            border-color: #007bff;
+            background: #f0f8ff;
+        }
+        
+        .upload-status, .processing-status {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+        
+        .upload-status.success, .processing-status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .upload-status.error, .processing-status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .upload-status.info, .processing-status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 15px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #007bff, #0056b3);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .progress-text {
+            text-align: center;
+            color: #6c757d;
+            font-weight: 500;
+        }
+        
+        .upload-results {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        
+        .upload-results h4 {
+            margin-top: 0;
+            color: #495057;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+        
+        .upload-result-item {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            border-left: 4px solid;
+        }
+        
+        .upload-result-item.success {
+            background: #d4edda;
+            color: #155724;
+            border-left-color: #28a745;
+        }
+        
+        .upload-result-item.error {
+            background: #f8d7da;
+            color: #721c24;
+            border-left-color: #dc3545;
+        }
+        
+        .upload-result-item small {
+            color: #6c757d;
+            font-size: 12px;
+        }
+        
+        /* Upload Steps Styles */
+        .upload-steps {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            flex: 1;
+            position: relative;
+        }
+        
+        .step:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            top: 20px;
+            right: -50%;
+            width: 100%;
+            height: 2px;
+            background: #dee2e6;
+            z-index: 1;
+        }
+        
+        .step.active:not(:last-child)::after {
+            background: #28a745;
+        }
+        
+        .step.completed:not(:last-child)::after {
+            background: #28a745;
+        }
+        
+        .step-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #dee2e6;
+            color: #6c757d;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            margin-bottom: 8px;
+            position: relative;
+            z-index: 2;
+            transition: all 0.3s ease;
+        }
+        
+        .step.active .step-icon {
+            background: #007bff;
+            color: white;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.3);
+        }
+        
+        .step.completed .step-icon {
+            background: #28a745;
+            color: white;
+        }
+        
+        .step-text {
+            font-size: 12px;
+            color: #6c757d;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .step.active .step-text {
+            color: #007bff;
+            font-weight: 600;
+        }
+        
+        .step.completed .step-text {
+            color: #28a745;
+            font-weight: 600;
+        }
+        
+        /* Detailed Progress Styles */
+        .detailed-progress {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+        
+        .progress-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #dee2e6;
+        }
+        
+        .current-file, .file-progress, .processing-status {
+            text-align: center;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .current-file span, .file-progress span, .processing-status span {
+            font-weight: 600;
+            color: #007bff;
+        }
+        
+        .processing-status span.processing {
+            color: #ffc107;
+        }
+        
+        .processing-status span.success {
+            color: #28a745;
+        }
+        
+        .processing-status span.error {
+            color: #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <script>
+    // Proteção simples por login (localStorage)
+    (function(){
+        try {
+            const auth = JSON.parse(localStorage.getItem('silva_auth') || '{}');
+            if (!auth || auth.username !== 'admin' || auth.token !== 'admin') {
+                window.location.href = 'login.html';
+            }
+        } catch (e) {
+            window.location.href = 'login.html';
+        }
+    })();
+    </script>
+    <div class="settings-container">
+        <div class="settings-header">
+            <h1>⚙️ Settings - S.I.L.V.A.</h1>
+            <a href="index.html" class="btn btn-primary">← Voltar ao Feed</a>
+        </div>
+        
+        <div class="settings-nav">
+            <button class="nav-tab active" onclick="showTab('artigos')">📰 Artigos Brutos</button>
+            <button class="nav-tab" onclick="showTab('clusters')">🔗 Clusters/Eventos</button>
+            <button class="nav-tab" onclick="showTab('sinteses')">📄 Sínteses Executivas</button>
+            <button class="nav-tab" onclick="showTab('upload')">📁 Upload de Arquivos</button>
+        </div>
+        
+        <!-- Tab Artigos -->
+        <div id="artigos" class="tab-content active">
+            <div id="artigos-loading" class="loading">Carregando artigos...</div>
+            <div id="artigos-error" class="error" style="display: none;"></div>
+            <div id="artigos-success" class="success" style="display: none;"></div>
+            
+            <table id="artigos-table" class="data-table" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Título</th>
+                        <th>Jornal</th>
+                        <th>Status</th>
+                        <th>Tag</th>
+                        <th>Prioridade</th>
+                        <th>Data</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="artigos-tbody"></tbody>
+            </table>
+            
+            <div id="artigos-pagination" class="pagination" style="display: none;"></div>
+        </div>
+        
+        <!-- Tab Clusters -->
+        <div id="clusters" class="tab-content">
+            <div id="clusters-loading" class="loading">Carregando clusters...</div>
+            <div id="clusters-error" class="error" style="display: none;"></div>
+            <div id="clusters-success" class="success" style="display: none;"></div>
+            
+            <table id="clusters-table" class="data-table" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Título do Cluster</th>
+                        <th>Tag</th>
+                        <th>Prioridade</th>
+                        <th>Status</th>
+                        <th>Artigos</th>
+                        <th>Data</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="clusters-tbody"></tbody>
+            </table>
+            
+            <div id="clusters-pagination" class="pagination" style="display: none;"></div>
+        </div>
+        
+        <!-- Tab Sínteses -->
+        <div id="sinteses" class="tab-content">
+            <div id="sinteses-loading" class="loading">Carregando sínteses...</div>
+            <div id="sinteses-error" class="error" style="display: none;"></div>
+            <div id="sinteses-success" class="success" style="display: none;"></div>
+            
+            <table id="sinteses-table" class="data-table" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Data</th>
+                        <th>Resumo</th>
+                        <th>Notícias</th>
+                        <th>Eventos</th>
+                        <th>Críticas</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="sinteses-tbody"></tbody>
+            </table>
+            
+            <div id="sinteses-pagination" class="pagination" style="display: none;"></div>
+        </div>
+        
+        <!-- Tab Upload -->
+        <div id="upload" class="tab-content">
+            <div class="upload-section">
+                <h3>📁 Upload de Arquivos</h3>
+                <p>Faça upload de arquivos PDF ou JSON para processar notícias automaticamente.</p>
+                
+                <div class="upload-area">
+                    <input type="file" id="file-upload" multiple accept=".pdf,.json" style="display: none;">
+                    <button type="button" id="upload-btn" class="btn btn-primary">
+                        📁 Selecionar Arquivos (PDF/JSON)
+                    </button>
+                    <div id="upload-status" class="upload-status"></div>
+                </div>
+                
+                <div id="upload-progress" class="upload-progress" style="display: none;">
+                    <!-- Etapas do processo -->
+                    <div class="upload-steps">
+                        <div class="step" id="step-upload">
+                            <div class="step-icon">📤</div>
+                            <div class="step-text">Enviando arquivo</div>
+                        </div>
+                        <div class="step" id="step-processing">
+                            <div class="step-icon">⚙️</div>
+                            <div class="step-text">Processando conteúdo</div>
+                        </div>
+                        <div class="step" id="step-database">
+                            <div class="step-icon">💾</div>
+                            <div class="step-text">Salvando no banco</div>
+                        </div>
+                        <div class="step" id="step-complete">
+                            <div class="step-icon">✅</div>
+                            <div class="step-text">Concluído</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Progresso detalhado -->
+                    <div class="detailed-progress">
+                        <div class="progress-bar">
+                            <div class="progress-fill"></div>
+                        </div>
+                        <div class="progress-text">Processando arquivos...</div>
+                        <div class="progress-details">
+                            <div class="current-file">Arquivo atual: <span id="current-filename">-</span></div>
+                            <div class="file-progress">Progresso: <span id="current-progress">0</span>/<span id="total-articles">0</span> artigos</div>
+                            <div class="processing-status">Status: <span id="processing-status-text">Aguardando...</span></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="upload-results" class="upload-results" style="display: none;">
+                    <h4>Resultados do Upload:</h4>
+                    <div id="upload-results-content"></div>
+                </div>
+            </div>
+            
+            <div class="processing-section">
+                <h3>⚙️ Processamento de Artigos</h3>
+                <p>Processe artigos pendentes para criar clusters e gerar resumos.</p>
+                
+                <button type="button" id="process-articles-btn" class="btn btn-secondary">
+                    🔄 Processar Artigos Pendentes
+                </button>
+                
+                <div id="processing-status" class="processing-status"></div>
+                <div id="processing-progress" class="processing-progress" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill"></div>
+                    </div>
+                    <div class="progress-text">Processando artigos...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal para edição -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Editar Item</h2>
+                <span class="close" onclick="closeModal()">&times;</span>
+            </div>
+            <form id="editForm">
+                <div id="modal-fields"></div>
+                <div class="form-actions">
+                    <button type="button" class="btn-cancel" onclick="closeModal()">Cancelar</button>
+                    <button type="submit" class="btn-save">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script src="settings.js?v=1.0.4"></script>
+</body>
+</html> 

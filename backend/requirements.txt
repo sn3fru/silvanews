@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+pydantic
+sqlalchemy
+psycopg2-binary
+python-dotenv
+google-generativeai
+sentence-transformers
+numpy
+APScheduler
+requests
+PyMuPDF

@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>S.I.L.V.A. - AlphaNews</title>
+    <link rel="preload" href="style.css?v=1.0.4" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="style.css?v=1.0.4"></noscript>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <script>
+    // Proteção simples por login (localStorage)
+    (function(){
+        try {
+            const auth = JSON.parse(localStorage.getItem('silva_auth') || '{}');
+            if (!auth || auth.username !== 'admin' || auth.token !== 'admin') {
+                window.location.href = 'login.html';
+            }
+        } catch (e) {
+            window.location.href = 'login.html';
+        }
+    })();
+    </script>
+
+    <div class="container">
+        <aside class="painel-controle">
+            <div class="logo">
+                <h1>S.I.L.V.A.</h1>
+            </div>
+
+            <section class="secao-filtro">
+                <h2>Prioridades</h2>
+                <div class="filtros-rapidos" id="filtros-prioridade">
+                    <button class="filtro-btn" data-priority="P1_CRITICO">P1 Crítico</button>
+                    <button class="filtro-btn" data-priority="P2_ESTRATEGICO">P2 Estratégico</button>
+                    <button class="filtro-btn" data-priority="P3_MONITORAMENTO">P3 Monitoramento</button>
+                </div>
+            </section>
+
+            <section class="secao-filtro">
+                <h2>Mesas</h2>
+                <nav class="feeds-personalizados">
+                    <a href="#" class="feed-link ativo">Special Situations</a>
+                    <a href="#" class="feed-link">Enforce</a>
+                </nav>
+                <button id="btn-criar-feed" class="btn btn-terciario">+ Criar Novo Feed</button>
+            </section>
+
+            <section class="secao-filtro">
+                <h2>Categorias</h2>
+                <div class="filtros-categorias" id="filtros-categoria">
+                                <!-- Tags serão carregadas dinamicamente via JavaScript -->
+                </div>
+            </section>
+        </aside>
+
+        <main class="conteudo-principal">
+            <!-- Seletor de Data e Métricas -->
+            <div class="seletor-data">
+                <div class="data-info">
+                    <span class="data-label">Notícias de:</span>
+                    <div class="data-navegacao">
+                        <button id="data-anterior" class="data-nav-btn" title="Dia anterior">←</button>
+                        <button id="data-atual" class="data-btn">
+                            <span id="data-texto">Hoje</span>
+                        </button>
+                        <button id="data-proxima" class="data-nav-btn" title="Próximo dia">→</button>
+                    </div>
+                </div>
+                <div class="metricas-container">
+                    <div class="metrica-item">
+                        <span class="metrica-label">Notícias Coletadas</span>
+                        <span class="metrica-valor" id="metric-coletadas">--</span>
+                    </div>
+                    <div class="metrica-item">
+                        <span class="metrica-label">Eventos Únicos</span>
+                        <span class="metrica-valor" id="metric-eventos">--</span>
+                    </div>
+                    <div class="metrica-item">
+                        <span class="metrica-label">Fontes Diferentes</span>
+                        <span class="metrica-valor" id="metric-fontes">--</span>
+                    </div>
+                    <div class="metrica-item">
+                        <span class="metrica-label">Com Resumo</span>
+                        <span class="metrica-valor" id="metric-com-resumo">--</span>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <a href="settings.html" class="btn btn-secondary">⚙️ Settings</a>
+                </div>
+                <input type="date" id="data-input" class="data-input oculto">
+            </div>
+
+            <!-- Barra de Loading Progressivo -->
+            <div id="loading-progress" class="loading-progress" style="display: none;">
+                <div class="loading-bar-container">
+                    <div id="loading-bar" class="loading-bar"></div>
+                </div>
+                <div id="loading-text" class="loading-text">Carregando...</div>
+            </div>
+            
+            <div class="feed-noticias" id="feed-container">
+                <!-- Síntese Executiva será inserida aqui dinamicamente -->
+                <!-- Cards de clusters serão inseridos aqui dinamicamente -->
+            </div>
+        </main>
+    </div>
+
+    <template id="card-template">
+        <article class="card-cluster">
+            <div class="card-header">
+                <h3 class="card-titulo"></h3>
+                <div class="card-contador-fontes" title="Número de fontes agrupadas">
+                    <span>📰</span>
+                    <span class="contador"></span>
+                </div>
+            </div>
+            <p class="card-resumo"></p>
+            <div class="card-footer">
+                <span class="card-timestamp"></span>
+                <div class="card-tags"></div>
+            </div>
+            <button class="btn btn-deep-dive">Conversar com a Notícia →</button>
+        </article>
+    </template>
+
+    <div id="modal-deep-dive" class="modal-overlay oculto">
+        <div class="modal-container">
+            <button id="modal-close-btn" class="modal-close-btn">&times;</button>
+            <header class="modal-header">
+                <h2 id="modal-titulo"></h2>
+            </header>
+            <div class="modal-body">
+                <!-- Resumo e Fontes (sempre visível) -->
+                <div class="modal-resumo-section">
+                    <h3>Resumo Executivo</h3>
+                    <p id="modal-resumo"></p>
+                    
+                    <hr>
+                    
+                    <h3>Fontes Originais</h3>
+                    <ul id="lista-fontes-container" class="lista-fontes"></ul>
+                </div>
+                
+                <!-- Abas de funcionalidades -->
+                <nav class="modal-tabs">
+                    <button class="tab-btn ativo" data-tab="tab-chat">Conversar com o Cluster</button>
+                    <button class="tab-btn" data-tab="tab-gerenciar">Gerenciar Análise</button>
+                </nav>
+                <div class="modal-content">
+                    <div id="tab-chat" class="tab-content ativo">
+                        <div class="chat-container">
+                            <div class="chat-input-area">
+                                <input type="text" id="chat-input" placeholder="Qual o impacto para os credores?">
+                                <button id="chat-send-btn" class="btn">Enviar</button>
+                            </div>
+                            <div id="chat-messages" class="chat-messages">
+                                <div class="message system">Faça uma pergunta sobre este evento.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="tab-gerenciar" class="tab-content oculto">
+                        <h3>Editar Classificação</h3>
+                        <div class="edit-form">
+                            <div class="form-group">
+                                <label for="edit-prioridade">Prioridade:</label>
+                                <select id="edit-prioridade">
+                                    <option value="P1_CRITICO">P1 - Crítico</option>
+                                    <option value="P2_ESTRATEGICO">P2 - Estratégico</option>
+                                    <option value="P3_MONITORAMENTO">P3 - Monitoramento</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-tags">Tags:</label>
+                                <div class="tags-input">
+                                    <input type="text" id="edit-tags-input" placeholder="Digite uma tag e pressione Enter">
+                                    <div id="edit-tags-list" class="tags-list"></div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-motivo">Motivo da Alteração:</label>
+                                <textarea id="edit-motivo" placeholder="Explique o motivo da alteração..."></textarea>
+                            </div>
+                            <div class="form-actions">
+                                <button id="save-changes-btn" class="btn btn-primary">Salvar Alterações</button>
+                                <button id="cancel-edit-btn" class="btn btn-terciario">Cancelar</button>
+                            </div>
+                        </div>
+                        
+                        <hr>
+                        
+                        <h3>Histórico de Alterações</h3>
+                        <div id="alteracoes-container" class="alteracoes-list">
+                            <!-- Histórico será carregado dinamicamente -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal de Configuração de Prompts -->
+    <div id="modal-prompts-config" class="modal-overlay oculto">
+        <div class="modal-container modal-large">
+            <button id="modal-prompts-close-btn" class="modal-close-btn">&times;</button>
+            <header class="modal-header">
+                <h2>Configuração de Prompts - Special Situations</h2>
+            </header>
+            <div class="modal-body">
+                <div class="prompts-config-container">
+                    <!-- Abas de configuração -->
+                    <nav class="prompts-tabs">
+                        <button class="prompt-tab-btn ativo" data-tab="tab-tags">Tags</button>
+                        <button class="prompt-tab-btn" data-tab="tab-prioridades">Prioridades</button>
+                        <button class="prompt-tab-btn" data-tab="tab-prompt">Resumo/Clusterizador</button>
+                        <button class="prompt-tab-btn" data-tab="tab-outros">Outros Prompts</button>
+                    </nav>
+                    
+                    <div class="prompts-content">
+                        <!-- Tab Tags Temáticas -->
+                        <div id="tab-tags" class="prompt-tab-content ativo">
+                            <h3>Tags de Special Situations</h3>
+                            <p class="config-description">
+                                Configure as 8 categorias temáticas para classificação de notícias.
+                            </p>
+                            <div id="tags-config-container" class="config-editor">
+                                <!-- Tags serão carregadas dinamicamente -->
+                            </div>
+                        </div>
+                        
+                        <!-- Tab Prioridades -->
+                        <div id="tab-prioridades" class="prompt-tab-content oculto">
+                            <h3>Hierarquia de Prioridades</h3>
+                            <p class="config-description">
+                                Configure os níveis de prioridade (P1, P2, P3) e seus critérios.
+                            </p>
+                            <div id="prioridades-config-container" class="config-editor">
+                                <!-- Prioridades serão carregadas dinamicamente -->
+                            </div>
+                        </div>
+                        
+                        <!-- Tab Prompt Principal (agora usa PROMPT_AGRUPAMENTO_V1) -->
+                        <div id="tab-prompt" class="prompt-tab-content oculto">
+                            <h3>Prompt de Agrupamento (Resumo/Clusterizador)</h3>
+                            <p class="config-description">
+                                Este editor reflete exatamente o conteúdo de `PROMPT_AGRUPAMENTO_V1` definido em `backend/prompts.py`.
+                            </p>
+                            <div class="prompt-editor">
+                                <textarea id="prompt-principal-textarea" class="prompt-textarea" 
+                                          placeholder="Digite o PROMPT_AGRUPAMENTO_V1 aqui..."></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Tab Outros Prompts -->
+                        <div id="tab-outros" class="prompt-tab-content oculto">
+                            <h3>Outros Prompts</h3>
+                            <p class="config-description">Visualize/edite outros prompts do sistema diretamente de `backend/prompts.py`.</p>
+                            <div class="prompt-editor">
+                                <label for="prompt-resumo-final" style="display:block;margin-bottom:6px;color:#6C757D;">PROMPT_RESUMO_FINAL_V3</label>
+                                <textarea id="prompt-resumo-final" class="prompt-textarea" placeholder="PROMPT_RESUMO_FINAL_V3"></textarea>
+                            </div>
+                            <div class="prompt-editor" style="margin-top:1rem;">
+                                <label for="prompt-decisao-detalhado" style="display:block;margin-bottom:6px;color:#6C757D;">PROMPT_DECISAO_CLUSTER_DETALHADO_V1</label>
+                                <textarea id="prompt-decisao-detalhado" class="prompt-textarea" placeholder="PROMPT_DECISAO_CLUSTER_DETALHADO_V1"></textarea>
+                            </div>
+                            <div class="prompt-editor" style="margin-top:1rem;">
+                                <label for="prompt-chat-cluster" style="display:block;margin-bottom:6px;color:#6C757D;">PROMPT_CHAT_CLUSTER_V1</label>
+                                <textarea id="prompt-chat-cluster" class="prompt-textarea" placeholder="PROMPT_CHAT_CLUSTER_V1"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Botões de ação -->
+                    <div class="prompts-actions">
+                        <button id="save-prompts-btn" class="btn btn-primary">Salvar Configurações</button>
+                        <button id="cancel-prompts-btn" class="btn btn-terciario">Cancelar</button>
+                        <button id="reset-prompts-btn" class="btn btn-secondary">Restaurar Padrão</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="script.js?v=1.0.30"></script>
+</body>
+</html>
