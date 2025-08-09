@@ -13,14 +13,28 @@ from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 
-# --- Configuração para Ambiente de Desenvolvimento ---
-# O objetivo aqui e apontar diretamente para o banco de dados portatil local.
-# Removemos a logica de 'os.getenv("DATABASE_URL")' que e mais adequada para ambientes de producao/staging,
-# onde as configuracoes sao injetadas externamente.
-SQLALCHEMY_DATABASE_URI = "postgresql+psycopg2://postgres_local@localhost:5433/devdb"
+# Detecta DATABASE_URL (Heroku) e ajusta para SQLAlchemy
+def _resolve_database_url() -> str:
+    env_url = os.getenv("DATABASE_URL")
+    if env_url:
+        url = env_url.strip()
+        # Converte postgres:// para postgresql+psycopg2:// se necessário
+        if url.startswith("postgres://"):
+            url = "postgresql+psycopg2://" + url[len("postgres://"):]
+        elif url.startswith("postgresql://") and not url.startswith("postgresql+psycopg2://"):
+            url = "postgresql+psycopg2://" + url[len("postgresql://"):]
+        return url
+    # Fallback desenvolvimento local
+    return "postgresql+psycopg2://postgres_local@localhost:5433/devdb"
 
-# Cria o engine do SQLAlchemy apontando para o banco de dados de desenvolvimento.
-engine = create_engine(SQLALCHEMY_DATABASE_URI)
+# Configuração única (Heroku/Prod via env; Dev fallback local)
+SQLALCHEMY_DATABASE_URI = _resolve_database_url()
+
+# Cria o engine do SQLAlchemy
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URI,
+    pool_pre_ping=True,
+)
 
 # Cria uma classe de sessão local, que sera usada em toda a aplicacao para interagir com o banco.
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

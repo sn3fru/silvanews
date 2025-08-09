@@ -1,5 +1,5 @@
 // Configurações globais
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = (typeof window !== 'undefined' ? window.location.origin : '') + '/api';
 let currentTab = 'artigos';
 let currentPage = 1;
 let currentItem = null;
