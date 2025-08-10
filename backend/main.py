@@ -1,5 +1,4 @@
 """
-FastAPI principal do BTG AlphaFeed.
 Endpoints da API para o frontend e integrações.
 """
 
@@ -17,6 +16,7 @@ from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from sqlalchemy.orm import Session
 import google.generativeai as genai
 
@@ -76,7 +76,7 @@ FRONTEND_DIR = PROJECT_ROOT / "frontend"
 async def lifespan(app: FastAPI):
     """Gerencia o ciclo de vida da aplicação."""
     # Startup
-    print("🚀 Iniciando BTG AlphaFeed API...")
+    print("🚀 Iniciando SILVA NEWS API...")
     
     # Inicializa banco de dados
     init_database()
@@ -85,17 +85,17 @@ async def lifespan(app: FastAPI):
     if not inicializar_processamento():
         print("⚠️ Aviso: Processamento não inicializado completamente")
     
-    print("✅ BTG AlphaFeed API iniciada com sucesso!")
+    print("✅ SILVA NEWS API iniciada com sucesso!")
     
     yield
     
     # Shutdown
-    print("🛑 Finalizando BTG AlphaFeed API...")
+    print("🛑 Finalizando SILVA NEWS API...")
 
 
 # Criação da aplicação FastAPI
 app = FastAPI(
-    title="BTG AlphaFeed API",
+    title="SILVA NEWS API",
     description="API para processamento e análise de notícias em tempo real",
     version="1.0.0",
     lifespan=lifespan
@@ -115,16 +115,40 @@ app.add_middleware(
 # SERVIR FRONTEND E ENDPOINTS PRINCIPAIS
 # ==============================================================================
 
-# SOLUÇÃO: Montar o diretório frontend na rota /frontend
-# O parâmetro 'html=True' faz com que ele sirva 'index.html' para requisições a diretórios
+# SOLUÇÃO: Montar o diretório do frontend. Mantemos /frontend por compatibilidade,
+# e servimos também na raiz / para não exibir o sufixo na URL.
 if FRONTEND_DIR.exists():
     app.mount("/frontend", StaticFiles(directory=FRONTEND_DIR, html=True, check_dir=True), name="frontend")
 
-
 @app.get("/")
-async def read_root():
-    """Redireciona para a aplicação frontend."""
-    return RedirectResponse(url="/frontend")
+async def serve_root_index():
+    """Serve o index.html do frontend na raiz sem redirecionar para /frontend."""
+    index_path = FRONTEND_DIR / "index.html"
+    if not index_path.exists():
+        return RedirectResponse(url="/frontend")
+    with open(index_path, "r", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read(), status_code=200)
+
+# Catch-all para servir arquivos do frontend e permitir navegação limpa na raiz
+@app.get("/{full_path:path}", include_in_schema=False)
+async def serve_frontend_files(full_path: str):
+    # Não intercepta a API
+    if full_path.startswith("api"):
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    file_path = FRONTEND_DIR / full_path
+    try:
+        if file_path.is_file():
+            return FileResponse(str(file_path))
+    except Exception:
+        pass
+
+    # Fallback SPA: retorna index.html para rotas desconhecidas
+    index_path = FRONTEND_DIR / "index.html"
+    if index_path.exists():
+        with open(index_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read(), status_code=200)
+    raise HTTPException(status_code=404, detail="Arquivo não encontrado")
 
 
 

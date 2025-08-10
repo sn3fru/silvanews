@@ -1,5 +1,5 @@
 """
-BTG AlphaFeed backend package initializer.
+SILVA NEWS backend package initializer.
 Ensures package-relative imports work both locally and on Heroku.
 """
 

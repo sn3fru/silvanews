@@ -1,4 +1,4 @@
-"""Pacote BTG AlphaFeed."""
+"""SILVA NEWS"""
 
 __all__ = [
     "backend",

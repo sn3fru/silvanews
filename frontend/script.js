@@ -46,6 +46,20 @@ let currentClusterId = null; // ID do cluster atual no modal
 let currentChatSession = null; // Sessão de chat atual
 let currentTags = []; // Tags atuais do cluster
 
+// Helpers de data sem impacto de fuso (tratam 'YYYY-MM-DD' como data local)
+function parseLocalDate(yyyyMmDd) {
+    if (!yyyyMmDd) return new Date();
+    const [y, m, d] = yyyyMmDd.split('-').map(Number);
+    return new Date(y, (m || 1) - 1, d || 1);
+}
+
+function formatLocalYYYYMMDD(dateObj) {
+    const y = dateObj.getFullYear();
+    const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const d = String(dateObj.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
 // Função para obter a data de hoje no formato YYYY-MM-DD
 function getTodayDate() {
     // SOLUÇÃO DEFINITIVA: Usa data exata do sistema
@@ -495,9 +509,9 @@ function setupEventListeners() {
 // =======================================
 function navegarData(dias) {
     console.log('🔄 navegarData chamado com dias:', dias, 'data atual:', currentDate);
-    const data = new Date(currentDate);
+    const data = parseLocalDate(currentDate);
     data.setDate(data.getDate() + dias);
-    currentDate = data.toISOString().split('T')[0];
+    currentDate = formatLocalYYYYMMDD(data);
     console.log('📅 Nova data selecionada:', currentDate);
     atualizarDataTexto();
     carregarFeed();
@@ -508,7 +522,7 @@ function navegarData(dias) {
 function atualizarDataTexto() {
     if (!dataTexto) return;
     
-    const data = new Date(currentDate);
+    const data = parseLocalDate(currentDate);
     const hoje = new Date();
     const ontem = new Date(hoje);
     ontem.setDate(hoje.getDate() - 1);
@@ -1542,7 +1556,7 @@ function formatarPrioridade(prioridade) {
 }
 
 function formatarDataTitulo(data) {
-    const dataSelecionada = new Date(data);
+    const dataSelecionada = parseLocalDate(data);
     return dataSelecionada.toLocaleDateString('pt-BR', {
         day: '2-digit',
         month: '2-digit',
@@ -2173,7 +2187,7 @@ document.addEventListener('keydown', (e) => {
 // =======================================
 // INICIALIZAÇÃO FINAL
 // =======================================
-console.log('🚀 BTG AlphaFeed Frontend inicializado');
+console.log('🚀 SILVA NEWS AlphaFeed Frontend inicializado');
 console.log(`📡 API Base: ${API_BASE}`);
 
 // Inicia atualização automática
