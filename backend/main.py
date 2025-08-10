@@ -16,7 +16,7 @@ from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 import google.generativeai as genai
 
@@ -129,26 +129,7 @@ async def serve_root_index():
     with open(index_path, "r", encoding="utf-8") as f:
         return HTMLResponse(content=f.read(), status_code=200)
 
-# Catch-all para servir arquivos do frontend e permitir navegação limpa na raiz
-@app.get("/{full_path:path}", include_in_schema=False)
-async def serve_frontend_files(full_path: str):
-    # Não intercepta a API
-    if full_path.startswith("api"):
-        raise HTTPException(status_code=404, detail="Not Found")
-
-    file_path = FRONTEND_DIR / full_path
-    try:
-        if file_path.is_file():
-            return FileResponse(str(file_path))
-    except Exception:
-        pass
-
-    # Fallback SPA: retorna index.html para rotas desconhecidas
-    index_path = FRONTEND_DIR / "index.html"
-    if index_path.exists():
-        with open(index_path, "r", encoding="utf-8") as f:
-            return HTMLResponse(content=f.read(), status_code=200)
-    raise HTTPException(status_code=404, detail="Arquivo não encontrado")
+# Removido catch-all para não interferir nas rotas /api
 
 
 

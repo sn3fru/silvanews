@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>S.I.L.V.A. - AlphaNews</title>
-    <link rel="preload" href="style.css?v=1.0.4" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="style.css?v=1.0.4"></noscript>
+    <link rel="preload" href="/frontend/style.css?v=1.0.4" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="/frontend/style.css?v=1.0.4"></noscript>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -17,10 +17,10 @@
         try {
             const auth = JSON.parse(localStorage.getItem('silva_auth') || '{}');
             if (!auth || auth.username !== 'admin' || auth.token !== 'admin') {
-                window.location.href = 'login.html';
+                window.location.href = '/frontend/login.html';
             }
         } catch (e) {
-            window.location.href = 'login.html';
+            window.location.href = '/frontend/login.html';
         }
     })();
     </script>
@@ -89,7 +89,7 @@
                     </div>
                 </div>
                 <div class="header-actions">
-                    <a href="settings.html" class="btn btn-secondary">⚙️ Settings</a>
+                    <a href="/frontend/settings.html" class="btn btn-secondary">⚙️ Settings</a>
                 </div>
                 <input type="date" id="data-input" class="data-input oculto">
             </div>
@@ -284,6 +284,6 @@
         </div>
     </div>
     
-    <script src="script.js?v=1.0.31"></script>
+    <script src="/frontend/script.js?v=1.0.31"></script>
 </body>
 </html>

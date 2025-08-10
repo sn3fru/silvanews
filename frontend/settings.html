@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SILVA NEWS - Settings</title>
-    <link rel="stylesheet" href="style.css?v=1.0.2">
+    <link rel="stylesheet" href="/frontend/style.css?v=1.0.2">
     <style>
         .settings-container {
             max-width: 1400px;
@@ -563,17 +563,17 @@
         try {
             const auth = JSON.parse(localStorage.getItem('silva_auth') || '{}');
             if (!auth || auth.username !== 'admin' || auth.token !== 'admin') {
-                window.location.href = 'login.html';
+                window.location.href = '/frontend/login.html';
             }
         } catch (e) {
-            window.location.href = 'login.html';
+            window.location.href = '/frontend/login.html';
         }
     })();
     </script>
     <div class="settings-container">
         <div class="settings-header">
             <h1>⚙️ Settings - S.I.L.V.A.</h1>
-            <a href="index.html" class="btn btn-primary">← Voltar ao Feed</a>
+            <a href="/frontend/index.html" class="btn btn-primary">← Voltar ao Feed</a>
         </div>
         
         <div class="settings-nav">
@@ -748,6 +748,6 @@
         </div>
     </div>
     
-    <script src="settings.js?v=1.0.4"></script>
+    <script src="/frontend/settings.js?v=1.0.4"></script>
 </body>
 </html> 
