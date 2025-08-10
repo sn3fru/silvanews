@@ -20,25 +20,25 @@ try:
 except ImportError:
     PDF_AVAILABLE = False
 
-# Importações do projeto - sempre usar imports absolutos para evitar problemas
-import sys
-from pathlib import Path
-
-# Adiciona o diretório backend ao path
-backend_dir = Path(__file__).parent.parent
-if str(backend_dir) not in sys.path:
-    sys.path.insert(0, str(backend_dir))
-
+# Importações do projeto com suporte a execução como pacote ou script
 try:
-    from database import SessionLocal
-    from models import ArtigoBrutoCreate
-    from crud import create_artigo_bruto, get_artigo_by_hash, create_log
-    from prompts import PROMPT_EXTRACAO_PERMISSIVO_V8
-    from utils import get_datetime_brasil_str, get_date_brasil_str
-except ImportError as e:
-    print(f"❌ ERRO: Não foi possível importar módulos do backend: {e}")
-    print(f"   Verifique se está executando a partir do diretório correto")
-    raise
+    from ..database import SessionLocal
+    from ..models import ArtigoBrutoCreate
+    from ..crud import create_artigo_bruto, get_artigo_by_hash, create_log
+    from ..prompts import PROMPT_EXTRACAO_PERMISSIVO_V8
+    from ..utils import get_datetime_brasil_str, get_date_brasil_str
+except ImportError:
+    # Fallback para execução direta
+    try:
+        from database import SessionLocal
+        from models import ArtigoBrutoCreate
+        from crud import create_artigo_bruto, get_artigo_by_hash, create_log
+        from prompts import PROMPT_EXTRACAO_PERMISSIVO_V8
+        from utils import get_datetime_brasil_str, get_date_brasil_str
+    except ImportError as e:
+        print(f"❌ ERRO: Não foi possível importar módulos do backend: {e}")
+        print(f"   Verifique se está executando a partir do diretório correto")
+        raise
 
 # Constantes para o processamento de PDF, para garantir robustez.
 PAGINAS_POR_CHUNK = 5
