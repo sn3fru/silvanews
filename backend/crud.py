@@ -14,10 +14,10 @@ try:
     from .models import ArtigoBrutoCreate, ClusterEventoCreate
     from .utils import get_date_brasil
 except ImportError:
-    # Fallback para import absoluto quando executado diretamente
-    from database import ArtigoBruto, ClusterEvento, SinteseExecutiva, LogProcessamento, ConfiguracaoColeta
-    from models import ArtigoBrutoCreate, ClusterEventoCreate
-    from utils import get_date_brasil
+    # Fallback para import absoluto quando executado fora do pacote
+    from backend.database import ArtigoBruto, ClusterEvento, SinteseExecutiva, LogProcessamento, ConfiguracaoColeta
+    from backend.models import ArtigoBrutoCreate, ClusterEventoCreate
+    from backend.utils import get_date_brasil
 
 
 # ==============================================================================
@@ -715,7 +715,7 @@ def get_or_create_chat_session(db: Session, cluster_id: int) -> 'ChatSession':
     try:
         from .database import ChatSession
     except ImportError:
-        from database import ChatSession
+        from backend.database import ChatSession
     
     session = db.query(ChatSession).filter(ChatSession.cluster_id == cluster_id).first()
     if not session:
@@ -731,7 +731,7 @@ def add_chat_message(db: Session, session_id: int, role: str, content: str) -> '
     try:
         from .database import ChatMessage
     except ImportError:
-        from database import ChatMessage
+        from backend.database import ChatMessage
     
     message = ChatMessage(
         session_id=session_id,
@@ -749,7 +749,7 @@ def get_chat_messages_by_session(db: Session, session_id: int) -> List['ChatMess
     try:
         from .database import ChatMessage
     except ImportError:
-        from database import ChatMessage
+        from backend.database import ChatMessage
     
     return db.query(ChatMessage).filter(
         ChatMessage.session_id == session_id
@@ -761,7 +761,7 @@ def get_chat_session_by_cluster(db: Session, cluster_id: int) -> Optional['ChatS
     try:
         from .database import ChatSession
     except ImportError:
-        from database import ChatSession
+        from backend.database import ChatSession
     
     return db.query(ChatSession).filter(ChatSession.cluster_id == cluster_id).first()
 
@@ -771,7 +771,7 @@ def update_cluster_priority(db: Session, cluster_id: int, nova_prioridade: str, 
     try:
         from .database import ClusterAlteracao
     except ImportError:
-        from database import ClusterAlteracao
+        from backend.database import ClusterAlteracao
     
     cluster = db.query(ClusterEvento).filter(ClusterEvento.id == cluster_id).first()
     if not cluster:
@@ -801,7 +801,7 @@ def update_cluster_tags(db: Session, cluster_id: int, novas_tags: List[str], mot
     try:
         from .database import ClusterAlteracao
     except ImportError:
-        from database import ClusterAlteracao
+        from backend.database import ClusterAlteracao
     
     cluster = db.query(ClusterEvento).filter(ClusterEvento.id == cluster_id).first()
     if not cluster:
@@ -831,7 +831,7 @@ def get_cluster_alteracoes(db: Session, cluster_id: int) -> List['ClusterAlterac
     try:
         from .database import ClusterAlteracao
     except ImportError:
-        from database import ClusterAlteracao
+        from backend.database import ClusterAlteracao
     
     return db.query(ClusterAlteracao).filter(
         ClusterAlteracao.cluster_id == cluster_id

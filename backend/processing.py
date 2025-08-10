@@ -30,16 +30,16 @@ try:
     )
     from .database import ClusterEvento
 except ImportError:
-    # Fallback para import absoluto quando executado diretamente
-    from models import Noticia
-    from prompts import PROMPT_EXTRACAO_PERMISSIVO_V8, PROMPT_DECISAO_CLUSTER_DETALHADO_V1, PROMPT_RESUMO_FINAL_V3
-    from utils import extrair_json_da_resposta, corrigir_tag_invalida, corrigir_prioridade_invalida, migrar_noticia_cache_legado, get_date_brasil_str
-    from crud import (
+    # Fallback para import absoluto quando executado fora do pacote
+    from backend.models import Noticia
+    from backend.prompts import PROMPT_EXTRACAO_PERMISSIVO_V8, PROMPT_DECISAO_CLUSTER_DETALHADO_V1, PROMPT_RESUMO_FINAL_V3
+    from backend.utils import extrair_json_da_resposta, corrigir_tag_invalida, corrigir_prioridade_invalida, migrar_noticia_cache_legado, get_date_brasil_str
+    from backend.crud import (
         get_artigo_by_id, update_artigo_processado, update_artigo_status,
         get_active_clusters_today, create_cluster, associate_artigo_to_cluster,
         update_cluster_embedding, create_log, get_artigos_by_cluster, get_cluster_by_id
     )
-    from database import ClusterEvento
+    from backend.database import ClusterEvento
 
 
 # ==============================================================================

@@ -11,8 +11,8 @@ from datetime import datetime
 try:
     from .prompts import TAGS_SPECIAL_SITUATIONS
 except ImportError:
-    # Fallback para import absoluto quando executado diretamente
-    from prompts import TAGS_SPECIAL_SITUATIONS
+    # Fallback para import absoluto quando executado fora do pacote
+    from backend.prompts import TAGS_SPECIAL_SITUATIONS
 
 # Extrai as tags válidas do dicionário
 TAGS_VALIDAS = list(TAGS_SPECIAL_SITUATIONS.keys())
