@@ -729,6 +729,15 @@ async def processar_arquivo_upload_com_progresso(file_path: Path, file_ext: str,
     """
     try:
         from backend.collectors.file_loader import FileLoader
+        # Carrega .env do backend (alinha com load_news.py)
+        try:
+            from dotenv import load_dotenv  # type: ignore
+            backend_dir = Path(__file__).resolve().parent
+            env_path = backend_dir / ".env"
+            if env_path.exists():
+                load_dotenv(dotenv_path=env_path)
+        except Exception:
+            pass
         
         if file_ext.lower() == 'json':
             # Processa JSON
@@ -736,7 +745,8 @@ async def processar_arquivo_upload_com_progresso(file_path: Path, file_ext: str,
             upload_progress[file_id]["message"] = "Processando conteúdo JSON..."
             
             # Carrega todos os artigos do JSON
-            loader = FileLoader()
+            # Instancia o FileLoader apontando para a pasta do arquivo enviado
+            loader = FileLoader(files_directory=str(file_path.parent))
             artigos = loader.processar_json_dump(file_path)
             total_artigos = len(artigos)
             upload_progress[file_id]["total_articles"] = total_artigos
@@ -781,7 +791,8 @@ async def processar_arquivo_upload_com_progresso(file_path: Path, file_ext: str,
                 except Exception:
                     client = None
 
-                loader = FileLoader(client=client)
+                # Instancia o FileLoader apontando para a pasta do arquivo enviado
+                loader = FileLoader(files_directory=str(file_path.parent), client=client)
                 artigos = loader.processar_pdf(file_path)
                 total_artigos = len(artigos)
                 upload_progress[file_id]["total_articles"] = total_artigos
@@ -808,7 +819,8 @@ async def processar_arquivo_upload_com_progresso(file_path: Path, file_ext: str,
                 # Fallback para processamento básico
                 upload_progress[file_id]["message"] = f"Fallback: processando PDF com método básico..."
                 
-                loader = FileLoader()
+                # Instancia o FileLoader apontando para a pasta do arquivo enviado
+                loader = FileLoader(files_directory=str(file_path.parent))
                 artigos = loader.processar_pdf(file_path)
                 total_artigos = len(artigos)
                 upload_progress[file_id]["total_articles"] = total_artigos

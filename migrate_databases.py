@@ -24,8 +24,8 @@ from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker, Session
 
 try:
-    # Executando como módulo dentro do pacote btg_alphafeed
-    from backend.database import (
+    # Execução como módulo: usar import relativo ao pacote
+    from .backend.database import (
         Base,
         ArtigoBruto,
         ClusterEvento,
@@ -36,10 +36,10 @@ try:
         ChatMessage,
         ClusterAlteracao,
     )
-except ImportError:
-    # Execução direta fora do pacote
+except Exception:
+    # Execução direta (python btg_alphafeed/migrate_databases.py): ajustar sys.path e importar absoluto
     sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-    from backend.database import (  # type: ignore
+    from backend.database import (
         Base,
         ArtigoBruto,
         ClusterEvento,

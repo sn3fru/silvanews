@@ -409,6 +409,73 @@ btg_alphafeed/
 - ✅ Servir frontend estático
 - ✅ Logs de inicialização
 
+### `migrate_databases.py` (novo)
+- ✅ Migração completa do Postgres local para o Postgres do Heroku
+- ✅ Idempotente para: Clusters, Artigos, Sínteses e Configurações
+- ⚠️ Opcional para: Logs e Chat (pode duplicar em múltiplas execuções)
+- 🧭 Como usar (rodar da raiz do projeto):
+  ```bash
+  # Ative o ambiente conda
+  conda activate pymc2
+
+  # Rodar como módulo a partir da pasta silva-front
+  python -m btg_alphafeed.migrate_databases \
+    --source "postgresql+psycopg2://postgres_local@localhost:5433/devdb" \
+    --dest   "postgres://<usuario>:<senha>@<host>:5432/<db>"
+
+  # Incluir logs e chat (pode gerar duplicatas se rodar várias vezes)
+  python -m btg_alphafeed.migrate_databases \
+    --source "postgresql+psycopg2://postgres_local@localhost:5433/devdb" \
+    --dest   "postgres://<usuario>:<senha>@<host>:5432/<db>" \
+    --include-logs --include-chat
+  ```
+
+### `migrate_incremental.py` (novo)
+- ✅ Migração incremental e totalmente idempotente (pode rodar várias vezes)
+- ✅ Lê apenas dados novos/alterados desde a última execução
+- ✅ Deduplicação para: Logs, Alterações de Cluster e Mensagens do Chat
+- ✅ Baixo uso de memória (batch com `yield_per`)
+- ⚙️ Flags principais:
+  - `--meta-file <path>`: arquivo com timestamp da última migração (padrão: `btg_alphafeed/last_migration.txt`)
+  - `--since <ISO-UTC>`: força início a partir de um timestamp específico
+  - `--no-update-existing`: não atualiza registros existentes (só insere novos)
+  - `--only <lista>`: migra apenas entidades específicas (ex.: `clusters,artigos,logs`)
+  - `--include-logs` e `--include-chat`: inclui logs e chat
+- 🔐 Chaves de negócio usadas (idempotência):
+  - Clusters: `(titulo_cluster, tag, date(created_at))`
+  - Artigos: `hash_unico`
+  - Sínteses: `date(data_sintese)`
+  - Configurações: `nome_coletor`
+  - Alterações de Cluster: `(cluster_id_mapeado, timestamp, campo_alterado)`
+  - Chat (mensagens): `(session_id_mapeado, timestamp, role, content)`
+  - Logs: `(timestamp, componente, mensagem)`
+- 🧭 Como usar (rodar da raiz do projeto):
+  ```bash
+  conda activate pymc2
+
+  # Incremental padrão (clusters, artigos, sínteses, configs, alterações)
+  python -m btg_alphafeed.migrate_incremental \
+    --source "postgresql+psycopg2://postgres_local@localhost:5433/devdb" \
+    --dest   "postgres://<usuario>:<senha>@<host>:5432/<db>"
+
+  # Incluir logs e chat
+  python -m btg_alphafeed.migrate_incremental \
+    --source "postgresql+psycopg2://postgres_local@localhost:5433/devdb" \
+    --dest   "postgres://<usuario>:<senha>@<host>:5432/<db>" \
+    --include-logs --include-chat
+
+  # Evitar sobrescrever produção (somente inserir novos registros)
+  python -m btg_alphafeed.migrate_incremental \
+    --source "postgresql+psycopg2://postgres_local@localhost:5433/devdb" \
+    --dest   "postgres://<usuario>:<senha>@<host>:5432/<db>" \
+    --no-update-existing
+  ```
+
+> Nota: Se ocorrer erro de driver, instale no ambiente `pymc2`:
+> ```bash
+> pip install psycopg2-binary
+> ```
+
 ### **`limpar_banco.py` (278 linhas)**
 - ✅ Utilitário de limpeza do banco
 - ✅ Remoção seletiva de dados
