@@ -46,9 +46,9 @@ try:
     from .utils import gerar_hash_unico, formatar_timestamp_relativo, get_date_brasil, parse_date_brasil
 except ImportError:
     # Fallback para import absoluto quando executado diretamente
-    from database import get_db, init_database, ArtigoBruto, ClusterEvento, SinteseExecutiva
-    from models import ProcessarArtigoRequest, StatusResponse, ArtigoBrutoCreate, ChatRequest, ChatResponse, ClusterUpdateRequest
-    from crud import (
+    from .database import get_db, init_database, ArtigoBruto, ClusterEvento, SinteseExecutiva
+    from .models import ProcessarArtigoRequest, StatusResponse, ArtigoBrutoCreate, ChatRequest, ChatResponse, ClusterUpdateRequest
+    from .crud import (
         get_artigos_pendentes, get_metricas_today, get_sintese_today,
         get_clusters_for_feed, get_cluster_by_id, get_artigos_by_cluster,
         create_artigo_bruto, get_artigo_by_hash, get_artigo_by_id, create_log, get_database_stats,
@@ -59,8 +59,8 @@ except ImportError:
         get_artigos_processados_hoje, get_clusters_existentes_hoje, get_cluster_com_artigos,
         associate_artigo_to_existing_cluster, create_cluster_for_artigo
     )
-    from processing import processar_artigo_pipeline, gerar_resumo_cluster, inicializar_processamento
-    from utils import gerar_hash_unico, formatar_timestamp_relativo, get_date_brasil, parse_date_brasil
+    from .processing import processar_artigo_pipeline, gerar_resumo_cluster, inicializar_processamento
+    from .utils import gerar_hash_unico, formatar_timestamp_relativo, get_date_brasil, parse_date_brasil
 
 
 # ==============================================================================
@@ -71,7 +71,6 @@ except ImportError:
 BACKEND_DIR = Path(__file__).parent
 PROJECT_ROOT = BACKEND_DIR.parent
 FRONTEND_DIR = PROJECT_ROOT / "frontend"
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
