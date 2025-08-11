@@ -616,7 +616,36 @@ document.addEventListener('DOMContentLoaded', function() {
     const processArticlesBtn = document.getElementById('process-articles-btn');
     
     if (uploadBtn) {
-        uploadBtn.addEventListener('click', () => fileUpload.click());
+        uploadBtn.addEventListener('click', async () => {
+            // Em vez de apenas abrir o seletor, dispara o mesmo fluxo do CLI
+            // Equivalente a: python load_news.py --dir ../pdfs --direct --yes
+            const uploadStatus = document.getElementById('upload-status');
+            const uploadProgress = document.getElementById('upload-progress');
+            const progressText = document.querySelector('#upload-progress .progress-text');
+
+            if (uploadStatus) uploadStatus.innerHTML = '';
+            if (uploadProgress) uploadProgress.style.display = 'block';
+            if (progressText) progressText.textContent = 'Iniciando carregamento da pasta ../pdfs...';
+
+            try {
+                const resp = await fetch(`${API_BASE}/admin/carregar-arquivos`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ diretorio: '../pdfs' })
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    if (uploadStatus) uploadStatus.innerHTML = `<div class="success">✅ ${data.message}</div>`;
+                } else {
+                    if (uploadStatus) uploadStatus.innerHTML = `<div class="error">❌ ${data.detail || 'Erro ao iniciar carregamento'}</div>`;
+                }
+            } catch (err) {
+                if (uploadStatus) uploadStatus.innerHTML = `<div class="error">❌ Erro de conexão: ${err.message}</div>`;
+            } finally {
+                // Oculta barra após breve delay
+                setTimeout(() => { if (uploadProgress) uploadProgress.style.display = 'none'; }, 1200);
+            }
+        });
     }
     
     if (fileUpload) {

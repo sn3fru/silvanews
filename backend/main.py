@@ -416,7 +416,9 @@ async def gerar_resumo_cluster_endpoint(
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
+# Alias de rota para manter consistência com demais endpoints /api/admin
 @app.post("/admin/carregar-arquivos")
+@app.post("/api/admin/carregar-arquivos")
 async def carregar_arquivos_endpoint(
     background_tasks: BackgroundTasks,
     diretorio: str = "../pdfs",
@@ -426,16 +428,22 @@ async def carregar_arquivos_endpoint(
     Endpoint para carregar notícias a partir de arquivos PDFs e JSONs.
     """
     try:
-        # Adiciona tarefa em background
-        background_tasks.add_task(carregar_arquivos_background, diretorio)
-        
+        # Resolve caminho absoluto com base no PROJECT_ROOT para alinhar com o CLI (../pdfs)
+        from pathlib import Path
+        dir_path = Path(diretorio)
+        if not dir_path.is_absolute():
+            dir_path = (PROJECT_ROOT / dir_path).resolve()
+
+        # Adiciona tarefa em background, garantindo o mesmo efeito de --direct
+        background_tasks.add_task(carregar_arquivos_background, str(dir_path))
+
         create_log(db, "INFO", "api", 
-                  f"Iniciado carregamento de arquivos do diretório: {diretorio}")
-        
+                  f"Iniciado carregamento de arquivos do diretório: {dir_path}")
+
         return StatusResponse(
             status="iniciado",
             message=f"Carregamento de arquivos iniciado",
-            data={"diretorio": diretorio}
+            data={"diretorio": str(dir_path)}
         )
     
     except Exception as e:
@@ -710,8 +718,29 @@ async def carregar_arquivos_background(diretorio: str):
     
     db = SessionLocal()
     try:
-        # Cria instância do carregador
-        loader = FileLoader(files_directory=diretorio)
+        # Alinha ambiente e cliente Gemini como no load_news.py
+        import os
+        from pathlib import Path
+        try:
+            from dotenv import load_dotenv  # type: ignore
+            backend_dir = Path(__file__).resolve().parent
+            env_path = backend_dir / ".env"
+            if env_path.exists():
+                load_dotenv(dotenv_path=env_path)
+        except Exception:
+            pass
+
+        client = None
+        try:
+            from google import genai as genai_new  # type: ignore
+            api_key = os.getenv("GEMINI_API_KEY")
+            if api_key:
+                client = genai_new.Client(api_key=api_key)
+        except Exception:
+            client = None
+
+        # Cria instância do carregador com cliente (quando disponível)
+        loader = FileLoader(files_directory=diretorio, client=client)
         
         # Processa arquivos diretamente no banco
         stats = loader.processar_diretorio(usar_api=False)
