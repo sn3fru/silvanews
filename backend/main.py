@@ -1451,12 +1451,20 @@ async def health_check(db: Session = Depends(get_db)):
 
 @app.get("/api/settings/artigos")
 async def get_artigos_settings(
-    page: int = 1, 
-    limit: int = 20, 
+    page: int = 1,
+    limit: int = 20,
     status: Optional[str] = None,
+    id: Optional[int] = None,
+    titulo: Optional[str] = None,
+    jornal: Optional[str] = None,
+    tag: Optional[str] = None,
+    prioridade: Optional[str] = None,
+    date: Optional[str] = None,  # YYYY-MM-DD
+    sort_by: Optional[str] = 'created_at',
+    sort_dir: Optional[str] = 'desc',
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
-    """Lista artigos para o painel de settings."""
+    """Lista artigos para o painel de settings com filtros e ordenação."""
     try:
         offset = (page - 1) * limit
         
@@ -1466,12 +1474,59 @@ async def get_artigos_settings(
         # Filtros
         if status:
             query = query.filter(ArtigoBruto.status == status)
+        if id is not None:
+            query = query.filter(ArtigoBruto.id == id)
+        if titulo:
+            from sqlalchemy import or_
+            like = f"%{titulo}%"
+            query = query.filter(or_(ArtigoBruto.titulo_extraido.ilike(like), ArtigoBruto.texto_bruto.ilike(like)))
+        if jornal:
+            query = query.filter(ArtigoBruto.jornal.ilike(f"%{jornal}%"))
+        if prioridade:
+            query = query.filter(ArtigoBruto.prioridade == prioridade)
+        if tag:
+            if tag == 'Outras':
+                # Tags válidas definidas nos prompts
+                try:
+                    from .prompts import TAGS_SPECIAL_SITUATIONS
+                except Exception:
+                    from backend.prompts import TAGS_SPECIAL_SITUATIONS  # fallback
+                valid_tags = list(TAGS_SPECIAL_SITUATIONS.keys())
+                query = query.filter((ArtigoBruto.tag.is_(None)) | (ArtigoBruto.tag == '') | (~ArtigoBruto.tag.in_(valid_tags)))
+            else:
+                query = query.filter(ArtigoBruto.tag == tag)
+        if date:
+            # Filtra por dia específico
+            from datetime import datetime, timedelta
+            try:
+                start = datetime.strptime(date, "%Y-%m-%d")
+                end = start + timedelta(days=1)
+                query = query.filter(ArtigoBruto.created_at >= start, ArtigoBruto.created_at < end)
+            except Exception:
+                pass
         
         # Contagem total
         total = query.count()
         
+        # Ordenação
+        sort_map = {
+            'id': ArtigoBruto.id,
+            'titulo_extraido': ArtigoBruto.titulo_extraido,
+            'jornal': ArtigoBruto.jornal,
+            'status': ArtigoBruto.status,
+            'tag': ArtigoBruto.tag,
+            'prioridade': ArtigoBruto.prioridade,
+            'created_at': ArtigoBruto.created_at,
+            'processed_at': ArtigoBruto.processed_at,
+        }
+        sort_col = sort_map.get(sort_by or 'created_at', ArtigoBruto.created_at)
+        if (sort_dir or 'desc').lower() == 'asc':
+            query = query.order_by(sort_col.asc())
+        else:
+            query = query.order_by(sort_col.desc())
+        
         # Paginação
-        artigos = query.order_by(ArtigoBruto.created_at.desc()).offset(offset).limit(limit).all()
+        artigos = query.offset(offset).limit(limit).all()
         
         # Formata dados
         artigos_data = []
@@ -1609,29 +1664,94 @@ async def delete_artigo_settings(artigo_id: int, db: Session = Depends(get_db)) 
 
 @app.get("/api/settings/clusters")
 async def get_clusters_settings(
-    page: int = 1, 
+    page: int = 1,
     limit: int = 20,
+    id: Optional[int] = None,
+    titulo: Optional[str] = None,
+    tag: Optional[str] = None,
+    prioridade: Optional[str] = None,
+    status: Optional[str] = None,
+    date: Optional[str] = None,  # YYYY-MM-DD
+    total_op: Optional[str] = None,  # one of '=', '>', '>=', '<', '<='
+    total_val: Optional[int] = None,
+    sort_by: Optional[str] = 'created_at',
+    sort_dir: Optional[str] = 'desc',
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
-    """Lista clusters para o painel de settings."""
+    """Lista clusters para o painel de settings com filtros e ordenação."""
     try:
         offset = (page - 1) * limit
         
         # Query base
         query = db.query(ClusterEvento)
         
+        # Filtros
+        if id is not None:
+            query = query.filter(ClusterEvento.id == id)
+        if titulo:
+            query = query.filter(ClusterEvento.titulo_cluster.ilike(f"%{titulo}%"))
+        if prioridade:
+            query = query.filter(ClusterEvento.prioridade == prioridade)
+        if status:
+            query = query.filter(ClusterEvento.status == status)
+        if tag:
+            if tag == 'Outras':
+                try:
+                    from .prompts import TAGS_SPECIAL_SITUATIONS
+                except Exception:
+                    from backend.prompts import TAGS_SPECIAL_SITUATIONS
+                valid_tags = list(TAGS_SPECIAL_SITUATIONS.keys())
+                query = query.filter((ClusterEvento.tag.is_(None)) | (ClusterEvento.tag == '') | (~ClusterEvento.tag.in_(valid_tags)))
+            else:
+                query = query.filter(ClusterEvento.tag == tag)
+        if date:
+            from datetime import datetime, timedelta
+            try:
+                start = datetime.strptime(date, "%Y-%m-%d")
+                end = start + timedelta(days=1)
+                query = query.filter(ClusterEvento.created_at >= start, ClusterEvento.created_at < end)
+            except Exception:
+                pass
+        if total_val is not None and total_op in ('=','>','>=','<','<='):
+            from sqlalchemy import text
+            # Usa expressão simples com bind parameters seria melhor, mas aqui mapeamos manualmente
+            if total_op == '=':
+                query = query.filter(ClusterEvento.total_artigos == total_val)
+            elif total_op == '>':
+                query = query.filter(ClusterEvento.total_artigos > total_val)
+            elif total_op == '>=':
+                query = query.filter(ClusterEvento.total_artigos >= total_val)
+            elif total_op == '<':
+                query = query.filter(ClusterEvento.total_artigos < total_val)
+            elif total_op == '<=':
+                query = query.filter(ClusterEvento.total_artigos <= total_val)
+        
         # Contagem total
         total = query.count()
         
+        # Ordenação
+        sort_map = {
+            'id': ClusterEvento.id,
+            'titulo_cluster': ClusterEvento.titulo_cluster,
+            'tag': ClusterEvento.tag,
+            'prioridade': ClusterEvento.prioridade,
+            'status': ClusterEvento.status,
+            'total_artigos': ClusterEvento.total_artigos,
+            'created_at': ClusterEvento.created_at,
+            'updated_at': ClusterEvento.updated_at,
+        }
+        sort_col = sort_map.get(sort_by or 'created_at', ClusterEvento.created_at)
+        if (sort_dir or 'desc').lower() == 'asc':
+            query = query.order_by(sort_col.asc())
+        else:
+            query = query.order_by(sort_col.desc())
+        
         # Paginação
-        clusters = query.order_by(ClusterEvento.created_at.desc()).offset(offset).limit(limit).all()
+        clusters = query.offset(offset).limit(limit).all()
         
         # Formata dados
         clusters_data = []
         for cluster in clusters:
-            # Conta artigos do cluster
-            num_artigos = db.query(ArtigoBruto).filter(ArtigoBruto.cluster_id == cluster.id).count()
-            
             clusters_data.append({
                 "id": cluster.id,
                 "titulo_cluster": cluster.titulo_cluster,
@@ -1639,7 +1759,7 @@ async def get_clusters_settings(
                 "tag": cluster.tag,
                 "prioridade": cluster.prioridade,
                 "status": cluster.status,
-                "total_artigos": num_artigos,
+                "total_artigos": cluster.total_artigos,
                 "created_at": cluster.created_at.isoformat() if cluster.created_at else None,
                 "updated_at": cluster.updated_at.isoformat() if cluster.updated_at else None
             })

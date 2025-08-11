@@ -89,11 +89,15 @@ function generateTagOptions(selectedTag) {
 function populateTagFiltersIfNeeded() {
     const artigosTagSelect = document.getElementById('artigos-filter-tag');
     if (artigosTagSelect && artigosTagSelect.options.length <= 1) {
-        artigosTagSelect.innerHTML = '<option value="">Todas</option>' + tagsDisponiveis.map(t => `<option value="${t}">${t}</option>`).join('');
+        const promptTags = ['M&A e Transações Corporativas','Jurídico, Falências e Regulatório','Dívida Ativa e Créditos Públicos','Distressed Assets e NPLs','Mercado de Capitais e Finanças Corporativas','Política Econômica (Brasil)','Internacional (Economia e Política)','Tecnologia e Setores Estratégicos'];
+        const opts = promptTags.map(t => `<option value="${t}">${t}</option>`).join('');
+        artigosTagSelect.innerHTML = '<option value="">Todas</option>' + opts + '<option value="Outras">Outras</option>';
     }
     const clustersTagSelect = document.getElementById('clusters-filter-tag');
     if (clustersTagSelect && clustersTagSelect.options.length <= 1) {
-        clustersTagSelect.innerHTML = '<option value=\"\">Todas</option>' + tagsDisponiveis.map(t => `<option value=\"${t}\">${t}</option>`).join('');
+        const promptTags = ['M&A e Transações Corporativas','Jurídico, Falências e Regulatório','Dívida Ativa e Créditos Públicos','Distressed Assets e NPLs','Mercado de Capitais e Finanças Corporativas','Política Econômica (Brasil)','Internacional (Economia e Política)','Tecnologia e Setores Estratégicos'];
+        const opts = promptTags.map(t => `<option value="${t}">${t}</option>`).join('');
+        clustersTagSelect.innerHTML = '<option value="">Todas</option>' + opts + '<option value="Outras">Outras</option>';
     }
     // Re-render lists to apply any selected tag filter
     if (artigosState.rows.length) renderArtigosFilteredSorted();
@@ -123,15 +127,15 @@ function setupSortingAndFilters() {
     const artigoFilterIds = ['id','titulo','jornal','status','tag','prioridade','date'];
     artigoFilterIds.forEach(fid => {
         const el = document.getElementById(`artigos-filter-${fid}`);
-        if (el) el.addEventListener('input', renderArtigosFilteredSorted);
-        if (el && el.tagName === 'SELECT') el.addEventListener('change', renderArtigosFilteredSorted);
+        if (el) el.addEventListener('input', () => { currentPage = 1; loadArtigos(); });
+        if (el && el.tagName === 'SELECT') el.addEventListener('change', () => { currentPage = 1; loadArtigos(); });
     });
     // Filter handlers - clusters
     const clusterFilterIds = ['id','titulo','tag','prioridade','status','total','date'];
     clusterFilterIds.forEach(fid => {
         const el = document.getElementById(`clusters-filter-${fid}`);
-        if (el) el.addEventListener('input', renderClustersFilteredSorted);
-        if (el && el.tagName === 'SELECT') el.addEventListener('change', renderClustersFilteredSorted);
+        if (el) el.addEventListener('input', () => { currentPage = 1; loadClusters(); });
+        if (el && el.tagName === 'SELECT') el.addEventListener('change', () => { currentPage = 1; loadClusters(); });
     });
 }
 
@@ -144,11 +148,8 @@ function toggleSort(tab, key) {
         state.sortDir = 'asc';
     }
     updateSortIndicators(tab);
-    if (tab === 'artigos') {
-        renderArtigosFilteredSorted();
-    } else {
-        renderClustersFilteredSorted();
-    }
+    currentPage = 1;
+    if (tab === 'artigos') loadArtigos(); else loadClusters();
 }
 
 function updateSortIndicators(tab) {
@@ -331,7 +332,29 @@ async function loadArtigos() {
     showLoading('artigos');
     
     try {
-        const response = await fetch(`${API_BASE}/settings/artigos?page=${currentPage}&limit=20`);
+        const params = new URLSearchParams();
+        params.set('page', currentPage);
+        params.set('limit', 20);
+        // Filtros
+        const fId = document.getElementById('artigos-filter-id')?.value || '';
+        const fTitulo = document.getElementById('artigos-filter-titulo')?.value || '';
+        const fJornal = document.getElementById('artigos-filter-jornal')?.value || '';
+        const fStatus = document.getElementById('artigos-filter-status')?.value || '';
+        const fTag = document.getElementById('artigos-filter-tag')?.value || '';
+        const fPrior = document.getElementById('artigos-filter-prioridade')?.value || '';
+        const fDate = document.getElementById('artigos-filter-date')?.value || '';
+        if (fId && /^\d+$/.test(fId)) params.set('id', fId);
+        if (fTitulo) params.set('titulo', fTitulo);
+        if (fJornal) params.set('jornal', fJornal);
+        if (fStatus) params.set('status', fStatus);
+        if (fTag) params.set('tag', fTag);
+        if (fPrior) params.set('prioridade', fPrior);
+        if (fDate) params.set('date', fDate);
+        // Ordenação
+        if (artigosState.sortKey) params.set('sort_by', artigosState.sortKey);
+        if (artigosState.sortDir) params.set('sort_dir', artigosState.sortDir);
+
+        const response = await fetch(`${API_BASE}/settings/artigos?${params.toString()}`);
         const data = await response.json();
         
         if (response.ok) {
@@ -345,9 +368,30 @@ async function loadArtigos() {
 }
 
 function displayArtigos(data) {
-    // guarda dados da página atual e renderiza com filtros/sort
+    // atualiza estado e renderiza exatamente os dados retornados
     artigosState.rows = Array.isArray(data.artigos) ? data.artigos : [];
-    renderArtigosFilteredSorted();
+    // apenas renderiza (sem refiltrar no cliente para não podar a página)
+    const tbody = document.getElementById('artigos-tbody');
+    tbody.innerHTML = '';
+    artigosState.rows.forEach(artigo => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${artigo.id}</td>
+            <td>${artigo.titulo_extraido || (artigo.texto_bruto ? artigo.texto_bruto.substring(0, 50) + '...' : '')}</td>
+            <td>${artigo.jornal || '-'}</td>
+            <td><span class="status-badge status-${artigo.status}">${artigo.status}</span></td>
+            <td>${artigo.tag ? `<span class="tag-badge">${artigo.tag}</span>` : '-'}</td>
+            <td>${artigo.prioridade ? `<span class="priority-badge ${artigo.prioridade}">${artigo.prioridade}</span>` : '-'}</td>
+            <td>${formatDate(artigo.created_at)}</td>
+            <td>
+                <div class="action-buttons">
+                    <button class="btn-edit" onclick="editArtigo(${artigo.id})">Editar</button>
+                    <button class="btn-delete" onclick="deleteArtigo(${artigo.id})">Excluir</button>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
 
     showTable('artigos');
     createPagination('artigos', data.page, data.pages, loadArtigos);
@@ -396,7 +440,32 @@ async function loadClusters() {
     showLoading('clusters');
     
     try {
-        const response = await fetch(`${API_BASE}/settings/clusters?page=${currentPage}&limit=20`);
+        const params = new URLSearchParams();
+        params.set('page', currentPage);
+        params.set('limit', 20);
+        // Filtros
+        const fId = document.getElementById('clusters-filter-id')?.value || '';
+        const fTitulo = document.getElementById('clusters-filter-titulo')?.value || '';
+        const fTag = document.getElementById('clusters-filter-tag')?.value || '';
+        const fPrior = document.getElementById('clusters-filter-prioridade')?.value || '';
+        const fStatus = document.getElementById('clusters-filter-status')?.value || '';
+        const fTotal = document.getElementById('clusters-filter-total')?.value || '';
+        const fDate = document.getElementById('clusters-filter-date')?.value || '';
+        if (fId && /^\d+$/.test(fId)) params.set('id', fId);
+        if (fTitulo) params.set('titulo', fTitulo);
+        if (fTag) params.set('tag', fTag);
+        if (fPrior) params.set('prioridade', fPrior);
+        if (fStatus) params.set('status', fStatus);
+        if (fTotal) {
+            const m = fTotal.match(/^(>=|<=|>|<|=)\s*(\d+)$/);
+            if (m) { params.set('total_op', m[1]); params.set('total_val', m[2]); }
+        }
+        if (fDate) params.set('date', fDate);
+        // Ordenação
+        if (clustersState.sortKey) params.set('sort_by', clustersState.sortKey);
+        if (clustersState.sortDir) params.set('sort_dir', clustersState.sortDir);
+
+        const response = await fetch(`${API_BASE}/settings/clusters?${params.toString()}`);
         const data = await response.json();
         
         if (response.ok) {
@@ -411,7 +480,27 @@ async function loadClusters() {
 
 function displayClusters(data) {
     clustersState.rows = Array.isArray(data.clusters) ? data.clusters : [];
-    renderClustersFilteredSorted();
+    const tbody = document.getElementById('clusters-tbody');
+    tbody.innerHTML = '';
+    clustersState.rows.forEach(cluster => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${cluster.id}</td>
+            <td>${cluster.titulo_cluster}</td>
+            <td><span class="tag-badge">${cluster.tag}</span></td>
+            <td><span class="priority-badge ${cluster.prioridade}">${cluster.prioridade}</span></td>
+            <td><span class="status-badge status-${cluster.status}">${cluster.status}</span></td>
+            <td>${cluster.total_artigos}</td>
+            <td>${formatDate(cluster.created_at)}</td>
+            <td>
+                <div class="action-buttons">
+                    <button class="btn-edit" onclick="editCluster(${cluster.id})">Editar</button>
+                    <button class="btn-delete" onclick="deleteCluster(${cluster.id})">Excluir</button>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
 
     showTable('clusters');
     createPagination('clusters', data.page, data.pages, loadClusters);

@@ -899,7 +899,11 @@ async function copyClusterToClipboard(cluster) {
     }
 
     if (success) {
-        showSuccessMessage('Resumo copiado');
+        if (typeof showSuccessMessage === 'function') {
+            showSuccessMessage('Resumo copiado');
+        } else {
+            showNotification('Resumo copiado', 'success');
+        }
         return true;
     } else {
         showErrorMessage('Falha ao copiar');
