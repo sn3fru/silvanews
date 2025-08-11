@@ -81,7 +81,7 @@ cd "C:\Users\marcos.silva\OneDrive - ENFORCE GESTAO DE ATIVOS S.A\jupyter\projet
   python load_news.py --dir ../pdfs --direct --yes
   ```
 - Upload de um arquivo específico:
-  ```bash
+```bash
   python load_news.py --file ../pdfs/arquivo.pdf --direct --yes
   ```
 - Processar artigos (extração → agrupamento → resumos):
@@ -96,12 +96,12 @@ cd "C:\Users\marcos.silva\OneDrive - ENFORCE GESTAO DE ATIVOS S.A\jupyter\projet
 
 ## Sincronizar Banco Local → Heroku (Incremental)
 Rodar a partir da pasta `silva-front` ou `btg_alphafeed`:
-```bash
-conda activate pymc2
-python -m btg_alphafeed.migrate_incremental \
-  --source "postgresql+psycopg2://postgres_local@localhost:5433/devdb" \
-  --dest   "postgres://<usuario>:<senha>@<host>:5432/<db>" \
-  --include-logs --include-chat
+  ```bash
+  conda activate pymc2
+  python -m btg_alphafeed.migrate_incremental \
+    --source "postgresql+psycopg2://postgres_local@localhost:5433/devdb" \
+    --dest   "postgres://<usuario>:<senha>@<host>:5432/<db>" \
+    --include-logs --include-chat
 ```
 - Opções úteis:
   - `--no-update-existing`: não atualiza registros existentes (apenas insere novos)

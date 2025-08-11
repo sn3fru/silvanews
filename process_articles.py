@@ -57,7 +57,7 @@ load_dotenv(env_file)
 print(f"SUCESSO: Arquivo .env carregado: {env_file}")
 
 # Configuração de lotes para evitar truncamento
-BATCH_SIZE_AGRUPAMENTO = 50  # Tamanho seguro do lote para agrupamento
+BATCH_SIZE_AGRUPAMENTO = 150  # Lote maior para aumentar consolidação por fato
 
 # Configuração do Gemini
 api_key = os.getenv("GEMINI_API_KEY")
@@ -594,7 +594,7 @@ def agrupar_noticias_incremental(db: Session, client) -> bool:
         print(f"🔗 AGRUPAMENTO INCREMENTAL: {len(artigos_novos)} artigos novos, {len(clusters_existentes)} clusters existentes")
         
         # Determina se precisa processar em lotes
-        TAMANHO_LOTE_MAXIMO = 50  # Máximo de notícias por lote
+        TAMANHO_LOTE_MAXIMO = 150  # Máximo de notícias por lote (incremental mais abrangente)
         processar_em_lotes = len(artigos_novos) > TAMANHO_LOTE_MAXIMO
         
         if processar_em_lotes:

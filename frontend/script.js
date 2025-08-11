@@ -695,6 +695,7 @@ function criarCardCluster(cluster) {
                 </div>
             </div>
             <div class="card-footer-right">
+                <button class="btn btn-secundario btn-copy" data-cluster-id="${cluster.id}">📋 Copiar</button>
                 <button class="btn btn-deep-dive" onclick="openModal(${cluster.id})">
                     💬 Conversar com a notícia
                 </button>
@@ -784,6 +785,92 @@ function mostrarModalDetalhes(clusterDetails) {
     
     if (modal) modal.classList.remove('oculto');
 }
+
+// ================================
+// COPIAR PARA CLIPBOARD (cluster)
+// ================================
+function formatarDataBR(isoStr) {
+    try {
+        const d = isoStr ? new Date(isoStr) : new Date();
+        return new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo' }).format(d);
+    } catch {
+        return new Date().toLocaleDateString('pt-BR');
+    }
+}
+
+function extrairFonteELink(cluster) {
+    const fonte = cluster.fonte || cluster.jornal || cluster.tag || 'N/A';
+    let link = null;
+    if (cluster.fontes && cluster.fontes.length) {
+        const f = cluster.fontes.find(x => x.url) || cluster.fontes[0];
+        link = f && f.url ? f.url : null;
+    }
+    return { fonte, link };
+}
+
+function buildClipboardPayload(cluster) {
+    const titulo = cluster.titulo_final || cluster.titulo_cluster || 'Sem título';
+    const resumo = cluster.resumo_final || cluster.resumo_cluster || 'Sem resumo';
+    const { fonte, link } = extrairFonteELink(cluster);
+    const dataStr = formatarDataBR(cluster.timestamp || cluster.created_at);
+
+    const text = `*Título:* ${titulo} / *Fonte:* ${fonte} / ${dataStr}\n*Resumo:* ${resumo}\n${link ? `*Link:* ${link}` : ''}`;
+
+    const html = `<div>
+  <div><b>Título:</b> ${titulo} / <b>Fonte:</b> ${fonte} / ${dataStr}</div>
+  <div><b>Resumo:</b> ${resumo}</div>
+  ${link ? `<div><b>Link:</b> <a href="${link}">${link}</a></div>` : ``}
+</div>`;
+
+    return { text, html };
+}
+
+async function copyClusterToClipboard(cluster) {
+    const { text, html } = buildClipboardPayload(cluster);
+
+    if (navigator.clipboard && window.ClipboardItem) {
+        try {
+            const data = [new ClipboardItem({
+                'text/plain': new Blob([text], { type: 'text/plain' }),
+                'text/html': new Blob([html], { type: 'text/html' })
+            })];
+            await navigator.clipboard.write(data);
+            showSuccessMessage('Resumo copiado');
+            return true;
+        } catch (e) {
+            // fallback
+        }
+    }
+    try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        showSuccessMessage('Resumo copiado');
+        return true;
+    } catch (e) {
+        showErrorMessage('Falha ao copiar');
+        return false;
+    }
+}
+
+// Delegação de eventos para botões Copiar
+document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.btn-copy');
+    if (!btn) return;
+    const id = btn.getAttribute('data-cluster-id');
+    const cluster = (window.currentApiData && window.currentApiData.clusters || []).find(c => String(c.id) === String(id));
+    if (!cluster) {
+        showErrorMessage('Cluster não encontrado');
+        return;
+    }
+    await copyClusterToClipboard(cluster);
+});
 
 function renderizarFontes(fontes) {
     if (!listaFontesContainer) return;

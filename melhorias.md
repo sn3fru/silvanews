@@ -118,3 +118,104 @@ Observações finais
 Mantemos a decisão de usar 8 tags (fonte da verdade em backend/prompts.py), mas introduzimos a “disciplina pragmática” do poc_silva.py na extração e no score.
 O conjunto de mudanças é majoritariamente em prompts e ajustes simples de validação; a estrutura de backend/front permanece.
 Se fizer sentido, eu escrevo os rascunhos de prompts revisados já com a linguagem do POC (allow/reject, exemplos positivos/negativos, “assunto-chave” obrigatório e bandas de score), preservando as 8 tags atuais.
+
+---
+
+Casos práticos de ruído (observados hoje) e ajustes específicos
+
+1) P1 indevido: “Idosa deve ser indenizada por queda em hotel” (cível de baixo valor)
+- Problema: classificado como P1 e “Jurídico, Falências e Regulatório”.
+- Ajuste proposto:
+  - Nova regra de rejeição imediata: “Indenizações individuais cíveis ou trabalhistas de baixo valor, sem impacto corporativo/setorial ou mercado de capitais → IRRELEVANTE”.
+  - Regra P1 dura: P1 só se o assunto-chave pertencer à lista crítica (RJ/Falência/M&A anunciado/Default/Crise de Liquidez/Quebra de Covenants/Decisão CADE com remédios). Casos fora dessa lista não podem ser P1.
+  - Se o LLM retornar P1 fora da lista, o pipeline corrige para P3 ≤ 35 ou descarta (gatekeeper).
+
+2) P1 indevido: “Auxiliar será indenizada por ofensas racistas” (trabalhista, dano moral)
+- Problema: classificado como P1; irrelevante para Special Situations.
+- Ajuste proposto:
+  - Rejeição imediata: “Ações trabalhistas/indenizações individuais, sem relação com empresas listadas, RJ/Falência, M&A, default, NPLs, decisões do CADE → IRRELEVANTE”.
+  - Reforçar “exemplos negativos” na allow list (POC) para afastar temas de direitos individuais sem efeito de mercado.
+
+3) P1 indevido: “Fórum dos Leitores (opiniões/Cartas)”
+- Problema: opinião/curadoria editorial → não é evento factual de negócio.
+- Ajuste proposto:
+  - Rejeição imediata: “Opinião/Cartas/Editorial/Crônicas/Colunas sem fato gerador objetivo → IRRELEVANTE”.
+  - Se houver fato de negócio concreto dentro do texto, a extração deve recortar o fato; caso contrário, descartar.
+
+4) P3 com tag errada: ‘Distressed Assets e NPLs’ aplicada a classificados/leilões genéricos
+- Problema: cluster P3 rotulado como “Distressed Assets e NPLs” agregando avisos de licitações, leilões pequenos (veículos/joias/apartamentos isolados), chamadas de compras públicas etc.
+- Ajuste proposto (tagging e gatekeeper):
+  - Regra de default: “Classificados/Leilões genéricos/Chamadas públicas/Procurement” → IRRELEVANTE.
+  - Exceções claras (podem ser ‘Distressed Assets e NPLs’ ou P1/P2 conforme o caso):
+    - Leilão judicial de alto valor (> R$ 10 milhões) de ativos relevantes (imóveis corporativos, participações societárias, usinas, concessões).
+    - Venda de carteira NPL (portfólio) ou anúncio de securitização de dívidas ativas por entes públicos (com valores e players).
+    - Anúncio formal de desinvestimento corporativo (asset sale) por companhia relevante.
+  - Exigir presença de: tipo (judicial/portfólio), valor/ordem de grandeza, atores corporativos ou ente público com potencial impacto. Sem isso → IRRELEVANTE.
+  - Ajuste de mapeamento: “Leilão de apartamento individual”, “leilões de veículos/joias”, “editais de compra/serviços” → nunca mapear para ‘Distressed Assets e NPLs’. Se permanecer no corpus por algum motivo, rotular como IRRELEVANTE pelo gatekeeper.
+
+Regras prontas para o prompt (copiar/colar nas seções de extração e gatekeeper)
+
+- Rejeição Imediata (extração e gatekeeper):
+  - Indenizações cíveis/trabalhistas individuais de baixo valor, sem impacto empresarial/setorial.
+  - Opinião/Cartas/Editorial/Colunas sem fato gerador objetivo e verificável.
+  - Classificados/leilões genéricos de bens de consumo, joias, veículos, apartamentos isolados e procurement comum (salvo exceções abaixo).
+  - Crimes e segurança pública cotidiana; cultura/entretenimento sem tese de negócio; política partidária pura.
+
+- Exceções (quando manter e como classificar):
+  - Leilão judicial de alto valor (> R$ 10 milhões) ou venda de carteira NPL/Distressed → ‘Distressed Assets e NPLs’. Prioridade depende do tamanho/urgência; P1 se acionável/imediato e relevante.
+  - Securitização de dívida ativa por estados/municípios (com valores/processos definidos) → ‘Dívida Ativa e Créditos Públicos’ (P1/P2 conforme materialidade/estágio).
+  - Desinvestimento/asset sale corporativo, OPA, M&A anunciado → ‘M&A e Transações Corporativas’ (P1 por padrão se anunciado/formal).
+
+- P1 – Regra Dura (gating):
+  - Somente quando o “assunto-chave” ∈ {Recuperação Judicial, Falência, Pedido de Falência, Assembleia de Credores, Default de Dívida, Quebra de Covenants, Crise de Liquidez Aguda, M&A Anunciado, Decisão do CADE com remédios/efeitos vinculantes, Securitização relevante ou venda de carteira NPL de grande porte}.
+  - Caso o LLM marque P1 fora dessa lista, normalizar para P3 (score ≤ 35) ou descartar, com justificativa do gatekeeper.
+
+- Bandas de score vinculadas à prioridade (com coerção no pipeline):
+  - P1 ≥ 85; P2 ∈ [50, 84]; P3 ∈ [20, 49].
+  - RJ/Falência/M&A anunciado/Default não podem ter score < 85.
+  - “Classificados/Procurement” nunca P1/P2.
+
+- Campo obrigatório “assunto-chave” para derivação determinística:
+  - O LLM deve sempre preencher o assunto exato (ex.: “Recuperação Judicial”, “Decisão do CADE”, “M&A anunciado”, “Venda de carteira NPL”, “Leilão judicial > R$10M”).
+  - Derivar tag/prioridade via mapeamento; se não mapeia, classificar como IRRELEVANTE ou P3 ≤ 35 sujeito a gatekeeper.
+
+Melhorias no texto dos P3 (Radar/one-liner)
+
+- Padrão: “Entidade/Ator principal: ação/síntese em 1 linha; evitar listas massivas de itens sem relevância financeira.”
+- Excluir do Radar: classificados/leilões genéricos, chamadas públicas, avisos de licitação comuns.
+- Exemplo de reescrita (quando excepcionalmente mantido):
+  - “Banco X: leilão judicial de portfólio de NPLs avaliado em R$ 120 mi — 1ª praça em 22/08; edital publicado.”
+  - “Estado Y: securitização de dívida ativa (R$ 800 mi) — consulta pública aberta; leilão previsto para setembro.”
+
+Heurísticas/keywords auxiliares
+
+- Indicadores de irrelevância: “Fórum dos Leitores”, “Cartas do Leitor”, “indenização por danos morais” (sem empresa listada/impacto), “procurement”, “pregão eletrônico”, “chamada pública”, “edital de licitação”, “leilão de veículos/joias/apartamento”.
+- Indicadores de relevância: “Recuperação Judicial”, “Falência”, “Pedido de Falência”, “default”, “quebra de covenants”, “M&A”, “OPA”, “Decisão do CADE”, “securitização”, “carteira NPL”, valores em R$ milhões/bilhões, players corporativos/governo.
+
+Plano de rollout incremental (com esses casos em mente)
+
+1. Endurecer EXTRAÇÃO com reject list, assunto-chave obrigatório e P1 gating.
+2. Normalizar no pipeline scores incoerentes e derrubar P1 inválido.
+3. Reforçar AGRUPAMENTO com exemplos “mesmo fato/estágios/ação⇄reação”; manter fallback.
+4. Gatekeeper binário espelhando reject list; derrubar classificados/avisos e casos cíveis/trabalhistas individuais.
+5. Radar: garantir one-liners de alto sinal; excluir ruído (classificados) por padrão.
+
+---
+
+Controle de volume por prioridade (sem sumir notícias)
+
+- Metas diárias: P1 10–20; P2 10–40; P3 30–100.
+- Princípio: nenhuma notícia some. Excesso desce de P1→P2 e de P2→P3; P3 excedente permanece visível (ou marcado como “extras”), nunca descartado.
+
+Camada de capping com demotion ordenada
+- Após agrupar e calcular score S (relevance + bônus/penalidades), ordenar clusters por S dentro de cada prioridade.
+- Aplicar caps:
+  - P1: se >20, demover os clusters de menor S para P2. Assuntos P1 “hard” (RJ/Falência/Default/OPA/CADE com remédios, NPL/securitização relevante) nunca caem abaixo de P2.
+  - P2: se >40, demover os clusters de menor S para P3.
+  - P3: se >100, manter excedentes visíveis (ou seção “extras”/paginação). Nunca ocultar definitivamente.
+
+Agrupar mais para caber (reduzir cardinalidade sem perder fontes)
+- Fusão por núcleo semântico: unir clusters com mesmo ator e fato temporal coincidente (anúncio+reação+análise no mesmo dia).
+- Ação⇄consequência direta: decisão regulatória e reação de mercado no mesmo período (mesmo cluster).
+- Preferir anexar em incremental: elevar o limiar de “preferir anexar” e, em caso de dúvida razoável, anexar.
+- Passada de fusão antes do capping: checar P1/P2 do dia por tema_principal/ator e unir clusters quase-idênticos.
