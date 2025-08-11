@@ -8,6 +8,7 @@ let currentItem = null;
 document.addEventListener('DOMContentLoaded', function() {
     loadArtigos();
     carregarTagsDisponiveis(); // Carrega tags disponíveis ao carregar a página
+    setupSortingAndFilters();
 });
 
 // Navegação entre tabs
@@ -29,9 +30,6 @@ function showTab(tabName) {
             break;
         case 'clusters':
             loadClusters();
-            break;
-        case 'sinteses':
-            loadSinteses();
             break;
     }
 }
@@ -63,10 +61,12 @@ async function carregarTagsDisponiveis() {
         tagsDisponiveis = Array.from(tagsUnicas).sort();
         
         console.log('Tags carregadas dos clusters:', tagsDisponiveis);
+        populateTagFiltersIfNeeded();
     } catch (error) {
         console.error('Erro ao carregar tags dos clusters:', error);
         // Fallback para tags antigas se a API falhar
         tagsDisponiveis = ['Governo e Politica', 'Economia e Tecnologia', 'Judicionario', 'Empresas Privadas'];
+        populateTagFiltersIfNeeded();
     }
 }
 
@@ -84,6 +84,243 @@ function generateTagOptions(selectedTag) {
     return tagsDisponiveis.map(tag => 
         `<option value="${tag}" ${selectedTag === tag ? 'selected' : ''}>${tag}</option>`
     ).join('');
+}
+
+function populateTagFiltersIfNeeded() {
+    const artigosTagSelect = document.getElementById('artigos-filter-tag');
+    if (artigosTagSelect && artigosTagSelect.options.length <= 1) {
+        artigosTagSelect.innerHTML = '<option value="">Todas</option>' + tagsDisponiveis.map(t => `<option value="${t}">${t}</option>`).join('');
+    }
+    const clustersTagSelect = document.getElementById('clusters-filter-tag');
+    if (clustersTagSelect && clustersTagSelect.options.length <= 1) {
+        clustersTagSelect.innerHTML = '<option value=\"\">Todas</option>' + tagsDisponiveis.map(t => `<option value=\"${t}\">${t}</option>`).join('');
+    }
+    // Re-render lists to apply any selected tag filter
+    if (artigosState.rows.length) renderArtigosFilteredSorted();
+    if (clustersState.rows.length) renderClustersFilteredSorted();
+}
+
+// =======================================
+// ORDENACAO E FILTROS (CLIENTE)
+// =======================================
+let artigosState = { rows: [], sortKey: 'created_at', sortDir: 'desc' };
+let clustersState = { rows: [], sortKey: 'created_at', sortDir: 'desc' };
+
+function setupSortingAndFilters() {
+    // Sorting handlers
+    document.querySelectorAll('#artigos-table thead th.sortable').forEach(th => {
+        th.addEventListener('click', () => {
+            toggleSort('artigos', th.dataset.key);
+        });
+    });
+    document.querySelectorAll('#clusters-table thead th.sortable').forEach(th => {
+        th.addEventListener('click', () => {
+            toggleSort('clusters', th.dataset.key);
+        });
+    });
+
+    // Filter handlers - artigos
+    const artigoFilterIds = ['id','titulo','jornal','status','tag','prioridade','date'];
+    artigoFilterIds.forEach(fid => {
+        const el = document.getElementById(`artigos-filter-${fid}`);
+        if (el) el.addEventListener('input', renderArtigosFilteredSorted);
+        if (el && el.tagName === 'SELECT') el.addEventListener('change', renderArtigosFilteredSorted);
+    });
+    // Filter handlers - clusters
+    const clusterFilterIds = ['id','titulo','tag','prioridade','status','total','date'];
+    clusterFilterIds.forEach(fid => {
+        const el = document.getElementById(`clusters-filter-${fid}`);
+        if (el) el.addEventListener('input', renderClustersFilteredSorted);
+        if (el && el.tagName === 'SELECT') el.addEventListener('change', renderClustersFilteredSorted);
+    });
+}
+
+function toggleSort(tab, key) {
+    const state = tab === 'artigos' ? artigosState : clustersState;
+    if (state.sortKey === key) {
+        state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+        state.sortKey = key;
+        state.sortDir = 'asc';
+    }
+    updateSortIndicators(tab);
+    if (tab === 'artigos') {
+        renderArtigosFilteredSorted();
+    } else {
+        renderClustersFilteredSorted();
+    }
+}
+
+function updateSortIndicators(tab) {
+    const table = document.getElementById(`${tab}-table`);
+    if (!table) return;
+    const state = tab === 'artigos' ? artigosState : clustersState;
+    table.querySelectorAll('thead th.sortable').forEach(th => {
+        th.classList.remove('sorted-asc', 'sorted-desc');
+        if (th.dataset.key === state.sortKey) {
+            th.classList.add(state.sortDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+        }
+    });
+}
+
+function compareValues(a, b) {
+    if (a == null && b == null) return 0;
+    if (a == null) return -1;
+    if (b == null) return 1;
+    // Try dates
+    const ad = Date.parse(a);
+    const bd = Date.parse(b);
+    if (!isNaN(ad) && !isNaN(bd)) return ad - bd;
+    // Numbers
+    const an = Number(a);
+    const bn = Number(b);
+    if (!isNaN(an) && !isNaN(bn)) return an - bn;
+    // Strings
+    return String(a).localeCompare(String(b), 'pt-BR', { sensitivity: 'base' });
+}
+
+function passesTextFilter(value, filterText) {
+    if (!filterText) return true;
+    return String(value || '').toLowerCase().includes(String(filterText).toLowerCase());
+}
+
+function passesNumericFilter(value, filterText) {
+    if (!filterText) return true;
+    const v = Number(value);
+    if (isNaN(v)) return false;
+    const m = filterText.trim();
+    const op = m.startsWith('>=') || m.startsWith('<=') || m.startsWith('>') || m.startsWith('<') || m.startsWith('=') ? null : '=';
+    const expr = op ? op + m : m;
+    const re = /^(>=|<=|>|<|=)\s*(\d+(?:\.\d+)?)$/;
+    const mm = expr.match(re);
+    if (!mm) return false;
+    const operator = mm[1];
+    const num = Number(mm[2]);
+    switch (operator) {
+        case '>': return v > num;
+        case '<': return v < num;
+        case '>=': return v >= num;
+        case '<=': return v <= num;
+        case '=': return v === num;
+        default: return true;
+    }
+}
+
+function passesDateFilter(valueISO, filterDateStr) {
+    if (!filterDateStr) return true;
+    if (!valueISO) return false;
+    const d1 = new Date(valueISO);
+    const d2 = new Date(filterDateStr);
+    return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
+}
+
+function renderArtigosFilteredSorted() {
+    // Fill tag filter options once
+    const tagSelect = document.getElementById('artigos-filter-tag');
+    if (tagSelect && tagSelect.options.length <= 1 && Array.isArray(tagsDisponiveis)) {
+        tagSelect.innerHTML = '<option value="">Todas</option>' + tagsDisponiveis.map(t => `<option value="${t}">${t}</option>`).join('');
+    }
+    const fId = document.getElementById('artigos-filter-id')?.value || '';
+    const fTitulo = document.getElementById('artigos-filter-titulo')?.value || '';
+    const fJornal = document.getElementById('artigos-filter-jornal')?.value || '';
+    const fStatus = document.getElementById('artigos-filter-status')?.value || '';
+    const fTag = document.getElementById('artigos-filter-tag')?.value || '';
+    const fPrior = document.getElementById('artigos-filter-prioridade')?.value || '';
+    const fDate = document.getElementById('artigos-filter-date')?.value || '';
+
+    let rows = artigosState.rows.filter(row => {
+        const okId = fId ? passesNumericFilter(row.id, fId) : true;
+        const okTitulo = passesTextFilter(row.titulo_extraido || row.texto_bruto, fTitulo);
+        const okJornal = passesTextFilter(row.jornal, fJornal);
+        const okStatus = fStatus ? String(row.status) === fStatus : true;
+        const okTag = fTag ? String(row.tag) === fTag : true;
+        const okPrior = fPrior ? String(row.prioridade) === fPrior : true;
+        const okDate = passesDateFilter(row.created_at, fDate);
+        return okId && okTitulo && okJornal && okStatus && okTag && okPrior && okDate;
+    });
+
+    rows.sort((a, b) => {
+        const dir = artigosState.sortDir === 'asc' ? 1 : -1;
+        return compareValues(a[artigosState.sortKey], b[artigosState.sortKey]) * dir;
+    });
+
+    const tbody = document.getElementById('artigos-tbody');
+    tbody.innerHTML = '';
+    rows.forEach(artigo => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${artigo.id}</td>
+            <td>${artigo.titulo_extraido || (artigo.texto_bruto ? artigo.texto_bruto.substring(0, 50) + '...' : '')}</td>
+            <td>${artigo.jornal || '-'}</td>
+            <td><span class="status-badge status-${artigo.status}">${artigo.status}</span></td>
+            <td>${artigo.tag ? `<span class="tag-badge">${artigo.tag}</span>` : '-'}</td>
+            <td>${artigo.prioridade ? `<span class="priority-badge ${artigo.prioridade}">${artigo.prioridade}</span>` : '-'}</td>
+            <td>${formatDate(artigo.created_at)}</td>
+            <td>
+                <div class="action-buttons">
+                    <button class="btn-edit" onclick="editArtigo(${artigo.id})">Editar</button>
+                    <button class="btn-delete" onclick="deleteArtigo(${artigo.id})">Excluir</button>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+    updateSortIndicators('artigos');
+}
+
+function renderClustersFilteredSorted() {
+    // Fill tag filter options once
+    const tagSelect = document.getElementById('clusters-filter-tag');
+    if (tagSelect && tagSelect.options.length <= 1 && Array.isArray(tagsDisponiveis)) {
+        tagSelect.innerHTML = '<option value="">Todas</option>' + tagsDisponiveis.map(t => `<option value="${t}">${t}</option>`).join('');
+    }
+
+    const fId = document.getElementById('clusters-filter-id')?.value || '';
+    const fTitulo = document.getElementById('clusters-filter-titulo')?.value || '';
+    const fTag = document.getElementById('clusters-filter-tag')?.value || '';
+    const fPrior = document.getElementById('clusters-filter-prioridade')?.value || '';
+    const fStatus = document.getElementById('clusters-filter-status')?.value || '';
+    const fTotal = document.getElementById('clusters-filter-total')?.value || '';
+    const fDate = document.getElementById('clusters-filter-date')?.value || '';
+
+    let rows = clustersState.rows.filter(row => {
+        const okId = fId ? passesNumericFilter(row.id, fId) : true;
+        const okTitulo = passesTextFilter(row.titulo_cluster, fTitulo);
+        const okTag = fTag ? String(row.tag) === fTag : true;
+        const okPrior = fPrior ? String(row.prioridade) === fPrior : true;
+        const okStatus = fStatus ? String(row.status) === fStatus : true;
+        const okTotal = fTotal ? passesNumericFilter(row.total_artigos, fTotal) : true;
+        const okDate = passesDateFilter(row.created_at, fDate);
+        return okId && okTitulo && okTag && okPrior && okStatus && okTotal && okDate;
+    });
+
+    rows.sort((a, b) => {
+        const dir = clustersState.sortDir === 'asc' ? 1 : -1;
+        return compareValues(a[clustersState.sortKey], b[clustersState.sortKey]) * dir;
+    });
+
+    const tbody = document.getElementById('clusters-tbody');
+    tbody.innerHTML = '';
+    rows.forEach(cluster => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${cluster.id}</td>
+            <td>${cluster.titulo_cluster}</td>
+            <td><span class="tag-badge">${cluster.tag}</span></td>
+            <td><span class="priority-badge ${cluster.prioridade}">${cluster.prioridade}</span></td>
+            <td><span class="status-badge status-${cluster.status}">${cluster.status}</span></td>
+            <td>${cluster.total_artigos}</td>
+            <td>${formatDate(cluster.created_at)}</td>
+            <td>
+                <div class="action-buttons">
+                    <button class="btn-edit" onclick="editCluster(${cluster.id})">Editar</button>
+                    <button class="btn-delete" onclick="deleteCluster(${cluster.id})">Excluir</button>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+    updateSortIndicators('clusters');
 }
 
 // ==============================================================================
@@ -108,29 +345,10 @@ async function loadArtigos() {
 }
 
 function displayArtigos(data) {
-    const tbody = document.getElementById('artigos-tbody');
-    tbody.innerHTML = '';
-    
-    data.artigos.forEach(artigo => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${artigo.id}</td>
-            <td>${artigo.titulo_extraido || artigo.texto_bruto.substring(0, 50) + '...'}</td>
-            <td>${artigo.jornal || '-'}</td>
-            <td><span class="status-badge status-${artigo.status}">${artigo.status}</span></td>
-            <td>${artigo.tag ? `<span class="tag-badge">${artigo.tag}</span>` : '-'}</td>
-            <td>${artigo.prioridade ? `<span class="priority-badge ${artigo.prioridade}">${artigo.prioridade}</span>` : '-'}</td>
-            <td>${formatDate(artigo.created_at)}</td>
-            <td>
-                <div class="action-buttons">
-                    <button class="btn-edit" onclick="editArtigo(${artigo.id})">Editar</button>
-                    <button class="btn-delete" onclick="deleteArtigo(${artigo.id})">Excluir</button>
-                </div>
-            </td>
-        `;
-        tbody.appendChild(row);
-    });
-    
+    // guarda dados da página atual e renderiza com filtros/sort
+    artigosState.rows = Array.isArray(data.artigos) ? data.artigos : [];
+    renderArtigosFilteredSorted();
+
     showTable('artigos');
     createPagination('artigos', data.page, data.pages, loadArtigos);
 }
@@ -192,29 +410,9 @@ async function loadClusters() {
 }
 
 function displayClusters(data) {
-    const tbody = document.getElementById('clusters-tbody');
-    tbody.innerHTML = '';
-    
-    data.clusters.forEach(cluster => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${cluster.id}</td>
-            <td>${cluster.titulo_cluster}</td>
-            <td><span class="tag-badge">${cluster.tag}</span></td>
-            <td><span class="priority-badge ${cluster.prioridade}">${cluster.prioridade}</span></td>
-            <td><span class="status-badge status-${cluster.status}">${cluster.status}</span></td>
-            <td>${cluster.total_artigos}</td>
-            <td>${formatDate(cluster.created_at)}</td>
-            <td>
-                <div class="action-buttons">
-                    <button class="btn-edit" onclick="editCluster(${cluster.id})">Editar</button>
-                    <button class="btn-delete" onclick="deleteCluster(${cluster.id})">Excluir</button>
-                </div>
-            </td>
-        `;
-        tbody.appendChild(row);
-    });
-    
+    clustersState.rows = Array.isArray(data.clusters) ? data.clusters : [];
+    renderClustersFilteredSorted();
+
     showTable('clusters');
     createPagination('clusters', data.page, data.pages, loadClusters);
 }

@@ -76,6 +76,13 @@
             font-weight: 600;
             color: #495057;
         }
+        /* Sorting indicators */
+        .data-table th.sortable { cursor: pointer; user-select: none; }
+        .data-table th.sorted-asc::after { content: ' \25B2'; font-size: 10px; }
+        .data-table th.sorted-desc::after { content: ' \25BC'; font-size: 10px; }
+        /* Filters row */
+        .filters-row th { background: #ffffff; }
+        .filters-row input, .filters-row select { font-size: 12px; padding: 6px; }
         
         .data-table tr:hover {
             background: #f8f9fa;
@@ -579,7 +586,6 @@
         <div class="settings-nav">
             <button class="nav-tab active" onclick="showTab('artigos')">📰 Artigos Brutos</button>
             <button class="nav-tab" onclick="showTab('clusters')">🔗 Clusters/Eventos</button>
-            <button class="nav-tab" onclick="showTab('sinteses')">📄 Sínteses Executivas</button>
             <button class="nav-tab" onclick="showTab('upload')">📁 Upload de Arquivos</button>
         </div>
         
@@ -592,14 +598,43 @@
             <table id="artigos-table" class="data-table" style="display: none;">
                 <thead>
                     <tr>
-                        <th>ID</th>
-                        <th>Título</th>
-                        <th>Jornal</th>
-                        <th>Status</th>
-                        <th>Tag</th>
-                        <th>Prioridade</th>
-                        <th>Data</th>
+                        <th class="sortable" data-key="id">ID</th>
+                        <th class="sortable" data-key="titulo_extraido">Título</th>
+                        <th class="sortable" data-key="jornal">Jornal</th>
+                        <th class="sortable" data-key="status">Status</th>
+                        <th class="sortable" data-key="tag">Tag</th>
+                        <th class="sortable" data-key="prioridade">Prioridade</th>
+                        <th class="sortable" data-key="created_at">Data</th>
                         <th>Ações</th>
+                    </tr>
+                    <tr class="filters-row">
+                        <th><input id="artigos-filter-id" type="text" placeholder="=, >, <" style="width:100%"></th>
+                        <th><input id="artigos-filter-titulo" type="text" placeholder="Filtrar..." style="width:100%"></th>
+                        <th><input id="artigos-filter-jornal" type="text" placeholder="Filtrar..." style="width:100%"></th>
+                        <th>
+                            <select id="artigos-filter-status" style="width:100%">
+                                <option value="">Todos</option>
+                                <option value="pendente">Pendente</option>
+                                <option value="processado">Processado</option>
+                                <option value="irrelevante">Irrelevante</option>
+                                <option value="erro">Erro</option>
+                            </select>
+                        </th>
+                        <th>
+                            <select id="artigos-filter-tag" style="width:100%">
+                                <option value="">Todas</option>
+                            </select>
+                        </th>
+                        <th>
+                            <select id="artigos-filter-prioridade" style="width:100%">
+                                <option value="">Todas</option>
+                                <option value="P1_CRITICO">P1_CRITICO</option>
+                                <option value="P2_ESTRATEGICO">P2_ESTRATEGICO</option>
+                                <option value="P3_MONITORAMENTO">P3_MONITORAMENTO</option>
+                            </select>
+                        </th>
+                        <th><input id="artigos-filter-date" type="date" style="width:100%"></th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody id="artigos-tbody"></tbody>
@@ -617,14 +652,42 @@
             <table id="clusters-table" class="data-table" style="display: none;">
                 <thead>
                     <tr>
-                        <th>ID</th>
-                        <th>Título do Cluster</th>
-                        <th>Tag</th>
-                        <th>Prioridade</th>
-                        <th>Status</th>
-                        <th>Artigos</th>
-                        <th>Data</th>
+                        <th class="sortable" data-key="id">ID</th>
+                        <th class="sortable" data-key="titulo_cluster">Título do Cluster</th>
+                        <th class="sortable" data-key="tag">Tag</th>
+                        <th class="sortable" data-key="prioridade">Prioridade</th>
+                        <th class="sortable" data-key="status">Status</th>
+                        <th class="sortable" data-key="total_artigos">Artigos</th>
+                        <th class="sortable" data-key="created_at">Data</th>
                         <th>Ações</th>
+                    </tr>
+                    <tr class="filters-row">
+                        <th><input id="clusters-filter-id" type="text" placeholder="=, >, <" style="width:100%"></th>
+                        <th><input id="clusters-filter-titulo" type="text" placeholder="Filtrar..." style="width:100%"></th>
+                        <th>
+                            <select id="clusters-filter-tag" style="width:100%">
+                                <option value="">Todas</option>
+                            </select>
+                        </th>
+                        <th>
+                            <select id="clusters-filter-prioridade" style="width:100%">
+                                <option value="">Todas</option>
+                                <option value="P1_CRITICO">P1_CRITICO</option>
+                                <option value="P2_ESTRATEGICO">P2_ESTRATEGICO</option>
+                                <option value="P3_MONITORAMENTO">P3_MONITORAMENTO</option>
+                            </select>
+                        </th>
+                        <th>
+                            <select id="clusters-filter-status" style="width:100%">
+                                <option value="">Todos</option>
+                                <option value="ativo">Ativo</option>
+                                <option value="arquivado">Arquivado</option>
+                                <option value="descartado">Descartado</option>
+                            </select>
+                        </th>
+                        <th><input id="clusters-filter-total" type="text" placeholder="=, >, <" style="width:100%"></th>
+                        <th><input id="clusters-filter-date" type="date" style="width:100%"></th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody id="clusters-tbody"></tbody>
@@ -633,29 +696,7 @@
             <div id="clusters-pagination" class="pagination" style="display: none;"></div>
         </div>
         
-        <!-- Tab Sínteses -->
-        <div id="sinteses" class="tab-content">
-            <div id="sinteses-loading" class="loading">Carregando sínteses...</div>
-            <div id="sinteses-error" class="error" style="display: none;"></div>
-            <div id="sinteses-success" class="success" style="display: none;"></div>
-            
-            <table id="sinteses-table" class="data-table" style="display: none;">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Data</th>
-                        <th>Resumo</th>
-                        <th>Notícias</th>
-                        <th>Eventos</th>
-                        <th>Críticas</th>
-                        <th>Ações</th>
-                    </tr>
-                </thead>
-                <tbody id="sinteses-tbody"></tbody>
-            </table>
-            
-            <div id="sinteses-pagination" class="pagination" style="display: none;"></div>
-        </div>
+        
         
         <!-- Tab Upload -->
         <div id="upload" class="tab-content">
@@ -748,6 +789,6 @@
         </div>
     </div>
     
-    <script src="/frontend/settings.js?v=1.0.4"></script>
+    <script src="/frontend/settings.js?v=1.0.5"></script>
 </body>
 </html> 
