@@ -66,7 +66,7 @@ if not api_key:
     sys.exit(1)
 
 genai.configure(api_key=api_key)
-client = genai.GenerativeModel('gemini-2.0-flash-lite')
+client = genai.GenerativeModel('gemini-2.0-flash')
 print("SUCESSO: Gemini configurado com sucesso!")
 
 def extrair_json_da_resposta(resposta: str) -> Any:

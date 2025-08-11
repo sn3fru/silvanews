@@ -145,14 +145,14 @@ class FileLoader:
             response = None
             try:
                 response = self.client.models.generate_content(
-                    model='gemini-2.0-flash-lite',
+                    model='gemini-2.0-flash',
                     contents=[uploaded_file, self.extraction_prompt],
                     config=self.generation_config_decision
                 )
             except Exception:
                 # Fallback para clientes que expõem .generate_content na raiz
                 response = self.client.generate_content(
-                    model='models/gemini-2.0-flash-lite',
+                    model='models/gemini-2.0-flash',
                     contents=[uploaded_file, self.extraction_prompt],
                     generation_config=self.generation_config_decision
                 )

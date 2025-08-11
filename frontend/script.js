@@ -860,6 +860,17 @@ function buildClipboardPayload(cluster) {
 async function copyClusterToClipboard(cluster) {
     const { text, html } = buildClipboardPayload(cluster);
 
+    let success = false;
+
+    // 1) Tentar texto simples (alta compatibilidade)
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+            await navigator.clipboard.writeText(text);
+            success = true;
+        } catch (_) {}
+    }
+
+    // 2) Tentar rich text (HTML) como best-effort, sem alterar sucesso se falhar
     if (navigator.clipboard && window.ClipboardItem) {
         try {
             const data = [new ClipboardItem({
@@ -867,25 +878,30 @@ async function copyClusterToClipboard(cluster) {
                 'text/html': new Blob([html], { type: 'text/html' })
             })];
             await navigator.clipboard.write(data);
-            showSuccessMessage('Resumo copiado');
-            return true;
-        } catch (e) {
-            // fallback
-        }
+            success = true;
+        } catch (_) {}
     }
-    try {
-        const ta = document.createElement('textarea');
-        ta.value = text;
-        ta.setAttribute('readonly', '');
-        ta.style.position = 'fixed';
-        ta.style.opacity = '0';
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
+
+    // 3) Fallback com textarea se ainda não copiou
+    if (!success) {
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            success = true;
+        } catch (_) {}
+    }
+
+    if (success) {
         showSuccessMessage('Resumo copiado');
         return true;
-    } catch (e) {
+    } else {
         showErrorMessage('Falha ao copiar');
         return false;
     }

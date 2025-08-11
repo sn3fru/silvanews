@@ -362,7 +362,7 @@ def get_gemini_model():
         raise ValueError("GEMINI_API_KEY não configurada")
     
     genai.configure(api_key=api_key)
-    return genai.GenerativeModel('gemini-2.0-flash-lite')
+    return genai.GenerativeModel('gemini-2.0-flash')
 
 # ==============================================================================
 # UTILITÁRIOS DE DATA E FUSO HORÁRIO (GMT-3)
