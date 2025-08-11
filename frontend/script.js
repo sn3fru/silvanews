@@ -29,6 +29,7 @@ const modalCloseBtn = document.getElementById('modal-close-btn');
 const modalTitulo = document.getElementById('modal-titulo');
 const modalResumo = document.getElementById('modal-resumo');
 const modalTabs = document.querySelector('.modal-tabs');
+const modalCopyBtn = document.getElementById('modal-copy-btn');
 const tabContents = document.querySelectorAll('.tab-content');
 const listaFontesContainer = document.getElementById('lista-fontes-container');
 
@@ -45,6 +46,7 @@ let refreshInterval = null; // Intervalo para atualização automática
 let currentClusterId = null; // ID do cluster atual no modal
 let currentChatSession = null; // Sessão de chat atual
 let currentTags = []; // Tags atuais do cluster
+let currentClusterDetails = null; // Detalhes do cluster atualmente aberto no modal
 
 // Helpers de data sem impacto de fuso (tratam 'YYYY-MM-DD' como data local)
 function parseLocalDate(yyyyMmDd) {
@@ -375,6 +377,34 @@ function setupEventListeners() {
     if (modal) modal.addEventListener('click', (e) => {
         if (e.target === modal) closeModal();
     });
+
+    // Botão Copiar no modal
+    if (modalCopyBtn) {
+        modalCopyBtn.addEventListener('click', async () => {
+            const id = currentClusterId;
+            if (!id) return;
+            // Preferir detalhes já carregados no modal
+            if (currentClusterDetails) {
+                await copyClusterToClipboard(currentClusterDetails);
+                return;
+            }
+            // Fallback: procurar no cache do feed
+            let cluster = (clustersCarregados || []).find(c => String(c.id) === String(id));
+            if (!cluster) {
+                try {
+                    const details = await carregarDetalhesCluster(id);
+                    if (details) {
+                        currentClusterDetails = details;
+                        await copyClusterToClipboard(details);
+                        return;
+                    }
+                } catch (_) {}
+                showErrorMessage('Cluster não encontrado');
+                return;
+            }
+            await copyClusterToClipboard(cluster);
+        });
+    }
 
     // Tabs do Modal
     if (modalTabs) modalTabs.addEventListener('click', (e) => {
@@ -721,6 +751,8 @@ async function openModal(clusterId) {
             return;
         }
         
+        currentClusterDetails = clusterData;
+
         // Preenche dados básicos
         if (modalTitulo) modalTitulo.textContent = clusterData.titulo_final;
         if (modalResumo) modalResumo.textContent = clusterData.resumo_final;
@@ -864,8 +896,16 @@ document.addEventListener('click', async (e) => {
     const btn = e.target.closest('.btn-copy');
     if (!btn) return;
     const id = btn.getAttribute('data-cluster-id');
-    const cluster = (window.currentApiData && window.currentApiData.clusters || []).find(c => String(c.id) === String(id));
+    let cluster = (clustersCarregados || []).find(c => String(c.id) === String(id));
     if (!cluster) {
+        // Tenta carregar detalhes direto da API como fallback
+        try {
+            const details = await carregarDetalhesCluster(id);
+            if (details) {
+                await copyClusterToClipboard(details);
+                return;
+            }
+        } catch (_) {}
         showErrorMessage('Cluster não encontrado');
         return;
     }
