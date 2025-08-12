@@ -911,7 +911,7 @@ def processar_pdf_com_chunking(caminho_pdf: str, client, generation_config_decis
                 
                 # Aguarda processamento
                 while uploaded_file.state.name == "PROCESSING":
-                    time.sleep(5)
+                    time.sleep(0.5)
                     uploaded_file = client.files.get(name=uploaded_file.name)
                 
                 if uploaded_file.state.name != "ACTIVE":
@@ -1445,7 +1445,7 @@ def gerar_resumo_para_grupo(args):
             if not hasattr(response, 'text') or not response.text:
                 if tentativa < MAX_TENTATIVAS:
                     print(f"     ⚠️ Tentativa {tentativa}: Resposta vazia da API. Tentando novamente...")
-                    time.sleep(1)
+                    time.sleep(0.2)
                     continue
                 else:
                     print(f"     ❌ Falha na tentativa {tentativa}: API retornou resposta vazia.")
@@ -1457,7 +1457,7 @@ def gerar_resumo_para_grupo(args):
             if not resumo_bruto:
                 if tentativa < MAX_TENTATIVAS:
                     print(f"     ⚠️ Tentativa {tentativa}: JSON inválido. Tentando novamente...")
-                    time.sleep(1)
+                    time.sleep(0.2)
                     continue
                 else:
                     print(f"     ❌ Falha na tentativa {tentativa}: Não foi possível extrair JSON válido.")
@@ -1468,7 +1468,7 @@ def gerar_resumo_para_grupo(args):
             if not isinstance(resumo_bruto, dict) or 'titulo_final' not in resumo_bruto or 'resumo_final' not in resumo_bruto:
                 if tentativa < MAX_TENTATIVAS:
                     print(f"     ⚠️ Tentativa {tentativa}: Estrutura JSON incompleta. Tentando novamente...")
-                    time.sleep(1)
+                    time.sleep(0.2)
                     continue
                 else:
                     print(f"     ❌ Falha na tentativa {tentativa}: JSON sem campos obrigatórios.")
@@ -1511,7 +1511,7 @@ def gerar_resumo_para_grupo(args):
         except json.JSONDecodeError as json_err:
             if tentativa < MAX_TENTATIVAS:
                 print(f"     ⚠️ Tentativa {tentativa}: Erro de JSON. Tentando novamente... ({json_err})")
-                time.sleep(1)
+                time.sleep(0.2)
                 continue
             else:
                 print(f"     ❌ Falha final na tentativa {tentativa}: Erro JSON persistente para '{tema}': {json_err}")
@@ -1520,7 +1520,7 @@ def gerar_resumo_para_grupo(args):
         except ValidationError as val_err:
             if tentativa < MAX_TENTATIVAS:
                 print(f"     ⚠️ Tentativa {tentativa}: Erro de validação. Tentando novamente...")
-                time.sleep(1)
+                time.sleep(0.2)
                 continue
             else:
                 print(f"     ❌ Falha final na tentativa {tentativa}: Erro de validação para '{tema}': {val_err}")
@@ -1529,7 +1529,7 @@ def gerar_resumo_para_grupo(args):
         except Exception as e:
             if tentativa < MAX_TENTATIVAS:
                 print(f"     ⚠️ Tentativa {tentativa}: Erro geral. Tentando novamente... ({e})")
-                time.sleep(1)
+                time.sleep(0.2)
                 continue
             else:
                 print(f"     ❌ Falha final na tentativa {tentativa}: Erro geral para '{tema}': {e}")
@@ -1627,13 +1627,13 @@ def main(client, generation_config_decision, generation_config_text):
 
                     if not hasattr(response, 'text') or not isinstance(response.text, str) or not response.text.strip():
                         print(f"     ⚠️ Tentativa {tentativa}: Resposta vazia do LLM para o lote. Retry...")
-                        time.sleep(1)
+                        time.sleep(0.2)
                         continue
 
                     grupos_brutos = extrair_json_da_resposta(response.text)
                     if not grupos_brutos or not isinstance(grupos_brutos, list):
                         print(f"     ⚠️ Tentativa {tentativa}: JSON inválido no lote. Retry...")
-                        time.sleep(1)
+                        time.sleep(0.2)
                         grupos_brutos = None
                         continue
 
@@ -1641,7 +1641,7 @@ def main(client, generation_config_decision, generation_config_text):
                     break
                 except Exception as e:
                     print(f"     ⚠️ Tentativa {tentativa}: Erro ao agrupar lote: {e}")
-                    time.sleep(1)
+                    time.sleep(0.2)
 
             if not grupos_brutos:
                 # Fallback: cada item do lote vira seu próprio grupo

@@ -135,7 +135,7 @@ class FileLoader:
 
             # Aguarda processamento do arquivo na File API
             while getattr(uploaded_file, "state", None) and getattr(uploaded_file.state, "name", None) == "PROCESSING":
-                time.sleep(1)
+                time.sleep(0.2)
                 uploaded_file = self.client.files.get(name=uploaded_file.name)
 
             if uploaded_file.state.name != "ACTIVE":
@@ -417,7 +417,7 @@ class FileLoader:
                     print(f"    ❌ Falha ao salvar artigo {i} no banco")
             
             # Aguarda um pouco entre envios
-            time.sleep(0.2)
+            time.sleep(0.05)
         
         print(f"🎉 SUCESSO: {sucessos}/{len(artigos_brutos)} artigos processados de {file_path.name}")
         return sucessos

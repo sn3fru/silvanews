@@ -222,7 +222,7 @@ def processar_artigos_pendentes(limite: int = 10) -> bool:
                 erros += 1
                 print(f"    ERRO: Falha no processamento do artigo {artigo.id}")
             
-            time.sleep(1)  # Pausa entre processamentos
+            time.sleep(0.1)  # Pausa leve entre processamentos (throttle)
         
         print(f"ETAPA 1 CONCLUIDA: Sucessos: {sucessos}, Erros: {erros}")
         
@@ -975,7 +975,7 @@ def processar_artigos_em_lote(limite: int = 10) -> bool:
             else:
                 erros += 1
             
-            time.sleep(1)
+            time.sleep(0.1)
         
         print(f"\n✅ Processamento de artigos finalizado:")
         print(f"   📰 Artigos processados: {len(artigos_pendentes)}")

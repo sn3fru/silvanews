@@ -802,7 +802,7 @@ async def processar_arquivo_upload_com_progresso(file_path: Path, file_ext: str,
                     print(f"🔍 DEBUG: Artigo {i} enviado com sucesso para o banco")
                 
                 # Pequena pausa para efeito visual
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(0.02)
             
             upload_progress[file_id]["status"] = "completed"
             upload_progress[file_id]["message"] = f"SUCESSO: {total_artigos}/{total_artigos} artigos processados"
@@ -843,7 +843,7 @@ async def processar_arquivo_upload_com_progresso(file_path: Path, file_ext: str,
                     loader.enviar_artigo_direto_db(artigo)
                     
                     # Pequena pausa para efeito visual
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(0.02)
                 
                 upload_progress[file_id]["status"] = "completed"
                 upload_progress[file_id]["message"] = f"SUCESSO: {total_artigos}/{total_artigos} artigos processados"
@@ -871,7 +871,7 @@ async def processar_arquivo_upload_com_progresso(file_path: Path, file_ext: str,
                     loader.enviar_artigo_direto_db(artigo)
                     
                     # Pequena pausa para efeito visual
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(0.02)
                 
                 upload_progress[file_id]["status"] = "completed"
                 upload_progress[file_id]["message"] = f"SUCESSO: {total_artigos}/{total_artigos} artigos processados (fallback)"

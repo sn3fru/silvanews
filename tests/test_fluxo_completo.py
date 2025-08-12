@@ -79,7 +79,7 @@ def test_fluxo_completo():
                 erros += 1
                 print(f"    ERRO: Falha no processamento")
             
-            time.sleep(2)  # Pausa entre processamentos
+            time.sleep(0.2)  # Pausa entre processamentos
         
         print(f"\nSUCESSO: Processamento de artigos finalizado:")
         print(f"   Artigos processados: {len(artigos_pendentes)}")

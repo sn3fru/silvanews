@@ -126,7 +126,7 @@ def main():
     print("\n🎯 Pressione Ctrl+C para parar o servidor\n")
     
     # Aguarda um pouco para o usuário ler
-    time.sleep(2)
+    time.sleep(0.2)
     
     # Inicia a API
     start_api()

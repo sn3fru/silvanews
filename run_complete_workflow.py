@@ -126,7 +126,7 @@ def start_backend():
         print("\nPressione Ctrl+C para parar o servidor\n")
         
         # Aguarda um pouco para o usuário ler
-        time.sleep(3)
+        time.sleep(0.3)
         
         # Inicia o backend
         subprocess.run([

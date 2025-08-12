@@ -161,7 +161,7 @@ class ExemploColetor:
             ):
                 sucessos += 1
                 # Aguarda um pouco entre envios
-                time.sleep(1)
+                time.sleep(0.2)
         
         print(f"\n✅ Coleta finalizada: {sucessos}/{len(noticias)} notícias enviadas com sucesso")
     
