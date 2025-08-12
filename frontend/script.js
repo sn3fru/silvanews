@@ -474,6 +474,16 @@ function setupEventListeners() {
                 }
             }
         }
+
+        // Botões de feedback (like/dislike)
+        const thumbBtn = e.target.closest('.btn-thumb');
+        if (thumbBtn) {
+            const card = thumbBtn.closest('.card-cluster');
+            const clusterId = card ? card.getAttribute('data-cluster-id') : thumbBtn.getAttribute('data-cluster-id');
+            if (!clusterId) return;
+            const tipo = thumbBtn.classList.contains('up') ? 'like' : 'dislike';
+            registrarFeedbackCluster(clusterId, tipo, thumbBtn);
+        }
     });
 
     // Link Special Situations - abre modal de configuração
@@ -710,7 +720,13 @@ function criarCardCluster(cluster) {
     
     card.innerHTML = `
         <div class="card-header">
-            <h3 class="card-titulo">${cluster.titulo_final}</h3>
+            <div class="card-title-area">
+                <h3 class="card-titulo">${cluster.titulo_final}</h3>
+                <div class="card-actions-feedback">
+                    <button class="btn-thumb up" data-cluster-id="${cluster.id}" title="Gostei (like)">👍</button>
+                    <button class="btn-thumb down" data-cluster-id="${cluster.id}" title="Não gostei (dislike)">👎</button>
+                </div>
+            </div>
             <div class="card-contador-fontes" title="Número de fontes agrupadas">
                 <span>📰</span>
                 <span class="contador">${cluster.total_artigos}</span>
@@ -942,6 +958,39 @@ document.addEventListener('click', async (e) => {
     }
     await copyClusterToClipboard(cluster);
 });
+
+// =============================
+// FEEDBACK: like / dislike
+// =============================
+async function registrarFeedbackCluster(clusterId, tipo, btnEl) {
+    try {
+        // Busca detalhes do cluster para obter um artigo_id válido
+        const details = await carregarDetalhesCluster(clusterId);
+        if (!details || !Array.isArray(details.artigos) || details.artigos.length === 0) {
+            showErrorMessage('Não foi possível identificar um artigo deste cluster');
+            return;
+        }
+
+        const artigoId = details.artigos[0].id;
+        const url = `/api/feedback?artigo_id=${encodeURIComponent(artigoId)}&feedback=${encodeURIComponent(tipo)}`;
+        const resp = await fetch(url, { method: 'POST' });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+            showErrorMessage(`Erro ao registrar feedback: ${data.detail || resp.status}`);
+            return;
+        }
+
+        // Feedback visual rápido
+        if (btnEl) {
+            btnEl.classList.add('active');
+            setTimeout(() => btnEl.classList.remove('active'), 1200);
+        }
+        showNotification(`Feedback '${tipo}' registrado`, 'success');
+    } catch (e) {
+        showErrorMessage('Falha ao registrar feedback');
+        console.error(e);
+    }
+}
 
 function renderizarFontes(fontes) {
     if (!listaFontesContainer) return;

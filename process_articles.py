@@ -41,14 +41,14 @@ from backend.crud import (
     get_artigos_pendentes, create_log, update_artigo_status, 
     update_artigo_processado, update_artigo_dados_sem_status, associate_artigo_to_cluster,
     create_cluster, get_active_clusters_today, get_artigos_by_cluster,
-    get_cluster_by_id
+    get_cluster_by_id, update_cluster_priority, update_cluster_tags
 )
 from backend.models import Noticia, NoticiaResumida, ResumoFinal
 from backend.processing import (
     gerar_embedding, bytes_to_embedding, calcular_similaridade_cosseno,
     processar_artigo_pipeline, gerar_resumo_cluster, find_or_create_cluster
 )
-from backend.prompts import PROMPT_AGRUPAMENTO_V1, PROMPT_RESUMO_FINAL_V3
+from backend.prompts import PROMPT_AGRUPAMENTO_V1, PROMPT_RESUMO_FINAL_V3, PROMPT_PRIORIZACAO_EXECUTIVA_V1
 from backend.utils import get_date_brasil_str, get_datetime_brasil_str
 
 # Carrega variáveis de ambiente
@@ -275,11 +275,19 @@ def processar_artigos_pendentes(limite: int = 10) -> bool:
                 print(f"    ❌ Cluster {cluster.id} - Falha na classificação")
         
         print(f"ETAPA 3 CONCLUIDA: Resumos gerados: {resumos_gerados}")
+
+        # ETAPA 4: Priorização Executiva Final (reclassificação rígida)
+        print(f"\nETAPA 4: Priorização Executiva Final...")
+        if priorizacao_executiva_final(db, client):
+            print("ETAPA 4 CONCLUIDA: Priorização executiva aplicada")
+        else:
+            print("ETAPA 4 FALHOU: Erro na priorização executiva")
         
         # Resumo final
         print(f"\nPROCESSAMENTO CONCLUIDO:")
         print(f"  Artigos processados: {sucessos}")
         print(f"  Resumos gerados: {resumos_gerados}")
+        print(f"  Priorização executiva: concluída")
         
         return True
         
@@ -565,6 +573,101 @@ def gerar_resumo_unificado(db: Session, cluster_id: int, client, nivel_detalhe: 
         
     except Exception as e:
         print(f"ERRO: Falha ao gerar resumo unificado para cluster {cluster_id}: {e}")
+        return False
+
+
+def priorizacao_executiva_final(db: Session, client, debug: bool = True) -> bool:
+    """
+    Aplica a priorização executiva (pós-agrupamento e pós-resumo) usando
+    PROMPT_PRIORIZACAO_EXECUTIVA_V1 sobre os clusters ativos do dia.
+    Reclassifica prioridade, ajusta score (se armazenado futuramente) e registra alterações.
+    """
+    try:
+        hoje = get_date_brasil_str()
+        clusters_hoje = db.query(ClusterEvento).filter(
+            ClusterEvento.status == 'ativo',
+            ClusterEvento.created_at >= hoje
+        ).all()
+
+        if not clusters_hoje:
+            if debug:
+                print("ℹ️ Priorização executiva: nenhum cluster ativo hoje")
+            return True
+
+        itens_finais = []
+        id_map = {}
+        for idx, c in enumerate(clusters_hoje):
+            itens_finais.append({
+                "id": idx,
+                "cluster_id": c.id,
+                "titulo_final": c.titulo_cluster,
+                "prioridade_atribuida_inicial": c.prioridade,
+                "tag_atribuida_inicial": c.tag,
+                "score_inicial": None,
+                "resumo_final": (c.resumo_cluster or "")[:1200]
+            })
+            id_map[idx] = c.id
+
+        prompt = PROMPT_PRIORIZACAO_EXECUTIVA_V1.format(
+            ITENS_FINAIS=json.dumps(itens_finais, indent=2, ensure_ascii=False)
+        )
+
+        if debug:
+            print(f"🧮 DEBUG: Enviando priorização executiva para {len(itens_finais)} itens...")
+
+        response = client.generate_content(
+            prompt,
+            generation_config={
+                'temperature': 0.1,
+                'top_p': 0.8,
+                'max_output_tokens': 2048
+            }
+        )
+
+        if not response.text:
+            if debug:
+                print("❌ Priorização executiva: resposta vazia")
+            return False
+
+        resultado = extrair_json_da_resposta(response.text)
+        if not isinstance(resultado, list):
+            if debug:
+                print("❌ Priorização executiva: formato inválido")
+            return False
+
+        alteracoes = 0
+        for item in resultado:
+            try:
+                rid = item.get("id")
+                decisao = item.get("decisao_prioridade_final")
+                tag = item.get("tag_final") or item.get("tag_atribuida_inicial")
+                justificativa = item.get("justificativa_executiva")
+
+                if rid is None or id_map.get(rid) is None:
+                    continue
+                cluster_id = id_map[rid]
+                cluster = get_cluster_by_id(db, cluster_id)
+                if not cluster:
+                    continue
+
+                # Atualiza prioridade se diferente
+                if decisao and decisao != cluster.prioridade:
+                    update_cluster_priority(db, cluster_id, decisao, motivo=justificativa or "priorização executiva")
+                    alteracoes += 1
+
+                # Atualiza tag se fornecida e válida
+                if tag and tag != cluster.tag:
+                    update_cluster_tags(db, cluster_id, [tag], motivo="priorização executiva")
+                    alteracoes += 1
+            except Exception:
+                continue
+
+        if debug:
+            print(f"✅ Priorização executiva concluída. Alterações aplicadas: {alteracoes}")
+        return True
+
+    except Exception as e:
+        print(f"❌ ERRO: Priorização executiva falhou: {e}")
         return False
 
 def agrupar_noticias_incremental(db: Session, client) -> bool:

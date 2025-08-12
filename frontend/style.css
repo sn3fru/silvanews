@@ -304,6 +304,12 @@ body {
 
 .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem; }
 .card-titulo { font-size: 1.35rem; font-weight: 600; }
+.card-title-area { display: flex; align-items: center; gap: .5rem; }
+.card-actions-feedback { display: inline-flex; gap: .25rem; margin-left: .5rem; }
+.btn-thumb { border: none; background: #e9ecef; color: #6c757d; border-radius: 6px; padding: .15rem .45rem; cursor: pointer; font-size: .95rem; }
+.btn-thumb:hover { background: #dee2e6; color: #495057; }
+.btn-thumb.up.active { background: #d1e7dd; color: #0f5132; }
+.btn-thumb.down.active { background: #f8d7da; color: #842029; }
 .card-contador-fontes { display: flex; align-items: center; gap: 0.25rem; color: var(--cor-texto-secundario); font-size: 0.9rem; }
 .card-resumo { color: var(--cor-texto-secundario); margin-bottom: 0.75rem; font-size: 0.95rem; }
 .card-footer { 
