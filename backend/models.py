@@ -210,3 +210,16 @@ class ClusterUpdateRequest(BaseModel):
     prioridade: Optional[PrioridadeType] = Field(default=None, description="Nova prioridade")
     tags: Optional[List[str]] = Field(default=None, description="Novas tags")
     motivo: Optional[str] = Field(default=None, description="Motivo da alteração")
+
+
+class FeedbackCreate(BaseModel):
+    artigo_id: int
+    feedback: Literal['like', 'dislike']
+
+
+class FeedbackItem(BaseModel):
+    id: int
+    artigo_id: int
+    feedback: Literal['like', 'dislike']
+    processed: bool
+    created_at: datetime

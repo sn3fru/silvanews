@@ -287,11 +287,25 @@ INSTRUÇÕES DE CLASSIFICAÇÃO (PROCESSO EM 3 PASSOS):
 --------------------------------------------------------------------------------
 LISTA DE REJEIÇÃO IMEDIATA (SE FOR SOBRE ISSO, É RUÍDO):
 --------------------------------------------------------------------------------
-- Indenizações cíveis/trabalhistas INDIVIDUAIS de baixo valor e sem impacto setorial/mercado de capitais.
+- Indenizações cíveis/trabalhistas INDIVIDUAIS de baixo valor, casos pessoais e disputas particulares sem efeito econômico setorial (ex.: ações trabalhistas pontuais, litígios familiares, condenações individuais).
+- Crimes e Segurança Pública cotidiana (homicídios, furtos, golpes comuns), sem vínculo com mercado de capitais ou tese de investimento.
+- Política partidária/pessoal (disputas eleitorais, polarização, agendas pessoais). Exceções: política econômica com impacto direto e decisões regulatórias com materialidade.
+- Cultura/Entretenimento/Fofoca/Esportes/Eventos (shows, teatro, celebridades, futebol, vaquejada etc.) — irrelevante para a mesa.
 - Opinião/Cartas/Editorial/Colunas sem fato gerador objetivo e verificável.
-- Classificados, avisos de licitação/chamadas públicas, procurement comum e leilões genéricos de bens de consumo/joias/veículos/apartamentos isolados.
-- Crimes e Segurança Pública cotidiana; Cultura/Entretenimento sem tese de negócio.
-- Política partidária pura (disputas internas/popularidade). Exceção: decisões de política econômica com impacto direto.
+- Classificados, avisos, chamamentos públicos e procurement rotineiro; leilões genéricos de bens de consumo/joias/veículos/apartamentos isolados (exceto leilões JUDICIAIS de alto valor > R$10 mi de ativos relevantes).
+- Programas/benefícios/governo sociais genéricos sem tese de investimento (ex.: liberação de recursos a aposentados e pensionistas, discussões sobre creches, campanhas públicas, selos de segurança de apps sem materialidade financeira setorial).
+- Decisões judiciais casuísticas sem precedentes vinculantes/jurisprudência ampla (ex.: vínculo individual pastor–igreja; ordens pontuais em redes sociais) — irrelevantes.
+
+EXEMPLOS CONCRETOS DE RUÍDO (REJEITE):
+- "Dentista indeniza família de concorrente assassinado" — crime comum; sem tese de investimento.
+- "STF e julgamentos que podem prejudicar Bolsonaro" — política partidária; no máximo P3 macro genérico, preferencialmente irrelevante.
+- "Reviravolta no caso Juliana Oliveira e Otávio Mesquita" — fofoca/entretenimento; irrelevante.
+- "STF mantém vínculo de emprego entre pastor e igreja" — caso pessoal; sem jurisprudência setorial ampla.
+- "Anotações do assessor de Braga Netto sobre o golpe" — política/pessoal; irrelevante.
+- "Condenação de mexicana a desculpas no X" — sem impacto econômico; irrelevante.
+- "Pedidos de visita a Bolsonaro por Nikolas Ferreira e Marcel Van Hattem" — política/pessoal; irrelevante.
+- "Crystal Palace disputará a Conference League...", "Palmeiras vive tensão...", "Futebol brasileiro tem de jogar mais limpo..." — esportes; irrelevante.
+- "Supremo vai reiniciar julgamento sobre vaquejada" — tema cultural/entretenimento sem tese de negócio.
 
 FOCO PRINCIPAL — CAPTURE APENAS O QUE ESTIVER NO GUIA DE TAGS E PRIORIDADES
 
@@ -334,17 +348,17 @@ Após definir a prioridade, classifique a notícia em UMA das 8 tags temáticas 
 - **Definição:** Movimentos de alto capital/tecnologia (IA, semicondutores, nuclear, aeroespacial) com potencial de M&A/disrupção.
 
 REGRAS DE P1 (GATING OBRIGATÓRIO):
-- P1 SOMENTE se o assunto-chave ∈ {Recuperação Judicial, Falência, Pedido de Falência, Assembleia de Credores, Default de Dívida, Quebra de Covenants, Crise de Liquidez Aguda, M&A ANUNCIADO/OPA, Decisão do CADE com remédios vinculantes, Venda de carteira NPL / Securitização RELEVANTE (valores altos, players relevantes)}.
-- NÃO É P1 (rebaixe para P2 ou P3): convocações/ata de assembleias rotineiras (debenturistas/CRI/AGE/AGO) sem evento material; comunicados administrativos; rumores/política partidária; casos casuísticos/operacionais (ex.: pedidos pontuais de desconto de aluguel, renegociação rotineira de contratos, sem risco sistêmico); notas sem materialidade mensurável.
-- P1 é o TOP do dia (essencial). Se houver dúvida razoável sobre materialidade imediata, NÃO classifique como P1.
+- P1 SOMENTE se o assunto-chave ∈ {Recuperação Judicial, Falência, Pedido de Falência, Assembleia de Credores, Default de Dívida, Quebra de Covenants, Crise de Liquidez Aguda, M&A ANUNCIADO/OPA, Decisão do CADE com remédios vinculantes, Venda de carteira NPL / Securitização RELEVANTE com valores altos e players relevantes}.
+- NÃO É P1: assembleias rotineiras (debenturistas/CRI/AGE/AGO) sem evento material; comunicados administrativos; rumores; política partidária; casos casuísticos/operacionais (ex.: descontos pontuais de aluguel, renegociações rotineiras, incidentes operacionais sem risco sistêmico); notas sem materialidade mensurável; anúncios de produtos/funcionalidades sem impacto financeiro claro.
+- P1 representa a nata do dia (acionável e material). Em caso de dúvida razoável sobre materialidade imediata, NÃO classifique como P1.
 
 REGRAS DE P2 (MONITORAMENTO ESTRATÉGICO COM MATERIALIDADE):
-- Use P2 quando houver potencial de impacto financeiro mensurável, mas sem gatilho imediato de P1 (ex.: mudanças de legislação relevantes em tramitação; regulações setoriais com players/valores/cronograma; grandes investimentos/contratos anunciados, sem fechamento definitivo).
-- NÃO classificar como P2: temas sociais, esportivos, crimes, programas sociais, opinião, educação cívica, comportamento em redes; esses devem ser P3 ou rejeitados se sem tese de negócio para mesa de Special Situations.
+- Use P2 quando houver potencial de impacto financeiro mensurável, mas sem gatilho imediato de P1 (ex.: mudanças de legislação relevantes em tramitação; regulações setoriais com players/valores/cronograma; grandes investimentos/contratos anunciados com players e cronograma, sem fechamento definitivo).
+- NÃO é P2: efemérides e programas sem tese de investimento (ex.: benefícios sociais, liberação de recursos a aposentados/pensionistas, discussões genéricas sobre creches), lançamentos/funcionalidades sem impacto financeiro setorial, segurança de apps sem materialidade; política partidária; crimes; esportes/entretenimento; opinião.
 
 INSTRUÇÕES DE EXTRAÇÃO:
-1. Seja disciplinado: se não estiver na allow list acima ou cair na rejeição, não inclua.
-2. Para fronteira, classifique como P3_MONITORAMENTO com score baixo.
+1. Seja disciplinado: se não estiver na allow list acima ou cair na rejeição, NÃO inclua (REJEITE).
+2. Fronteira: somente se houver potencial de materialidade diretamente ligado aos itens do guia, classifique como P3_MONITORAMENTO com score baixo; caso contrário, REJEITE.
 3. Preencha `categoria` com o assunto-chave determinístico (ex.: "Recuperação Judicial", "Decisão do CADE", "M&A anunciado").
 
 INSTRUÇÕES DE SCORING (BANDAS OBRIGATÓRIAS):
@@ -358,6 +372,8 @@ EXEMPLOS NEGATIVOS TÍPICOS (REJEITE):
 - Indenizações individuais (cível/trabalhista) sem impacto setorial.
 - Opinião/Cartas/Editorial sem fato econômico objetivo.
 - Classificados/leilões genéricos/avisos/procurement.
+ - Fofoca/entretenimento/esportes/política partidária/crimes comuns.
+ - Casos pessoais e decisões judiciais casuísticas sem jurisprudência ampla.
 
 FORMATO DE SAÍDA (JSON PURO):
 ```json
@@ -441,7 +457,7 @@ Você é um especialista em análise de conteúdo focado em granularidade. Sua t
       - Notícia 2: "Ministro do STF não decreta prisão de X e esclarece cautelares."
       - **Análise:** Núcleo idêntico → MESMO GRUPO.
 
-3.  **ESTÁGIOS DO MESMO PROCESSO (MESMO DIA):** anúncio → reação imediata → análises → desfecho parcial → **MESMO GRUPO**.
+3.  **ESTÁGIOS DO MESMO PROCESSO (MESMO DIA):** anúncio → reação imediata → análises → desfecho parcial → **MESMO GRUPO**. Seja agressivo aqui: se uma notícia for repercussão direta ou análise imediata do mesmo evento, mantenha no mesmo grupo.
 
 4.  **AÇÃO ⇄ CONSEQUÊNCIA DIRETA (MESMO PERÍODO):**
     - "CADE aprova fusão A+B com remédios" e "Ações da C sobem 5% após decisão" → **MESMO GRUPO**.
@@ -583,6 +599,70 @@ Se você tem:
 **CLASSIFIQUE:** Cada notícia nova deve ser anexada a um cluster existente ou criar um novo cluster.
 """
 
+# ==============================================================================
+# PROMPT PARA AGRUPAMENTO INCREMENTAL (V2 — com contexto enriquecido)
+# ==============================================================================
+
+PROMPT_AGRUPAMENTO_INCREMENTAL_V2 = """
+Você é um especialista em análise de conteúdo focado em granularidade. Sua tarefa é classificar novas notícias em relação a clusters existentes do mesmo dia.
+
+CONTEXTO IMPORTANTE:
+- Você receberá NOTÍCIAS NOVAS que precisam ser classificadas (título e, se disponível, início do texto)
+- Você receberá CLUSTERS EXISTENTES do mesmo dia com os campos:
+  - "cluster_id": identificador do cluster
+  - "tema_principal": título consolidado do evento
+  - "titulos_internos": lista com os títulos das notícias já anexadas ao cluster (apenas títulos)
+- Sua missão é decidir se cada notícia nova deve ser ANEXADA a um cluster existente ou se deve criar um NOVO cluster somente quando tratar de evento distinto
+
+REGRAS CRÍTICAS:
+1. PRIORIZE ANEXAR: Em caso de dúvida razoável (desdobramento, reação ou análise do mesmo evento), prefira ANEXAR ao cluster existente.
+2. MESMO FATO GERADOR: Se a notícia nova se refere ao mesmo evento, decisão ou anúncio de um cluster existente, ANEXE ao cluster.
+3. FATO DIFERENTE: Crie um novo cluster somente se a notícia tratar de um evento claramente distinto e independente.
+4. INTEGRIDADE TOTAL: TODAS as notícias novas DEVEM ser classificadas (anexadas ou em novos clusters).
+
+FORMATO DE ENTRADA:
+- NOTÍCIAS NOVAS: Lista de notícias com ID e título (e opcionalmente um breve início do texto)
+- CLUSTERS EXISTENTES: Lista de clusters com "cluster_id", "tema_principal" e "titulos_internos" (apenas títulos, sem textos)
+
+FORMATO DE SAÍDA OBRIGATÓRIO (JSON PURO):
+```json
+[
+  {
+    "tipo": "anexar",
+    "noticia_id": 0,
+    "cluster_id_existente": 1,
+    "justificativa": "A notícia se refere ao mesmo evento do cluster existente"
+  },
+  {
+    "tipo": "novo_cluster",
+    "noticia_id": 1,
+    "tema_principal": "Novo evento específico",
+    "justificativa": "A notícia se refere a um fato gerador diferente"
+  }
+]
+```
+
+EXEMPLO:
+Se você tem:
+- Notícia nova: "Apple anuncia novo iPhone"
+- Cluster existente: {
+    "cluster_id": 10,
+    "tema_principal": "Apple lança iPhone 20",
+    "titulos_internos": ["Apple apresenta iPhone 20 em evento", "Novo iPhone 20 chega com chip X"]
+  }
+
+RESULTADO: Anexar a notícia nova ao cluster existente, pois se refere ao mesmo evento.
+
+DADOS PARA ANÁLISE:
+**NOTÍCIAS NOVAS:**
+{NOVAS_NOTICIAS}
+
+**CLUSTERS EXISTENTES:**
+{CLUSTERS_EXISTENTES}
+
+CLASSIFIQUE: Cada notícia nova deve ser anexada a um cluster existente ou criar um novo cluster.
+"""
+
 # ============================================================================
 # PROMPT DE SANITIZAÇÃO (GATEKEEPER) — REMOVER CLUSTERS IRRELEVANTES
 # ============================================================================
@@ -595,6 +675,11 @@ REJEIÇÃO IMEDIATA (IRRELEVANTE):
 - Opinião/Cartas/Editorial sem fato econômico objetivo.
 - Classificados/avisos/procurement/leilões genéricos (veículos/joias/apartamentos isolados).
 - Esportes, Cultura/Entretenimento (sem tese de negócio), Crimes cotidianos, Política partidária pura.
+
+ EXEMPLOS CONCRETOS DE IRRELEVÂNCIA (REJEITE):
+ - Crimes comuns e casos pessoais: "Dentista indeniza família de concorrente assassinado"; "Condenação de mexicana a desculpas no X"; decisões casuísticas (ex.: vínculo individual pastor–igreja).
+ - Política partidária/pessoal: "STF e julgamentos que podem prejudicar Bolsonaro"; "Pedidos de visita a Bolsonaro por deputados".
+ - Fofoca/entretenimento/esportes: "Reviravolta no caso Juliana Oliveira e Otávio Mesquita"; futebol (Palmeiras, Crystal Palace etc.); "vaquejada" sem tese de negócio.
 
 EXCEÇÕES (RELEVANTE quando houver materialidade):
 - Leilão JUDICIAL de alto valor (> R$10 mi) de ativo relevante; Venda de carteira NPL; Securitização de Dívida Ativa com valores/processos.

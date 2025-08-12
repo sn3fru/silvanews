@@ -673,9 +673,16 @@ def processar_lote_incremental(db: Session, client, artigos_lote: List[ArtigoBru
         
         clusters_existentes_data = []
         for i, cluster in enumerate(clusters_existentes):
+            artigos_cluster = get_artigos_by_cluster(db, cluster.id)
+            titulos = [
+                a.titulo_extraido or (a.texto_processado[:80] + "...") if (a.texto_processado or "") else "Sem título"
+                for a in artigos_cluster
+            ]
+            titulos = titulos[:30]
             cluster_data = {
-                "id": cluster.id,
-                "titulo": cluster.titulo_cluster
+                "cluster_id": cluster.id,
+                "tema_principal": cluster.titulo_cluster,
+                "titulos_internos": titulos
             }
             clusters_existentes_data.append(cluster_data)
         
@@ -683,8 +690,8 @@ def processar_lote_incremental(db: Session, client, artigos_lote: List[ArtigoBru
         mapa_id_para_artigo = {i: artigo for i, artigo in enumerate(artigos_lote)}
         
         # Monta o prompt incremental
-        from backend.prompts import PROMPT_AGRUPAMENTO_INCREMENTAL_V1
-        prompt_completo = PROMPT_AGRUPAMENTO_INCREMENTAL_V1.format(
+        from backend.prompts import PROMPT_AGRUPAMENTO_INCREMENTAL_V2
+        prompt_completo = PROMPT_AGRUPAMENTO_INCREMENTAL_V2.format(
             NOVAS_NOTICIAS=json.dumps(novas_noticias, indent=2, ensure_ascii=False),
             CLUSTERS_EXISTENTES=json.dumps(clusters_existentes_data, indent=2, ensure_ascii=False)
         )

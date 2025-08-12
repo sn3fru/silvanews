@@ -587,6 +587,8 @@
             <button class="nav-tab active" onclick="showTab('artigos')">📰 Artigos Brutos</button>
             <button class="nav-tab" onclick="showTab('clusters')">🔗 Clusters/Eventos</button>
             <button class="nav-tab" onclick="showTab('upload')">📁 Upload de Arquivos</button>
+            <button class="nav-tab" onclick="showTab('bi')">📈 BI</button>
+            <button class="nav-tab" onclick="showTab('feedback')">👍 Feedback</button>
         </div>
         
         <!-- Tab Artigos -->
@@ -641,6 +643,70 @@
             </table>
             
             <div id="artigos-pagination" class="pagination" style="display: none;"></div>
+        </div>
+
+        <!-- Tab BI -->
+        <div id="bi" class="tab-content">
+            <div class="upload-section">
+                <h3>📈 Séries por dia (últimos 30 dias)</h3>
+                <div id="bi-series-dia" style="overflow:auto; max-height: 320px;">
+                    <table class="data-table" id="bi-series-table" style="min-width:600px;">
+                        <thead>
+                            <tr>
+                                <th>Dia</th>
+                                <th># Artigos</th>
+                                <th># Clusters</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="upload-section">
+                <h3>📰 Notícias por Fonte (Top 20)</h3>
+                <table class="data-table" id="bi-fonte-table">
+                    <thead><tr><th>Fonte</th><th>Qtd</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="upload-section">
+                <h3>✍️ Notícias por Autor (Top 20)</h3>
+                <table class="data-table" id="bi-autor-table">
+                    <thead><tr><th>Autor</th><th>Qtd</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="upload-section">
+                <h3>💵 Estimativa de Custos</h3>
+                <button class="btn btn-secondary" onclick="carregarEstimativaCustos()">Calcular Estimativa</button>
+                <div id="custos-output" class="upload-results" style="display:none;"></div>
+            </div>
+        </div>
+
+        <!-- Tab Feedback -->
+        <div id="feedback" class="tab-content">
+            <div class="upload-section">
+                <h3>👍 Registrar Feedback Manual</h3>
+                <div class="form-group">
+                    <label>ID do Artigo</label>
+                    <input type="number" id="fb-artigo-id" />
+                </div>
+                <div class="form-group">
+                    <label>Feedback</label>
+                    <select id="fb-tipo">
+                        <option value="like">like</option>
+                        <option value="dislike">dislike</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" onclick="enviarFeedback()">Enviar</button>
+            </div>
+            <div class="upload-section">
+                <h3>🗂️ Itens de Feedback</h3>
+                <table class="data-table" id="fb-table">
+                    <thead><tr><th>ID</th><th>Artigo</th><th>Feedback</th><th>Processado</th><th>Quando</th><th>Ações</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
         </div>
         
         <!-- Tab Clusters -->

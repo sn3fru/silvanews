@@ -40,7 +40,9 @@ try:
         get_chat_session_by_cluster, update_cluster_priority, update_cluster_tags,
         get_cluster_alteracoes, get_all_cluster_alteracoes,
         get_artigos_processados_hoje, get_clusters_existentes_hoje, get_cluster_com_artigos,
-        associate_artigo_to_existing_cluster, create_cluster_for_artigo
+        associate_artigo_to_existing_cluster, create_cluster_for_artigo,
+        agg_noticias_por_dia, agg_noticias_por_fonte, agg_noticias_por_autor,
+        create_feedback, list_feedback, mark_feedback_processed
     )
     from .processing import processar_artigo_pipeline, gerar_resumo_cluster, inicializar_processamento
     from .utils import gerar_hash_unico, formatar_timestamp_relativo, get_date_brasil, parse_date_brasil
@@ -347,6 +349,91 @@ async def get_admin_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
     
     except Exception as e:
         create_log(db, "ERROR", "api", f"Erro no endpoint /admin/stats: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+# ==============================================================================
+# ENDPOINTS DE BI (DASHBOARDS SIMPLES)
+# ==============================================================================
+
+@app.get("/api/bi/series-por-dia")
+async def bi_series_por_dia(dias: int = 30, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    try:
+        series = agg_noticias_por_dia(db, dias=dias)
+        return {"series": series}
+    except Exception as e:
+        create_log(db, "ERROR", "api", f"Erro em /api/bi/series-por-dia: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+@app.get("/api/bi/noticias-por-fonte")
+async def bi_noticias_por_fonte(limit: int = 20, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    try:
+        data = agg_noticias_por_fonte(db, limit=limit)
+        return {"itens": data}
+    except Exception as e:
+        create_log(db, "ERROR", "api", f"Erro em /api/bi/noticias-por-fonte: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+@app.get("/api/bi/noticias-por-autor")
+async def bi_noticias_por_autor(limit: int = 20, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    try:
+        data = agg_noticias_por_autor(db, limit=limit)
+        return {"itens": data}
+    except Exception as e:
+        create_log(db, "ERROR", "api", f"Erro em /api/bi/noticias-por-autor: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+# ==============================================================================
+# ENDPOINTS DE FEEDBACK
+# ==============================================================================
+
+@app.post("/api/feedback")
+async def post_feedback(artigo_id: int, feedback: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    if feedback not in ("like", "dislike"):
+        raise HTTPException(status_code=400, detail="feedback deve ser 'like' ou 'dislike'")
+    try:
+        fb_id = create_feedback(db, artigo_id, feedback)
+        return {"status": "ok", "id": fb_id}
+    except Exception as e:
+        create_log(db, "ERROR", "api", f"Erro em POST /api/feedback: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+@app.get("/api/feedback")
+async def get_feedback(processed: Optional[bool] = None, limit: int = 100, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    try:
+        itens = list_feedback(db, processed=processed, limit=limit)
+        # Serialização simples
+        data = [
+            {
+                "id": it.id,
+                "artigo_id": it.artigo_id,
+                "feedback": it.feedback,
+                "processed": it.processed,
+                "created_at": it.created_at.isoformat()
+            }
+            for it in itens
+        ]
+        return {"itens": data}
+    except Exception as e:
+        create_log(db, "ERROR", "api", f"Erro em GET /api/feedback: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+@app.post("/api/feedback/{feedback_id}/process")
+async def process_feedback(feedback_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    try:
+        ok = mark_feedback_processed(db, feedback_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Feedback não encontrado")
+        return {"status": "ok"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        create_log(db, "ERROR", "api", f"Erro em POST /api/feedback/{{id}}/process: {e}")
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
@@ -1062,7 +1149,7 @@ async def agrupar_noticias_incremental(db: Session) -> bool:
     e os classifica em relação aos clusters existentes do mesmo dia.
     """
     try:
-        from backend.prompts import PROMPT_AGRUPAMENTO_INCREMENTAL_V1
+        from backend.prompts import PROMPT_AGRUPAMENTO_INCREMENTAL_V2
         from backend.crud import (
             get_artigos_processados_hoje, get_clusters_existentes_hoje,
             get_artigos_by_cluster, associate_artigo_to_existing_cluster,
@@ -1126,10 +1213,17 @@ async def agrupar_noticias_incremental(db: Session) -> bool:
 
         clusters_existentes_data = []
         for cluster in clusters_existentes:
+            artigos_cluster = get_artigos_by_cluster(db, cluster.id)
+            titulos = [
+                a.titulo_extraido or (a.texto_processado[:80] + "...") if (a.texto_processado or "") else "Sem título"
+                for a in artigos_cluster
+            ]
+            # Limita quantidade de títulos para evitar payload excessivo
+            titulos = titulos[:30]
             cluster_data = {
-                "id": cluster.id,
-                "titulo_cluster": cluster.titulo_cluster,
-                "total_artigos": len(get_artigos_by_cluster(db, cluster.id))
+                "cluster_id": cluster.id,
+                "tema_principal": cluster.titulo_cluster,
+                "titulos_internos": titulos
             }
             clusters_existentes_data.append(cluster_data)
         
@@ -1142,7 +1236,7 @@ async def agrupar_noticias_incremental(db: Session) -> bool:
         # Monta o prompt completo
         print(f"🔍 DEBUG: Montando prompt completo para o LLM...")
         
-        prompt_completo = PROMPT_AGRUPAMENTO_INCREMENTAL_V1.format(
+        prompt_completo = PROMPT_AGRUPAMENTO_INCREMENTAL_V2.format(
             NOVAS_NOTICIAS=json.dumps(novas_noticias, indent=2, ensure_ascii=False),
             CLUSTERS_EXISTENTES=json.dumps(clusters_existentes_data, indent=2, ensure_ascii=False)
         )

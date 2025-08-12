@@ -433,6 +433,73 @@ def get_metricas_by_date(db: Session, target_date: datetime.date) -> Dict[str, i
         "com_resumo": clusters_exibiveis
     }
 
+# ===================== FEEDBACK =====================
+def create_feedback(db: Session, artigo_id: int, feedback: str) -> int:
+    try:
+        from .database import FeedbackNoticia
+    except ImportError:
+        from backend.database import FeedbackNoticia
+    novo = FeedbackNoticia(artigo_id=artigo_id, feedback=feedback, processed=False)
+    db.add(novo)
+    db.commit()
+    db.refresh(novo)
+    return novo.id
+
+
+def list_feedback(db: Session, processed: Optional[bool] = None, limit: int = 100):
+    try:
+        from .database import FeedbackNoticia
+    except ImportError:
+        from backend.database import FeedbackNoticia
+    q = db.query(FeedbackNoticia).order_by(FeedbackNoticia.created_at.desc())
+    if processed is not None:
+        q = q.filter(FeedbackNoticia.processed == processed)
+    return q.limit(limit).all()
+
+
+def mark_feedback_processed(db: Session, feedback_id: int) -> bool:
+    try:
+        from .database import FeedbackNoticia
+    except ImportError:
+        from backend.database import FeedbackNoticia
+    fb = db.query(FeedbackNoticia).filter(FeedbackNoticia.id == feedback_id).first()
+    if not fb:
+        return False
+    fb.processed = True
+    db.commit()
+    return True
+
+
+# ===================== AGREGADOS (BI) =====================
+def agg_noticias_por_dia(db: Session, dias: int = 30):
+    base_date = datetime.utcnow() - timedelta(days=dias)
+    q = db.query(
+        func.date(ArtigoBruto.created_at).label('dia'),
+        func.count(ArtigoBruto.id).label('num_artigos'),
+    ).filter(ArtigoBruto.created_at >= base_date).group_by(func.date(ArtigoBruto.created_at)).order_by(func.date(ArtigoBruto.created_at))
+    artigos = q.all()
+    # clusters por dia
+    from .database import ClusterEvento as _Cluster
+    qc = db.query(
+        func.date(_Cluster.created_at).label('dia'),
+        func.count(_Cluster.id).label('num_clusters'),
+    ).filter(_Cluster.created_at >= base_date).group_by(func.date(_Cluster.created_at)).order_by(func.date(_Cluster.created_at)).all()
+    clusters_map = {row.dia: row.num_clusters for row in qc}
+    return [
+        {"dia": str(row.dia), "num_artigos": row.num_artigos, "num_clusters": clusters_map.get(row.dia, 0)}
+        for row in artigos
+    ]
+
+
+def agg_noticias_por_fonte(db: Session, limit: int = 20):
+    q = db.query(ArtigoBruto.jornal, func.count(ArtigoBruto.id).label('qtd')).group_by(ArtigoBruto.jornal).order_by(func.count(ArtigoBruto.id).desc()).limit(limit)
+    return [{"jornal": j or "Desconhecido", "qtd": qtd} for j, qtd in q.all()]
+
+
+def agg_noticias_por_autor(db: Session, limit: int = 20):
+    q = db.query(ArtigoBruto.autor, func.count(ArtigoBruto.id).label('qtd')).group_by(ArtigoBruto.autor).order_by(func.count(ArtigoBruto.id).desc()).limit(limit)
+    return [{"autor": a or "N/A", "qtd": qtd} for a, qtd in q.all()]
+
 
 def get_sintese_by_date(db: Session, target_date: datetime.date) -> Optional[SinteseExecutiva]:
     """

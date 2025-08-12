@@ -277,6 +277,27 @@ class ChatMessage(Base):
     )
 
 
+class FeedbackNoticia(Base):
+    """
+    Tabela para coletar feedback de usuários sobre notícias (artigos).
+    """
+    __tablename__ = "feedback_noticias"
+
+    id = Column(Integer, primary_key=True, index=True)
+    artigo_id = Column(Integer, ForeignKey('artigos_brutos.id'), nullable=False, index=True)
+    feedback = Column(String(10), nullable=False)  # like | dislike
+    processed = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    artigo = relationship("ArtigoBruto")
+
+    __table_args__ = (
+        Index('idx_feedback_artigo_id', 'artigo_id'),
+        Index('idx_feedback_processed', 'processed'),
+        Index('idx_feedback_created_date', 'created_at'),
+    )
+
+
 class ClusterAlteracao(Base):
     """
     Tabela para registrar alterações em clusters.

@@ -20,7 +20,7 @@ from crud import (
     get_cluster_com_artigos,
     create_log
 )
-from prompts import PROMPT_AGRUPAMENTO_INCREMENTAL_V1
+from prompts import PROMPT_AGRUPAMENTO_INCREMENTAL_V2
 import json
 
 
@@ -71,10 +71,14 @@ def test_incremental_clustering():
             for cluster in clusters_existentes[:2]:  # Limita a 2 para teste
                 cluster_data = get_cluster_com_artigos(db, cluster.id)
                 if cluster_data:
-                    clusters_existentes_data.append(cluster_data)
+                    clusters_existentes_data.append({
+                        "cluster_id": cluster_data["id"],
+                        "tema_principal": cluster_data["titulo_cluster"],
+                        "titulos_internos": [a["titulo"] for a in cluster_data.get("artigos", [])][:30]
+                    })
             
             # Monta o prompt
-            prompt_completo = PROMPT_AGRUPAMENTO_INCREMENTAL_V1.format(
+            prompt_completo = PROMPT_AGRUPAMENTO_INCREMENTAL_V2.format(
                 NOVAS_NOTICIAS=json.dumps(novas_noticias, indent=2, ensure_ascii=False),
                 CLUSTERS_EXISTENTES=json.dumps(clusters_existentes_data, indent=2, ensure_ascii=False)
             )

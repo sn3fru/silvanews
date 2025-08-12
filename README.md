@@ -47,7 +47,7 @@ graph TD
 ### LLMs e prompts (o que roda e para quê)
 - Extração e triagem inicial: `PROMPT_EXTRACAO_PERMISSIVO_V8`.
 - Agrupamento em lote: `PROMPT_AGRUPAMENTO_V1`.
-- Agrupamento incremental (novas notícias do dia): `PROMPT_AGRUPAMENTO_INCREMENTAL_V1`.
+- Agrupamento incremental (novas notícias do dia): `PROMPT_AGRUPAMENTO_INCREMENTAL_V2` (contexto enriquecido com `titulos_internos`).
 - Resumo executivo por prioridade: `PROMPT_RESUMO_FINAL_V3` e `PROMPT_RADAR_MONITORAMENTO_V1` (bullets P3).
 - Sanitização (gatekeeper): `PROMPT_SANITIZACAO_CLUSTER_V1`.
 - Chat com cluster: `PROMPT_CHAT_CLUSTER_V1`.
@@ -249,7 +249,7 @@ python test_fluxo_completo.py
 - Ingestão: estender `backend/collectors/file_loader.py` para novas fontes/formatos.
 - Classificação/Tags: alterar apenas `backend/prompts.py` e manter coerência com `TAGS_SPECIAL_SITUATIONS`.
 - Prioridade/Resumo: `backend/prompts.py` (PROMPT_RESUMO_*), tamanho conforme P1/P2/P3.
-- Agrupamento incremental: `PROMPT_AGRUPAMENTO_INCREMENTAL_V1` e lógica de pivot automático em `process_articles.py`.
+- Agrupamento incremental: `PROMPT_AGRUPAMENTO_INCREMENTAL_V2` (usa `titulos_internos` dos artigos de cada cluster no payload) e lógica de pivot automático em `process_articles.py`.
 - API/Endpoints: adicionar rotas em `backend/main.py` e delegar CRUD para `backend/crud.py`.
 
 ### Regras de contribuição (para evitar duplicação e lógica fora do lugar)

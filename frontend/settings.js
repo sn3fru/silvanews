@@ -31,6 +31,12 @@ function showTab(tabName) {
         case 'clusters':
             loadClusters();
             break;
+        case 'bi':
+            carregarBI();
+            break;
+        case 'feedback':
+            carregarFeedback();
+            break;
     }
 }
 
@@ -782,6 +788,115 @@ function showTable(tab) {
     document.getElementById(`${tab}-loading`).style.display = 'none';
     document.getElementById(`${tab}-table`).style.display = 'table';
     document.getElementById(`${tab}-pagination`).style.display = 'flex';
+}
+
+// ======================= BI =======================
+async function carregarBI() {
+    try {
+        // séries por dia
+        const s = await fetch(`${API_BASE}/bi/series-por-dia?dias=30`);
+        const sd = await s.json();
+        const stbody = document.querySelector('#bi-series-table tbody');
+        stbody.innerHTML = '';
+        (sd.series || []).forEach(item => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${item.dia}</td><td>${item.num_artigos}</td><td>${item.num_clusters}</td>`;
+            stbody.appendChild(tr);
+        });
+
+        // por fonte
+        const f = await fetch(`${API_BASE}/bi/noticias-por-fonte?limit=20`);
+        const fd = await f.json();
+        const ftbody = document.querySelector('#bi-fonte-table tbody');
+        ftbody.innerHTML = '';
+        (fd.itens || []).forEach(i => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${i.jornal}</td><td>${i.qtd}</td>`;
+            ftbody.appendChild(tr);
+        });
+
+        // por autor
+        const a = await fetch(`${API_BASE}/bi/noticias-por-autor?limit=20`);
+        const ad = await a.json();
+        const atbody = document.querySelector('#bi-autor-table tbody');
+        atbody.innerHTML = '';
+        (ad.itens || []).forEach(i => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${i.autor}</td><td>${i.qtd}</td>`;
+            atbody.appendChild(tr);
+        });
+    } catch (e) {
+        console.error('Erro ao carregar BI', e);
+    }
+}
+
+async function carregarEstimativaCustos() {
+    try {
+        // execução indireta: chama um endpoint futuro? Aqui apenas placeholder local
+        // Como não temos endpoint, mostramos instrução para executar o script localmente
+        const el = document.getElementById('custos-output');
+        el.style.display = 'block';
+        el.innerHTML = `
+            <div>
+                Para estimar custos, rode no servidor: <code>python estimativa_custos.py</code>.
+                Em breve podemos expor um endpoint para retornar a análise formatada.
+            </div>
+        `;
+    } catch (e) {
+        console.error('Erro estimativa custos', e);
+    }
+}
+
+// ======================= FEEDBACK =======================
+async function enviarFeedback() {
+    const artigoId = Number(document.getElementById('fb-artigo-id').value);
+    const tipo = document.getElementById('fb-tipo').value;
+    if (!artigoId || !tipo) return alert('Preencha os campos');
+    try {
+        const resp = await fetch(`${API_BASE}/feedback?artigo_id=${artigoId}&feedback=${tipo}`, { method: 'POST' });
+        const data = await resp.json();
+        if (!resp.ok) return alert('Erro: ' + (data.detail || 'falha'));
+        alert('Feedback registrado');
+        carregarFeedback();
+    } catch (e) {
+        alert('Erro de conexão: ' + e.message);
+    }
+}
+
+async function carregarFeedback() {
+    try {
+        const resp = await fetch(`${API_BASE}/feedback?processed=`);
+        const data = await resp.json();
+        const tbody = document.querySelector('#fb-table tbody');
+        tbody.innerHTML = '';
+        (data.itens || []).forEach(fb => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${fb.id}</td>
+                <td>${fb.artigo_id}</td>
+                <td>${fb.feedback}</td>
+                <td>${fb.processed ? 'Sim' : 'Não'}</td>
+                <td>${fb.created_at}</td>
+                <td>${fb.processed ? '' : `<button class="btn-edit" onclick="processarFeedback(${fb.id})">Marcar processado</button>`}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (e) {
+        console.error('Erro ao carregar feedback', e);
+    }
+}
+
+async function processarFeedback(id) {
+    try {
+        const resp = await fetch(`${API_BASE}/feedback/${id}/process`, { method: 'POST' });
+        if (!resp.ok) {
+            const data = await resp.json();
+            return alert('Erro: ' + (data.detail || 'falha'));
+        }
+        carregarFeedback();
+    } catch (e) {
+        alert('Erro de conexão: ' + e.message);
+    }
 }
 
 function showError(tab, message) {
