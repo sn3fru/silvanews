@@ -110,6 +110,30 @@ function populateTagFiltersIfNeeded() {
 let artigosState = { rows: [], sortKey: 'created_at', sortDir: 'desc' };
 let clustersState = { rows: [], sortKey: 'created_at', sortDir: 'desc' };
 
+// Mapeia nome da tag para classe de cor usada no feed principal
+function getTagColorClass(tagName) {
+    const tagColorMap = {
+        'Internacional (Economia e Política)': 'tag-1',
+        'Jurídico, Falências e Regulatório': 'tag-2',
+        'M&A e Transações Corporativas': 'tag-3',
+        'Mercado de Capitais e Finanças Corporativas': 'tag-4',
+        'Política Econômica (Brasil)': 'tag-5',
+        'Tecnologia e Setores Estratégicos': 'tag-6',
+        'Dívida Ativa e Créditos Públicos': 'tag-7',
+        'Distressed Assets e NPLs': 'tag-8',
+        'IRRELEVANTE': 'tag-9',
+        'PENDING': 'tag-10'
+    };
+    if (tagColorMap[tagName]) return tagColorMap[tagName];
+    // Fallback determinístico
+    let hash = 0;
+    for (let i = 0; i < String(tagName || '').length; i++) {
+        hash = String(tagName).charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const colorIndex = Math.abs(hash) % 10 + 1;
+    return `tag-${colorIndex}`;
+}
+
 function setupSortingAndFilters() {
     // Sorting handlers
     document.querySelectorAll('#artigos-table thead th.sortable').forEach(th => {
@@ -304,10 +328,11 @@ function renderClustersFilteredSorted() {
     tbody.innerHTML = '';
     rows.forEach(cluster => {
         const row = document.createElement('tr');
+        const tagClass = cluster.tag ? getTagColorClass(cluster.tag) : '';
         row.innerHTML = `
             <td>${cluster.id}</td>
             <td>${cluster.titulo_cluster}</td>
-            <td><span class="tag-badge">${cluster.tag}</span></td>
+            <td><span class="tag ${tagClass}">${cluster.tag}</span></td>
             <td><span class="priority-badge ${cluster.prioridade}">${cluster.prioridade}</span></td>
             <td><span class="status-badge status-${cluster.status}">${cluster.status}</span></td>
             <td>${cluster.total_artigos}</td>
@@ -375,12 +400,13 @@ function displayArtigos(data) {
     tbody.innerHTML = '';
     artigosState.rows.forEach(artigo => {
         const row = document.createElement('tr');
+        const tagClass = artigo.tag ? getTagColorClass(artigo.tag) : '';
         row.innerHTML = `
             <td>${artigo.id}</td>
             <td>${artigo.titulo_extraido || (artigo.texto_bruto ? artigo.texto_bruto.substring(0, 50) + '...' : '')}</td>
             <td>${artigo.jornal || '-'}</td>
             <td><span class="status-badge status-${artigo.status}">${artigo.status}</span></td>
-            <td>${artigo.tag ? `<span class="tag-badge">${artigo.tag}</span>` : '-'}</td>
+            <td>${artigo.tag ? `<span class="tag ${tagClass}">${artigo.tag}</span>` : '-'}</td>
             <td>${artigo.prioridade ? `<span class="priority-badge ${artigo.prioridade}">${artigo.prioridade}</span>` : '-'}</td>
             <td>${formatDate(artigo.created_at)}</td>
             <td>
@@ -484,10 +510,11 @@ function displayClusters(data) {
     tbody.innerHTML = '';
     clustersState.rows.forEach(cluster => {
         const row = document.createElement('tr');
+        const tagClass = cluster.tag ? getTagColorClass(cluster.tag) : '';
         row.innerHTML = `
             <td>${cluster.id}</td>
             <td>${cluster.titulo_cluster}</td>
-            <td><span class="tag-badge">${cluster.tag}</span></td>
+            <td><span class="tag ${tagClass}">${cluster.tag}</span></td>
             <td><span class="priority-badge ${cluster.prioridade}">${cluster.prioridade}</span></td>
             <td><span class="status-badge status-${cluster.status}">${cluster.status}</span></td>
             <td>${cluster.total_artigos}</td>

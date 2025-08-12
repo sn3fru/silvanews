@@ -306,7 +306,7 @@ def get_clusters_for_feed(db: Session, data_inicio: Optional[datetime] = None) -
                 {
                     "nome": artigo.jornal or "Fonte Desconhecida",
                     "tipo": "web" if artigo.url_original else "pdf",
-                    "url": artigo.url_original or f"#artigo_{artigo.id}"
+                    "url": artigo.url_original
                 }
                 for artigo in artigos[:5]  # Limita a 5 fontes por cluster
             ],
@@ -497,7 +497,7 @@ def get_clusters_for_feed_by_date(db: Session, target_date: datetime.date, page:
             fonte = {
                 "nome": artigo.jornal or "Fonte Desconhecida",
                 "tipo": "web" if artigo.url_original else "pdf",
-                "url": artigo.url_original or f"#artigo_{artigo.id}",
+                "url": artigo.url_original,
                 "autor": artigo.autor or "N/A",
                 "pagina": artigo.pagina
             }
@@ -592,7 +592,7 @@ def get_cluster_details_by_id(db: Session, cluster_id: int) -> Optional[Dict[str
         fonte = {
             "nome": artigo.jornal or "Fonte Desconhecida",
             "tipo": "web" if artigo.url_original else "pdf",
-            "url": artigo.url_original or f"#artigo_{artigo.id}",
+            "url": artigo.url_original,
             "autor": artigo.autor or "N/A",
             "pagina": artigo.pagina
         }

@@ -831,11 +831,13 @@ function formatarDataBR(isoStr) {
 }
 
 function extrairFonteELink(cluster) {
-    const fonte = cluster.fonte || cluster.jornal || cluster.tag || 'N/A';
+    // Usa as fontes fornecidas pelo backend; nome = arquivo PDF ou site; url apenas quando existir
+    let fonte = 'N/A';
     let link = null;
-    if (cluster.fontes && cluster.fontes.length) {
-        const f = cluster.fontes.find(x => x.url) || cluster.fontes[0];
-        link = f && f.url ? f.url : null;
+    if (Array.isArray(cluster.fontes) && cluster.fontes.length > 0) {
+        const primeira = cluster.fontes[0];
+        fonte = primeira && primeira.nome ? primeira.nome : 'N/A';
+        link = primeira && primeira.url ? primeira.url : null;
     }
     return { fonte, link };
 }
@@ -844,12 +846,21 @@ function buildClipboardPayload(cluster) {
     const titulo = cluster.titulo_final || cluster.titulo_cluster || 'Sem título';
     const resumo = cluster.resumo_final || cluster.resumo_cluster || 'Sem resumo';
     const { fonte, link } = extrairFonteELink(cluster);
+    // Captura autor/página se existirem na primeira fonte
+    let fonteDetalhe = fonte;
+    if (Array.isArray(cluster.fontes) && cluster.fontes.length > 0) {
+        const f0 = cluster.fontes[0];
+        const partes = [];
+        if (f0.pagina && String(f0.pagina).toLowerCase() !== 'n/a') partes.push(`pág. ${f0.pagina}`);
+        if (f0.autor && String(f0.autor).toLowerCase() !== 'n/a') partes.push(`por ${f0.autor}`);
+        if (partes.length) fonteDetalhe = `${fonte} (${partes.join(', ')})`;
+    }
     const dataStr = formatarDataBR(cluster.timestamp || cluster.created_at);
 
-    const text = `*Título:* ${titulo} / *Fonte:* ${fonte} / ${dataStr}\n*Resumo:* ${resumo}\n${link ? `*Link:* ${link}` : ''}`;
+    const text = `*Título:* ${titulo} / *Fonte:* ${fonteDetalhe} / ${dataStr}\n*Resumo:* ${resumo}${link ? `\n*Link:* ${link}` : ''}`;
 
     const html = `<div>
-  <div><b>Título:</b> ${titulo} / <b>Fonte:</b> ${fonte} / ${dataStr}</div>
+  <div><b>Título:</b> ${titulo} / <b>Fonte:</b> ${fonteDetalhe} / ${dataStr}</div>
   <div><b>Resumo:</b> ${resumo}</div>
   ${link ? `<div><b>Link:</b> <a href="${link}">${link}</a></div>` : ``}
 </div>`;

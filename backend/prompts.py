@@ -118,21 +118,11 @@ LISTA_RELEVANCIA_HIERARQUICA = {
             'Fusões e Aquisições (M&A) - Anunciadas',
             'Crise de Liquidez Aguda',
             'Quebra de Covenants',
-            'Default de Dívida',
-            'Americanas S.A.',
-            'Oi S.A.',
-            'Casas Bahia (Grupo Pão de Açúcar)',
-            'Light S.A.',
-            'Gol Linhas Aéreas',
-            'Azul Linhas Aéreas',
-            'Petrobras',
-            'Vale',
-            'IRB Resseguradora (IRB Brasil RE)',
-            'BTG Pactual'
+            'Default de Dívida'
         ]
     },
     'P2_ESTRATEGICO': {
-        'descricao': 'MONITORAMENTO ESTRATÉGICO: Tendências e eventos que podem gerar oportunidades P1 no futuro.',
+        'descricao': 'MONITORAMENTO ESTRATÉGICO (COM MATERIALIDADE): Tendências, decisões regulatórias e sinais de mercado com potencial claro de virar P1 e IMPACTO FINANCEIRO MENSURÁVEL (players, valores, cronograma). Não inclui temas sociais, esportivos, crimes, opinião ou programas sem tese de investimento.',
         'assuntos': [
             'Mudanças em Legislação (Tributária, Societária, Falimentar, Precatórios)',
             'Inteligência Artificial (IA - apenas grandes movimentos de mercado, M&A no setor ou regulação pesada)',
@@ -344,8 +334,13 @@ Após definir a prioridade, classifique a notícia em UMA das 8 tags temáticas 
 - **Definição:** Movimentos de alto capital/tecnologia (IA, semicondutores, nuclear, aeroespacial) com potencial de M&A/disrupção.
 
 REGRAS DE P1 (GATING OBRIGATÓRIO):
-- P1 SOMENTE se o assunto-chave ∈ {Recuperação Judicial, Falência, Pedido de Falência, Assembleia de Credores, Default de Dívida, Quebra de Covenants, Crise de Liquidez Aguda, M&A ANUNCIADO/OPA, Decisão do CADE com remédios vinculantes, Venda de carteira NPL/ Securitização relevante}.
-- Se não atender a essas condições, NÃO rotule como P1.
+- P1 SOMENTE se o assunto-chave ∈ {Recuperação Judicial, Falência, Pedido de Falência, Assembleia de Credores, Default de Dívida, Quebra de Covenants, Crise de Liquidez Aguda, M&A ANUNCIADO/OPA, Decisão do CADE com remédios vinculantes, Venda de carteira NPL / Securitização RELEVANTE (valores altos, players relevantes)}.
+- NÃO É P1 (rebaixe para P2 ou P3): convocações/ata de assembleias rotineiras (debenturistas/CRI/AGE/AGO) sem evento material; comunicados administrativos; rumores/política partidária; casos casuísticos/operacionais (ex.: pedidos pontuais de desconto de aluguel, renegociação rotineira de contratos, sem risco sistêmico); notas sem materialidade mensurável.
+- P1 é o TOP do dia (essencial). Se houver dúvida razoável sobre materialidade imediata, NÃO classifique como P1.
+
+REGRAS DE P2 (MONITORAMENTO ESTRATÉGICO COM MATERIALIDADE):
+- Use P2 quando houver potencial de impacto financeiro mensurável, mas sem gatilho imediato de P1 (ex.: mudanças de legislação relevantes em tramitação; regulações setoriais com players/valores/cronograma; grandes investimentos/contratos anunciados, sem fechamento definitivo).
+- NÃO classificar como P2: temas sociais, esportivos, crimes, programas sociais, opinião, educação cívica, comportamento em redes; esses devem ser P3 ou rejeitados se sem tese de negócio para mesa de Special Situations.
 
 INSTRUÇÕES DE EXTRAÇÃO:
 1. Seja disciplinado: se não estiver na allow list acima ou cair na rejeição, não inclua.

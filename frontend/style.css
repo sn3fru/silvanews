@@ -171,6 +171,8 @@ body {
 /* PAINEL DE CONTROLE (SIDEBAR)            */
 /* ======================================= */
 .logo h1 { color: var(--cor-destaque-btg); font-weight: 700; font-size: 1.75rem; }
+.logo-subtitle { margin-top: 4px; font-size: 0.9rem; color: rgba(0,0,0,0.55); line-height: 1.2; }
+.logo-subtitle .sigla { color: var(--cor-destaque-btg); font-weight: 700; }
 
 .secao-filtro h2 {
     font-size: 0.9rem;
