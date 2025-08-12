@@ -13,6 +13,11 @@ Plataforma de inteligência de mercado que transforma alto volume de notícias e
 - O processamento orquestrado agrupa por fato gerador, classifica e gera resumos.
 - O frontend exibe o feed por data, com filtros de prioridade e tags dinâmicas vindas dos dados reais.
 
+### Novidades recentes (pipeline mais rigoroso)
+- Endurecimento do `PROMPT_EXTRACAO_PERMISSIVO_V8`: lista de rejeição ampliada (crimes comuns, casos pessoais, fofoca/entretenimento, esportes, política partidária, efemérides e programas sociais sem tese) e gating P1/P2/P3 mais duro.
+- Priorização Executiva Final integrada: etapa adicional pós-resumo/pós-agrupamento que reclassifica como P1/P2/P3/IRRELEVANTE com justificativa e ação recomendada (`PROMPT_PRIORIZACAO_EXECUTIVA_V1`).
+- O fluxo automático acionado pelo botão “Processar Artigos Pendentes” também aplica essa priorização final.
+
 ### Filtros e visualização (frontend)
 - Seletor de data no topo: alterna entre hoje e datas históricas (tudo GMT-3).
 - Filtros: prioridade (P1/P2/P3) e tags dinâmicas (derivadas dos clusters reais).
@@ -29,7 +34,8 @@ Plataforma de inteligência de mercado que transforma alto volume de notícias e
 2) Processamento inicial: extrai dados, gera embeddings e marca `pronto_agrupar`.
 3) Agrupamento: cria/atualiza clusters por fato gerador (modo em lote ou incremental automático).
 4) Classificação e Resumos: define prioridade/tag e gera resumo no tamanho certo.
-5) Exposição: API `FastAPI` alimenta o frontend; CRUD e endpoints admin.
+5) Priorização Executiva Final: reclassifica rigidamente P1/P2/P3/IRRELEVANTE e ajusta decisão final.
+6) Exposição: API `FastAPI` alimenta o frontend; CRUD e endpoints admin.
 
 ```mermaid
 graph TD
@@ -38,7 +44,8 @@ graph TD
   C --> D[(artigos_brutos: pronto_agrupar)]
   D --> E[process_articles.py<br/>Etapa 2: agrupar (pivot auto))]
   E --> F[Etapa 3: classificar e resumir]
-  F --> G[(clusters_eventos + resumos)]
+  F --> F2[Etapa 4: priorização executiva]
+  F2 --> G[(clusters_eventos + resumos + prioridades finais)]
   G --> H[FastAPI /api/feed]
   H --> I[Frontend /frontend]
   J[Admin: upload-file<br/>processar-pendentes] --> H
@@ -51,6 +58,14 @@ graph TD
 - Resumo executivo por prioridade: `PROMPT_RESUMO_FINAL_V3` e `PROMPT_RADAR_MONITORAMENTO_V1` (bullets P3).
 - Sanitização (gatekeeper): `PROMPT_SANITIZACAO_CLUSTER_V1`.
 - Chat com cluster: `PROMPT_CHAT_CLUSTER_V1`.
+- Priorização executiva (pós-pipeline): `PROMPT_PRIORIZACAO_EXECUTIVA_V1`.
+
+Prompts opcionais/POC (não usados no pipeline padrão):
+- `PROMPT_RESUMO_CRITICO_V1` (POC de resumo crítico)
+- `PROMPT_RADAR_MONITORAMENTO_V1` (POC de bullets de radar P3)
+- `PROMPT_AGRUPAMENTO_INCREMENTAL_V1` (substituído por `V2` no pipeline)
+- `PROMPT_SANITIZACAO_CLUSTER_V1` (disponível como segunda linha de defesa; não integrado por padrão)
+- `PROMPT_EXTRACAO_JSON_V1` (alias de `PROMPT_EXTRACAO_PERMISSIVO_V8`, mantido para compatibilidade)
 - Onde ajustar: `backend/prompts.py` (textos, tags, prioridades). API key via `backend/.env` (`GEMINI_API_KEY`).
 
 ### Arquitetura em 1 minuto
@@ -94,6 +109,13 @@ cd "C:\Users\marcos.silva\OneDrive - ENFORCE GESTAO DE ATIVOS S.A\jupyter\projet
   ```
 - Acesso rápido: Frontend `http://localhost:8000/frontend` | Docs `http://localhost:8000/docs` | Health `http://localhost:8000/health`
 
+### Estimativa de Custos (LLM)
+Para uma estimativa rápida de custos por etapa do pipeline, execute:
+```bash
+python estimativa_custos.py
+```
+O script simula tokens de entrada/saída por etapa usando as notícias no banco e imprime um comparativo por cenário de modelos.
+
 ## Sincronizar Banco Local → Heroku (Incremental)
 Rodar a partir da pasta `silva-front` ou `btg_alphafeed`:
   ```bash
@@ -126,6 +148,23 @@ Rodar a partir da pasta `silva-front` ou `btg_alphafeed`:
   ```bash
   curl http://localhost:8000/health
   ```
+
+### Novo (Protótipo) – Análise de Feedback para Ajuste de Prompt
+- Agora é possível registrar like/dislike de notícias diretamente no feed (👍/👎 ao lado do título de cada card). O backend agrega esse feedback por cluster e expõe no `GET /api/feed` dentro do campo `feedback` de cada item: `{ likes, dislikes, last }`.
+- Foi adicionado um protótipo de análise de feedback que sugere ajustes no prompt de agrupamento sem alterar os arquivos em produção. Ele gera um relatório com o diff do prompt proposto.
+
+Rodar o protótipo de análise de feedback e gerar diff do prompt:
+```bash
+conda activate pymc2
+python analisar_feedback_prompt.py --limit 200 --output reports/prompt_diff_feedback.md
+```
+Saída esperada:
+- Arquivo `reports/prompt_diff_feedback.md` com:
+  - Prompt atual
+  - Prompt proposto (adiciona addendum baseado em padrões de like/dislike)
+  - Diff (unified) entre os dois para revisão humana
+
+Importante: este processo não altera `backend/prompts.py`. É apenas para estudo e validação.
 
 ## Playbooks (cenários prontos)
 
@@ -188,10 +227,19 @@ curl "http://localhost:8000/api/feed?data=2099-01-01"
 
 ## Endpoints principais
 - `GET /api/feed?data=YYYY-MM-DD`
+  - Cada item do feed inclui `feedback: { likes, dislikes, last }` agregados por cluster
 - `POST /admin/processar-pendentes`
 - `POST /api/admin/upload-file` e `GET /admin/upload-progress/{file_id}`
 - `GET /health`
 - Frontend servido em `/frontend`
+
+### Endpoints de BI e Feedback
+- `GET /api/bi/series-por-dia?dias=30`
+- `GET /api/bi/noticias-por-fonte?limit=20`
+- `GET /api/bi/noticias-por-autor?limit=20`
+- `POST /api/feedback?artigo_id=<id>&feedback=like|dislike`
+- `GET /api/feedback?processed=`
+- `POST /api/feedback/{id}/process`
 
 ## Dicas de Ambiente
 - Sempre usar Anaconda Prompt e `conda activate pymc2`
@@ -238,7 +286,7 @@ python test_fluxo_completo.py
 - `btg_alphafeed/backend/utils.py`: utilidades gerais (datas GMT-3, etc.).
 - `btg_alphafeed/backend/collectors/file_loader.py`: classe `FileLoader` usada por `load_news.py` para ingerir PDFs/JSONs.
 - `btg_alphafeed/frontend/index.html|script.js|style.css`: UI do feed, seletor de data, modal de deep-dive, filtros dinâmicos.
-- `btg_alphafeed/frontend/settings.html|settings.js`: UI administrativa/CRUD e operações de manutenção.
+- `btg_alphafeed/frontend/settings.html|settings.js`: UI administrativa/CRUD e operações de manutenção, com abas de BI (séries por dia, por fonte e por autor) e Feedback (like/dislike por artigo, com marcação de processado).
 - `btg_alphafeed/load_news.py`: CLI para ingestão de PDFs/JSONs (salva artigos brutos, com `--direct` para DB).
 - `btg_alphafeed/process_articles.py`: orquestrador do pipeline (processar → agrupar → classificar/resumir). Não conter regra de negócio própria.
 - `btg_alphafeed/migrate_incremental.py`: sync incremental local → Heroku (idempotente, com filtros `--only`, `--include-logs`, `--include-chat`).

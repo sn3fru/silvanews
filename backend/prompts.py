@@ -406,6 +406,7 @@ PROMPT_EXTRACAO_JSON_V1 = PROMPT_EXTRACAO_PERMISSIVO_V8
 # Os prompts abaixo não lidam com a classificação inicial e, portanto,
 # não precisam ser alterados. Eles operam em dados já classificados.
 
+# [UNUSED] POC de resumo crítico; não integrado ao pipeline principal.
 PROMPT_RESUMO_CRITICO_V1 = """
 Você é um analista de investimentos escrevendo um briefing para o comitê executivo.
 Sua tarefa é resumir o seguinte evento em um **único parágrafo conciso de, no máximo, 5 linhas.**
@@ -423,27 +424,28 @@ FORMATO DE SAÍDA OBRIGATÓRIO (JSON PURO):
 ```
 """
 
-PROMPT_RADAR_MONITORAMENTO_V1 = """
-Você está criando um "Radar de Monitoramento" para executivos. Sua tarefa é transformar as notícias do cluster abaixo em UM ÚNICO bullet point de UMA LINHA, começando com a ENTIDADE/ATOR principal.
+# [UNUSED] POC de bullets de radar; não integrado ao pipeline principal.
+# PROMPT_RADAR_MONITORAMENTO_V1 = """
+# Você está criando um "Radar de Monitoramento" para executivos. Sua tarefa é transformar as notícias do cluster abaixo em UM ÚNICO bullet point de UMA LINHA, começando com a ENTIDADE/ATOR principal.
 
-REGRAS:
-- Apenas 1 linha. Comece com "Entidade: ...". Seja preciso e informativo.
-- Evite listas de classificados/leilões/avisos genéricos. Se mantidos excepcionalmente, foque em materialidade (valor, atores, data/próximo marco).
+# REGRAS:
+# - Apenas 1 linha. Comece com "Entidade: ...". Seja preciso e informativo.
+# - Evite listas de classificados/leilões/avisos genéricos. Se mantidos excepcionalmente, foque em materialidade (valor, atores, data/próximo marco).
 
-Exemplos:
-- "iFood: em negociações para adquirir a Alelo por R$ 5 bilhões"
-- "Mercado de Carbono: governo adia a criação de agência reguladora para o setor"
+# Exemplos:
+# - "iFood: em negociações para adquirir a Alelo por R$ 5 bilhões"
+# - "Mercado de Carbono: governo adia a criação de agência reguladora para o setor"
 
-DADOS DO CLUSTER PARA TRANSFORMAR EM BULLET POINT:
-{DADOS_DO_GRUPO}
+# DADOS DO CLUSTER PARA TRANSFORMAR EM BULLET POINT:
+# {DADOS_DO_GRUPO}
 
-FORMATO DE SAÍDA OBRIGATÓRIO (JSON PURO):
-```json
-{{
-  "bullet_point": "Entidade: resumo consolidado das notícias do cluster em uma linha"
-}}
-```
-"""
+# FORMATO DE SAÍDA OBRIGATÓRIO (JSON PURO):
+# ```json
+# {{
+#   "bullet_point": "Entidade: resumo consolidado das notícias do cluster em uma linha"
+# }}
+# ```
+# """
 
 PROMPT_AGRUPAMENTO_V1 = """
 Você é um especialista em análise de conteúdo focado em granularidade. Sua tarefa é agrupar notícias de uma lista JSON que se referem ao MESMO FATO GERADOR. Diferentes jornais cobrem o mesmo fato com títulos distintos; sua missão é identificar o núcleo semântico e consolidar em grupos.
@@ -515,6 +517,7 @@ Baseado no CLUSTER de notícias fornecido e no **Nível de Detalhe** `{NIVEL_DE_
 {DADOS_DO_GRUPO}
 """
 
+# [UNUSED] Utilitário de decisão granular; não chamado no caminho principal. Mantido para ferramentas/rotas específicas.
 PROMPT_DECISAO_CLUSTER_DETALHADO_V1 = """
 Você é um especialista em análise de conteúdo. Sua tarefa é decidir se uma nova notícia deve ser agrupada com um cluster existente ou não.
 
@@ -546,58 +549,59 @@ SIM ou NÃO
 # PROMPT PARA AGRUPAMENTO INCREMENTAL
 # ==============================================================================
 
-PROMPT_AGRUPAMENTO_INCREMENTAL_V1 = """
-Você é um especialista em análise de conteúdo focado em granularidade. Sua tarefa é classificar novas notícias em relação a clusters existentes do mesmo dia.
+# [UNUSED] Este prompt não é usado no pipeline atual (substituído por PROMPT_AGRUPAMENTO_INCREMENTAL_V2). Mantido para referência/POC.
+# PROMPT_AGRUPAMENTO_INCREMENTAL_V1 = """
+# Você é um especialista em análise de conteúdo focado em granularidade. Sua tarefa é classificar novas notícias em relação a clusters existentes do mesmo dia.
 
-**CONTEXTO IMPORTANTE:**
-- Você receberá NOTÍCIAS NOVAS que precisam ser classificadas (título e, se disponível, início do texto)
-- Você receberá CLUSTERS EXISTENTES do mesmo dia (inclua `tema_principal` e, se disponível, um breve resumo)
-- Sua missão é decidir se cada notícia nova deve ser ANEXADA a um cluster existente ou criar um NOVO cluster somente se tratar de evento distinto
+# **CONTEXTO IMPORTANTE:**
+# - Você receberá NOTÍCIAS NOVAS que precisam ser classificadas (título e, se disponível, início do texto)
+# - Você receberá CLUSTERS EXISTENTES do mesmo dia (inclua `tema_principal` e, se disponível, um breve resumo)
+# - Sua missão é decidir se cada notícia nova deve ser ANEXADA a um cluster existente ou criar um NOVO cluster somente se tratar de evento distinto
 
-**REGRAS CRÍTICAS:**
-1. **PRIORIZE ANEXAR:** Em caso de dúvida razoável (desdobramento, reação ou análise do mesmo evento), prefira ANEXAR ao cluster existente.
-2. **MESMO FATO GERADOR:** Se a notícia nova se refere ao mesmo evento, decisão ou anúncio de um cluster existente, ANEXE ao cluster.
-3. **FATO DIFERENTE:** Crie um novo cluster somente se a notícia tratar de um evento claramente distinto e independente.
-4. **INTEGRIDADE TOTAL:** TODAS as notícias novas DEVEM ser classificadas (anexadas ou em novos clusters).
+# **REGRAS CRÍTICAS:**
+# 1. **PRIORIZE ANEXAR:** Em caso de dúvida razoável (desdobramento, reação ou análise do mesmo evento), prefira ANEXAR ao cluster existente.
+# 2. **MESMO FATO GERADOR:** Se a notícia nova se refere ao mesmo evento, decisão ou anúncio de um cluster existente, ANEXE ao cluster.
+# 3. **FATO DIFERENTE:** Crie um novo cluster somente se a notícia tratar de um evento claramente distinto e independente.
+# 4. **INTEGRIDADE TOTAL:** TODAS as notícias novas DEVEM ser classificadas (anexadas ou em novos clusters).
 
-**FORMATO DE ENTRADA:**
-- **NOTÍCIAS NOVAS:** Lista de notícias com ID, título e opcionalmente um breve início do texto
-- **CLUSTERS EXISTENTES:** Lista de clusters com `cluster_id`, `tema_principal` e opcionalmente um breve resumo
+# **FORMATO DE ENTRADA:**
+# - **NOTÍCIAS NOVAS:** Lista de notícias com ID, título e opcionalmente um breve início do texto
+# - **CLUSTERS EXISTENTES:** Lista de clusters com `cluster_id`, `tema_principal` e opcionalmente um breve resumo
 
-**FORMATO DE SAÍDA OBRIGATÓRIO (JSON PURO):**
-```json
-[
-  {{
-    "tipo": "anexar",
-    "noticia_id": 0,
-    "cluster_id_existente": 1,
-    "justificativa": "A notícia se refere ao mesmo evento do cluster existente"
-  }},
-  {{
-    "tipo": "novo_cluster",
-    "noticia_id": 1,
-    "tema_principal": "Novo evento específico",
-    "justificativa": "A notícia se refere a um fato gerador diferente"
-  }}
-]
-```
+# **FORMATO DE SAÍDA OBRIGATÓRIO (JSON PURO):**
+# ```json
+# [
+#   {{
+#     "tipo": "anexar",
+#     "noticia_id": 0,
+#     "cluster_id_existente": 1,
+#     "justificativa": "A notícia se refere ao mesmo evento do cluster existente"
+#   }},
+#   {{
+#     "tipo": "novo_cluster",
+#     "noticia_id": 1,
+#     "tema_principal": "Novo evento específico",
+#     "justificativa": "A notícia se refere a um fato gerador diferente"
+#   }}
+# ]
+# ```
 
-**EXEMPLO:**
-Se você tem:
-- Notícia nova: "Apple anuncia novo iPhone"
-- Cluster existente: "Apple lança iPhone 20" (com outras notícias sobre o mesmo lançamento)
+# **EXEMPLO:**
+# Se você tem:
+# - Notícia nova: "Apple anuncia novo iPhone"
+# - Cluster existente: "Apple lança iPhone 20" (com outras notícias sobre o mesmo lançamento)
 
-**RESULTADO:** Anexar a notícia nova ao cluster existente, pois se refere ao mesmo evento.
+# **RESULTADO:** Anexar a notícia nova ao cluster existente, pois se refere ao mesmo evento.
 
-**DADOS PARA ANÁLISE:**
-**NOTÍCIAS NOVAS:**
-{NOVAS_NOTICIAS}
+# **DADOS PARA ANÁLISE:**
+# **NOTÍCIAS NOVAS:**
+# {NOVAS_NOTICIAS}
 
-**CLUSTERS EXISTENTES:**
-{CLUSTERS_EXISTENTES}
+# **CLUSTERS EXISTENTES:**
+# {CLUSTERS_EXISTENTES}
 
-**CLASSIFIQUE:** Cada notícia nova deve ser anexada a um cluster existente ou criar um novo cluster.
-"""
+# **CLASSIFIQUE:** Cada notícia nova deve ser anexada a um cluster existente ou criar um novo cluster.
+# """
 
 # ==============================================================================
 # PROMPT PARA AGRUPAMENTO INCREMENTAL (V2 — com contexto enriquecido)
@@ -667,36 +671,37 @@ CLASSIFIQUE: Cada notícia nova deve ser anexada a um cluster existente ou criar
 # PROMPT DE SANITIZAÇÃO (GATEKEEPER) — REMOVER CLUSTERS IRRELEVANTES
 # ============================================================================
 
-PROMPT_SANITIZACAO_CLUSTER_V1 = """
-Você é um porteiro (gatekeeper) para a mesa de 'Special Situations'. Decida se um CLUSTER de notícias é RELEVANTE ou IRRELEVANTE para análise financeira.
+# [UNUSED] Este prompt não está integrado ao pipeline padrão (gatekeeper opcional). Mantido para referência.
+# PROMPT_SANITIZACAO_CLUSTER_V1 = """
+# Você é um porteiro (gatekeeper) para a mesa de 'Special Situations'. Decida se um CLUSTER de notícias é RELEVANTE ou IRRELEVANTE para análise financeira.
 
-REJEIÇÃO IMEDIATA (IRRELEVANTE):
-- Indenizações cíveis/trabalhistas individuais de baixo valor.
-- Opinião/Cartas/Editorial sem fato econômico objetivo.
-- Classificados/avisos/procurement/leilões genéricos (veículos/joias/apartamentos isolados).
-- Esportes, Cultura/Entretenimento (sem tese de negócio), Crimes cotidianos, Política partidária pura.
+# REJEIÇÃO IMEDIATA (IRRELEVANTE):
+# - Indenizações cíveis/trabalhistas individuais de baixo valor.
+# - Opinião/Cartas/Editorial sem fato econômico objetivo.
+# - Classificados/avisos/procurement/leilões genéricos (veículos/joias/apartamentos isolados).
+# - Esportes, Cultura/Entretenimento (sem tese de negócio), Crimes cotidianos, Política partidária pura.
 
- EXEMPLOS CONCRETOS DE IRRELEVÂNCIA (REJEITE):
- - Crimes comuns e casos pessoais: "Dentista indeniza família de concorrente assassinado"; "Condenação de mexicana a desculpas no X"; decisões casuísticas (ex.: vínculo individual pastor–igreja).
- - Política partidária/pessoal: "STF e julgamentos que podem prejudicar Bolsonaro"; "Pedidos de visita a Bolsonaro por deputados".
- - Fofoca/entretenimento/esportes: "Reviravolta no caso Juliana Oliveira e Otávio Mesquita"; futebol (Palmeiras, Crystal Palace etc.); "vaquejada" sem tese de negócio.
+#  EXEMPLOS CONCRETOS DE IRRELEVÂNCIA (REJEITE):
+#  - Crimes comuns e casos pessoais: "Dentista indeniza família de concorrente assassinado"; "Condenação de mexicana a desculpas no X"; decisões casuísticas (ex.: vínculo individual pastor–igreja).
+#  - Política partidária/pessoal: "STF e julgamentos que podem prejudicar Bolsonaro"; "Pedidos de visita a Bolsonaro por deputados".
+#  - Fofoca/entretenimento/esportes: "Reviravolta no caso Juliana Oliveira e Otávio Mesquita"; futebol (Palmeiras, Crystal Palace etc.); "vaquejada" sem tese de negócio.
 
-EXCEÇÕES (RELEVANTE quando houver materialidade):
-- Leilão JUDICIAL de alto valor (> R$10 mi) de ativo relevante; Venda de carteira NPL; Securitização de Dívida Ativa com valores/processos.
-- M&A anunciado/OPA; Decisão do CADE com remédios; RJ/Falência/Default/Quebra de Covenants/Crise de Liquidez.
+# EXCEÇÕES (RELEVANTE quando houver materialidade):
+# - Leilão JUDICIAL de alto valor (> R$10 mi) de ativo relevante; Venda de carteira NPL; Securitização de Dívida Ativa com valores/processos.
+# - M&A anunciado/OPA; Decisão do CADE com remédios; RJ/Falência/Default/Quebra de Covenants/Crise de Liquidez.
 
-DADOS DO CLUSTER:
-- Título do Cluster: {TITULO_CLUSTER}
-- Amostra de Títulos: {TITULOS_ARTIGOS}
+# DADOS DO CLUSTER:
+# - Título do Cluster: {TITULO_CLUSTER}
+# - Amostra de Títulos: {TITULOS_ARTIGOS}
 
-FORMATO DE SAÍDA (JSON PURO):
-```json
-{
-  "decisao": "RELEVANTE" ou "IRRELEVANTE",
-  "justificativa": "Motivo conciso"
-}
-```
-"""
+# FORMATO DE SAÍDA (JSON PURO):
+# ```json
+# {
+#   "decisao": "RELEVANTE" ou "IRRELEVANTE",
+#   "justificativa": "Motivo conciso"
+# }
+# ```
+# """
 
 # ==============================================================================
 # PROMPT PARA CHAT COM CLUSTERS

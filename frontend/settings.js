@@ -865,7 +865,7 @@ async function enviarFeedback() {
 
 async function carregarFeedback() {
     try {
-        const resp = await fetch(`${API_BASE}/feedback?processed=`);
+        const resp = await fetch(`${API_BASE}/feedback`);
         const data = await resp.json();
         const tbody = document.querySelector('#fb-table tbody');
         tbody.innerHTML = '';

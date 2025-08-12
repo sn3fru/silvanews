@@ -573,6 +573,41 @@ def get_clusters_for_feed_by_date(db: Session, target_date: datetime.date, page:
         # Formata tags
         tags = [cluster.tag] if cluster.tag else []
         
+        # Calcula feedback agregado do cluster (likes/dislikes e último feedback)
+        try:
+            try:
+                from .database import FeedbackNoticia as _Feedback
+            except ImportError:
+                from backend.database import FeedbackNoticia as _Feedback
+
+            likes = db.query(func.count(_Feedback.id)).join(
+                ArtigoBruto, _Feedback.artigo_id == ArtigoBruto.id
+            ).filter(
+                ArtigoBruto.cluster_id == cluster.id,
+                _Feedback.feedback == 'like'
+            ).scalar() or 0
+
+            dislikes = db.query(func.count(_Feedback.id)).join(
+                ArtigoBruto, _Feedback.artigo_id == ArtigoBruto.id
+            ).filter(
+                ArtigoBruto.cluster_id == cluster.id,
+                _Feedback.feedback == 'dislike'
+            ).scalar() or 0
+
+            ultimo = db.query(_Feedback).join(
+                ArtigoBruto, _Feedback.artigo_id == ArtigoBruto.id
+            ).filter(
+                ArtigoBruto.cluster_id == cluster.id
+            ).order_by(_Feedback.created_at.desc()).first()
+
+            feedback_info = {
+                "likes": int(likes),
+                "dislikes": int(dislikes),
+                "last": (ultimo.feedback if ultimo else None)
+            }
+        except Exception:
+            feedback_info = {"likes": 0, "dislikes": 0, "last": None}
+
         # Cria item do feed
         item = {
             "id": cluster.id,
@@ -584,7 +619,8 @@ def get_clusters_for_feed_by_date(db: Session, target_date: datetime.date, page:
             "fontes": fontes,
             "timestamp": _format_relative_time(cluster.updated_at),
             "total_artigos": len(artigos),
-            "created_at": cluster.created_at.isoformat()
+            "created_at": cluster.created_at.isoformat(),
+            "feedback": feedback_info
         }
         
         # Carrega texto completo apenas se solicitado

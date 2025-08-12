@@ -748,6 +748,23 @@ function criarCardCluster(cluster) {
             </div>
         </div>
     `;
+    // Marca feedback persistido (se existir)
+    try {
+        const upBtn = card.querySelector('.btn-thumb.up');
+        const downBtn = card.querySelector('.btn-thumb.down');
+        const fb = cluster && cluster.feedback ? cluster.feedback : null;
+        if (fb && (upBtn || downBtn)) {
+            if (fb.last === 'like') {
+                upBtn && upBtn.classList.add('active');
+            } else if (fb.last === 'dislike') {
+                downBtn && downBtn.classList.add('active');
+            } else if ((fb.likes || 0) > (fb.dislikes || 0)) {
+                upBtn && upBtn.classList.add('active');
+            } else if ((fb.dislikes || 0) > (fb.likes || 0)) {
+                downBtn && downBtn.classList.add('active');
+            }
+        }
+    } catch (_) {}
     return card;
 }
 
