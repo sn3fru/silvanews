@@ -22,12 +22,12 @@
 # 1. FONTES DA VERDADE PARA CLASSIFICAÇÃO
 # ==============================================================================
 
-# Dicionário central para as 8 tags temáticas de Special Situations.
+# Dicionário central para as tags temáticas de Special Situations.
 TAGS_SPECIAL_SITUATIONS = {
     'M&A e Transações Corporativas': {
         'descricao': 'Mudanças na estrutura de capital ou controle de empresas através de transações.',
         'exemplos': [
-            'Fusões e Aquisições (M&A) - Anunciadas ou em negociação avançada',
+            'Fusões e Aquisições (M&A) - Apenas quando o fato gerador for um anúncio oficial de transação, um acordo assinado ou uma negociação formal e exclusiva em andamento. Intenções genéricas de "buscar aquisições" devem ser P3 ou rejeitadas',
             'Venda de ativos ou subsidiárias (divestitures)',
             'Ofertas públicas de aquisição (OPA)',
             'Disputas por controle acionário que podem levar a uma transação'
@@ -37,7 +37,7 @@ TAGS_SPECIAL_SITUATIONS = {
         'descricao': 'Eventos legais ou regulatórios que criam estresse financeiro, oportunidades de arbitragem ou alteram o ambiente de negócios.',
         'exemplos': [
             'Recuperação Judicial (RJ), Falência, Pedido de Falência, Assembleia de Credores',
-            'Disputas Societárias Relevantes que possam gerar ineficiência de preço',
+            'Disputas societárias relevantes ENTRE SÓCIOS, ACIONISTAS ou CONSELHO de uma EMPRESA, com impacto em controle ou governança. (Ex: NÃO se aplica a disputas entre partidos políticos ou investigações de agentes públicos por crimes comuns)',
             'Mudanças em Legislação (Tributária, Societária, Falimentar)',
             'Decisões do CADE (bloqueio de fusões, imposição de remédios)',
             'Decisões de tribunais superiores (STF, STJ) com impacto direto em empresas ou setores'
@@ -92,11 +92,39 @@ TAGS_SPECIAL_SITUATIONS = {
         'exemplos': [
             'Inteligência Artificial (IA - grandes M&As no setor, regulação pesada)',
             'Semicondutores (geopolítica da cadeia de suprimentos, grandes investimentos)',
-            'EnergIA Nuclear e Aeroespacial (grandes projetos, concessões)',
-            'xxxx xx'
+            'EnergIA Nuclear e Aeroespacial (grandes projetos, concessões)'
+        ]
+    },
+    'Divulgação de Resultados': {
+        'descricao': 'Publicações oficiais de resultados trimestrais/anuais (earnings) de empresas.',
+        'exemplos': [
+            'Divulgação de resultados trimestrais (ex.: 2T24, 3T24, 4T24)',
+            'Conference call de resultados/press release de earnings',
+            'Atualização de guidance vinculada ao release de resultados',
+            'Observação: Resultados com sinais de estresse severo (impairment, write-down, quebra de covenants) podem ser elevados para P2.'
+        ]
+    },
+    'IRRELEVANTE': {
+        'descricao': 'Estamos na mesa de Special Situations do BTG Pactual. Vamos classificar tudo que que não tem contato conosco como IRRELEVANTE.',
+        'exemplos': [
+            'Noticias sobre crimes comuns, politica, opiniÕes que nao tem contato com o banco',
+            'Fofocas, entretenimento, esportes, programas sociais, etc.',
+            'Eventos esportivos, culturais, musicas, shows, teatrosetc.',
+            'Programas publicos e do governo sociais, ambientes, bolsa familia, desemprego, etc que nao impactem a economia de forma abrangente'
         ]
     }
 }
+
+# Lista central de empresas prioritárias para gating de "Divulgação de Resultados"
+EMPRESAS_PRIORITARIAS = [
+    # Big Techs e tecnologia
+    'Alphabet', 'AMD', 'Apple', 'Google', 'Intel', 'Intuitive Machines', 'Meta',
+    'Micron Technology', 'Microsoft', 'Netflix', 'Tesla', 'Nvidia',
+    # Energia
+    'Constellation Energy Group', 'Siemens Energy AG',
+    # Bancos e reguladores relevantes
+    'Banco Master', 'Banco Pan', 'Caixa Econômica Federal', 'PREVIC'
+]
 
 # Dicionário central para a hierarquia de prioridades.
 LISTA_RELEVANCIA_HIERARQUICA = {
@@ -111,7 +139,7 @@ LISTA_RELEVANCIA_HIERARQUICA = {
             'Créditos Podres (Distressed Debt)',
             'Venda de Carteira de NPL',
             'Crédito Tributário (teses, oportunidades de monetização)',
-            'Disputas Societárias Relevantes',
+            'Disputas societárias RELEVANTES entre sócios, acionistas ou conselho de uma EMPRESA, com impacto em controle ou governança (NÃO inclui litígios pessoais; NÃO se aplica a disputas entre partidos políticos ou investigações de agentes públicos por crimes comuns)',
             'FCVS (apenas liquidação ou venda)',
             'Dívida Ativa (apenas venda de blocos ou securitização)',
             'Leilões Judiciais de Ativos (>R$10 milhões)',
@@ -160,7 +188,7 @@ LISTA_RELEVANCIA_HIERARQUICA = {
             'Acordos Comerciais (Mercosul-UE, etc.)',
             'Decisões do FED e BCE',
             'Games (apenas notícias sobre grandes fusões e aquisições, ex: Microsoft comprando Activision)',
-            'Balancos financeiros (apenas se forem de empresas P2 ou indicarem estresse financeiro severo)',
+            'Divulgação de Resultados',
             'Classificados e leilões (99% irrelevantes, exceto leilões judiciais de alto valor >R$10M)'
         ]
     }
@@ -168,67 +196,31 @@ LISTA_RELEVANCIA_HIERARQUICA = {
 
 
 # ==============================================================================
-# 1.1 MAPEAMENTO DETERMINÍSTICO: ASSUNTO ➜ (PRIORIDADE, TAG)
+# 1.1 MAPEAMENTO DETERMINÍSTICO: ASSUNTO ➜ PRIORIDADE
 # ==============================================================================
 
-# Mapeia assuntos-chave para a tag temática correspondente.
-# A prioridade é inferida diretamente a partir de LISTA_RELEVANCIA_HIERARQUICA.
-ASSUNTO_PARA_TAG = {
-    # P1_CRITICO
-    'Recuperação Judicial (RJ)': 'Jurídico, Falências e Regulatório',
-    'Falência': 'Jurídico, Falências e Regulatório',
-    'Pedido de Falência': 'Jurídico, Falências e Regulatório',
-    'Assembleia de Credores': 'Jurídico, Falências e Regulatório',
-    'Créditos Inadimplentes (NPLs)': 'Distressed Assets e NPLs',
-    'Créditos Podres (Distressed Debt)': 'Distressed Assets e NPLs',
-    'Venda de Carteira de NPL': 'Distressed Assets e NPLs',
-    'Crédito Tributário (teses, oportunidades de monetização)': 'Dívida Ativa e Créditos Públicos',
-    'Disputas Societárias Relevantes': 'Jurídico, Falências e Regulatório',
-    'FCVS (apenas liquidação ou venda)': 'Dívida Ativa e Créditos Públicos',
-    'Dívida Ativa (apenas venda de blocos ou securitização)': 'Dívida Ativa e Créditos Públicos',
-    'Leilões Judiciais de Ativos (>R$10 milhões)': 'Distressed Assets e NPLs',
-    'Fusões e Aquisições (M&A) - Anunciadas': 'M&A e Transações Corporativas',
-    'Crise de Liquidez Aguda': 'Mercado de Capitais e Finanças Corporativas',
-    'Quebra de Covenants': 'Mercado de Capitais e Finanças Corporativas',
-    'Default de Dívida': 'Mercado de Capitais e Finanças Corporativas',
-
-    # P2_ESTRATEGICO
-    'Mudanças em Legislação (Tributária, Societária, Falimentar, Precatórios)': 'Jurídico, Falências e Regulatório',
-    'Inteligência Artificial (IA - apenas grandes movimentos de mercado, M&A no setor ou regulação pesada)': 'Tecnologia e Setores Estratégicos',
-    'Semicondutores (geopolítica da cadeia de suprimentos, grandes investimentos/fábricas)': 'Tecnologia e Setores Estratégicos',
-    'Energia Nuclear (grandes projetos, concessões, marco regulatório)': 'Tecnologia e Setores Estratégicos',
-    'Aeroespacial e Defesa (grandes contratos governamentais, privatizações)': 'Tecnologia e Setores Estratégicos',
-    'Política Econômica (Decisões de juros e política fiscal que afetem o crédito e a saúde financeira das empresas)': 'Política Econômica (Brasil)',
-    'Decisões do CADE (bloqueio de fusões, imposição de remédios)': 'Jurídico, Falências e Regulatório',
-    'Ativismo Acionário (grandes investidores tentando influenciar a gestão)': 'Mercado de Capitais e Finanças Corporativas',
-
-    # P3_MONITORAMENTO
-    'Criptomoedas (apenas visão macro de mercado, adoção institucional ou regulação. Sem análise técnica de moedas específicas).': 'Internacional (Economia e Política)',
-    'Geoeconomia': 'Internacional (Economia e Política)',
-    'Acordos Comerciais (Mercosul-UE, etc.)': 'Internacional (Economia e Política)',
-    'Decisões do FED e BCE': 'Internacional (Economia e Política)',
-    'Games (apenas notícias sobre grandes fusões e aquisições, ex: Microsoft comprando Activision)': 'Internacional (Economia e Política)',
-    'Balancos financeiros (apenas se forem de empresas P2 ou indicarem estresse financeiro severo)': 'Mercado de Capitais e Finanças Corporativas',
-    'Classificados e leilões (99% irrelevantes, exceto leilões judiciais de alto valor >R$10M)': 'Distressed Assets e NPLs',
-}
+# Removido mapeamento assunto ➜ tag. A tag deve ser escolhida EXCLUSIVAMENTE
+# a partir de TAGS_SPECIAL_SITUATIONS. Mantemos apenas o mapeamento de prioridade
+# no guia de texto para orientar a seleção.
 
 
 def gerar_guia_classificacao_rapida():
     """
-    Constrói um guia determinístico assunto ➜ (prioridade, tag) derivado das fontes da verdade.
+    Constrói um guia determinístico assunto ➜ prioridade derivado das fontes da verdade.
     """
     linhas = []
-    linhas.append("--- GUIA DE CLASSIFICAÇÃO RÁPIDA (ASSUNTO ➜ PRIORIDADE E TAG) ---\n")
-    linhas.append("Siga 3 passos: (1) identifique o assunto-chave; (2) derive prioridade e tag conforme o mapeamento abaixo; (3) preencha os campos no JSON de saída.\n")
+    linhas.append("--- GUIA DE CLASSIFICAÇÃO RÁPIDA (ASSUNTO ➜ PRIORIDADE) ---\n")
+    linhas.append("Siga 3 passos: (1) identifique o assunto-chave; (2) derive a PRIORIDADE pelo mapeamento abaixo; (3) selecione UMA tag de 'TAGS_SPECIAL_SITUATIONS'.\n")
     for prioridade, dados in LISTA_RELEVANCIA_HIERARQUICA.items():
         for assunto in dados.get('assuntos', []):
-            tag = ASSUNTO_PARA_TAG.get(assunto)
-            if not tag:
-                continue
-            linhas.append(f"- {assunto} ➜ prioridade: {prioridade}, tag: '{tag}'")
+            linhas.append(f"- {assunto} ➜ prioridade: {prioridade}")
     linhas.append("\nObservações:")
     linhas.append("- Se o assunto for 'Recuperação Judicial', 'Falência' ou 'Pedido de Falência', a prioridade é SEMPRE P1_CRITICO.")
+    linhas.append("- 'Disputas societárias relevantes' referem-se EXCLUSIVAMENTE a litígios corporativos (sócios/acionistas/conselho) envolvendo pessoas jurídicas, com impacto em governança/controle. Casos pessoais ou indenizações individuais NÃO se enquadram e devem ser REJEITADOS.")
+    linhas.append("- Indenizações cíveis/trabalhistas INDIVIDUAIS, de qualquer valor, sem vínculo direto com empresas/mercado de capitais, devem ser REJEITADAS.")
+    linhas.append("- Após definir a prioridade, selecione UMA tag válida em 'TAGS_SPECIAL_SITUATIONS' que melhor reflita a natureza do evento.")
     linhas.append("- Em caso de dúvida entre anexar a 'Jurídico' ou 'Mercado de Capitais', prefira a natureza do evento (jurídico-regulatório vs. financeiro-capital).")
+    linhas.append("- EMPRESAS_PRIORITARIAS (para Divulgação de Resultados em P1): " + ", ".join(EMPRESAS_PRIORITARIAS))
     return "\n".join(linhas) + "\n"
 
 
@@ -254,7 +246,7 @@ def gerar_lista_relevancia_para_prompt():
 
     # Parte 2: Guia de Tags Temáticas
     guia_tags = "--- GUIA DE TAGS TEMÁTICAS (QUAL A NATUREZA DA OPORTUNIDADE?) ---\n"
-    guia_tags += "Após definir a prioridade, classifique a notícia em UMA das 8 tags temáticas abaixo. A `tag` deve refletir o núcleo da tese de investimento.\n\n"
+    guia_tags += "Após definir a prioridade, classifique a notícia em UMA das 9 tags temáticas abaixo. A `tag` deve refletir o núcleo da tese de investimento.\n\n"
     for i, (tag, data) in enumerate(TAGS_SPECIAL_SITUATIONS.items(), 1):
         guia_tags += f"**{i}. TAG: '{tag}'**\n"
         guia_tags += f"- **Definição:** {data['descricao']}\n"
@@ -268,6 +260,20 @@ def gerar_lista_relevancia_para_prompt():
 LISTA_RELEVANCIA_FORMATADA = gerar_lista_relevancia_para_prompt()
 
 
+# Guia apenas de tags para injeção em prompts que não precisam repetir a parte de prioridade
+def gerar_guia_tags_formatado():
+    guia_tags = "--- GUIA DE TAGS TEMÁTICAS (QUAL A NATUREZA DA OPORTUNIDADE?) ---\n"
+    guia_tags += "Após definir a prioridade, classifique a notícia em UMA das 9 tags temáticas abaixo. A `tag` deve refletir o núcleo da tese de investimento.\n\n"
+    for i, (tag, data) in enumerate(TAGS_SPECIAL_SITUATIONS.items(), 1):
+        guia_tags += f"**{i}. TAG: '{tag}'**\n"
+        guia_tags += f"- **Definição:** {data['descricao']}\n"
+        guia_tags += f"- **O que classificar aqui (Exemplos):** {'; '.join(data['exemplos'])}\n\n"
+    return guia_tags
+
+
+GUIA_TAGS_FORMATADO = gerar_guia_tags_formatado()
+
+
 # ==============================================================================
 # PROMPTS DETALHADOS PARA O PIPELINE DE IA (REATORADOS)
 # ==============================================================================
@@ -279,7 +285,7 @@ Sua identidade: Você é um analista Senior da mesa de 'Special Situations' do b
 
 INSTRUÇÕES DE CLASSIFICAÇÃO (PROCESSO EM 3 PASSOS):
 1) Identifique o assunto-chave mais específico da notícia (ex.: "Recuperação Judicial", "Decisão do CADE", "M&A anunciado").
-   - O CAMPO `categoria` DEVE SER EXATAMENTE ESSE ASSUNTO-CHAVE determinístico.
+   - O CAMPO `categoria` DEVE SER EXATAMENTE UM assunto-chave listado no guia (não invente novos). Se não houver encaixe direto, REJEITE.
 2) A partir do assunto-chave, DERIVE a prioridade e a tag de forma determinística conforme o guia abaixo.
 3) Preencha o JSON com: categoria=assunto-chave, prioridade=derivada, tag=derivada, relevance_score justificado.
 
@@ -287,11 +293,11 @@ INSTRUÇÕES DE CLASSIFICAÇÃO (PROCESSO EM 3 PASSOS):
 --------------------------------------------------------------------------------
 LISTA DE REJEIÇÃO IMEDIATA (SE FOR SOBRE ISSO, É RUÍDO):
 --------------------------------------------------------------------------------
-- Indenizações cíveis/trabalhistas INDIVIDUAIS de baixo valor, casos pessoais e disputas particulares sem efeito econômico setorial (ex.: ações trabalhistas pontuais, litígios familiares, condenações individuais).
+- Indenizações cíveis/trabalhistas INDIVIDUAIS (de qualquer valor), casos pessoais e disputas particulares sem efeito econômico setorial OU sem vínculo direto com empresa/mercado de capitais (ex.: ações trabalhistas pontuais, litígios familiares, danos morais individuais, celebridades/pessoas públicas sem empresa).
 - Crimes e Segurança Pública cotidiana (homicídios, furtos, golpes comuns), sem vínculo com mercado de capitais ou tese de investimento.
-- Política partidária/pessoal (disputas eleitorais, polarização, agendas pessoais). Exceções: política econômica com impacto direto e decisões regulatórias com materialidade.
+- Política partidária/pessoal (disputas eleitorais, polarização, agendas pessoais). Exceções: política econômica com impacto direto e decisões regulatórias com materialidade. Ex.: rejeite notícias sobre rotina de políticos, pedidos de visita, discursos em comícios, disputas internas de partidos, agendas de custodiados/presos, etc.
 - Cultura/Entretenimento/Fofoca/Esportes/Eventos (shows, teatro, celebridades, futebol, vaquejada etc.) — irrelevante para a mesa.
-- Opinião/Cartas/Editorial/Colunas sem fato gerador objetivo e verificável.
+- Opinião/Cartas/Editorial/Colunas/Entrevistas/Palestras: a forma de opinião tem precedência sobre o tema. Rejeite mesmo que o assunto discutido (ex.: IA, geopolítica) seja relevante, se não houver fato gerador novo e objetivo.
 - Classificados, avisos, chamamentos públicos e procurement rotineiro; leilões genéricos de bens de consumo/joias/veículos/apartamentos isolados (exceto leilões JUDICIAIS de alto valor > R$10 mi de ativos relevantes).
 - Programas/benefícios/governo sociais genéricos sem tese de investimento (ex.: liberação de recursos a aposentados e pensionistas, discussões sobre creches, campanhas públicas, selos de segurança de apps sem materialidade financeira setorial).
 - Decisões judiciais casuísticas sem precedentes vinculantes/jurisprudência ampla (ex.: vínculo individual pastor–igreja; ordens pontuais em redes sociais) — irrelevantes.
@@ -310,7 +316,7 @@ EXEMPLOS CONCRETOS DE RUÍDO (REJEITE):
 FOCO PRINCIPAL — CAPTURE APENAS O QUE ESTIVER NO GUIA DE TAGS E PRIORIDADES
 
 --- GUIA DE TAGS TEMÁTICAS (QUAL A NATUREZA DA OPORTUNIDADE?) ---
-Após definir a prioridade, classifique a notícia em UMA das 8 tags temáticas abaixo. A `tag` deve refletir o núcleo da tese de investimento.
+Após definir a prioridade, classifique a notícia em UMA das 9 tags temáticas abaixo. A `tag` deve refletir o núcleo da tese de investimento.
 
 **1. TAG: 'M&A e Transações Corporativas'**
 - **Definição:** Mudanças na estrutura de capital ou controle de empresas através de transações.
@@ -347,8 +353,14 @@ Após definir a prioridade, classifique a notícia em UMA das 8 tags temáticas 
 **8. TAG: 'Tecnologia e Setores Estratégicos'**
 - **Definição:** Movimentos de alto capital/tecnologia (IA, semicondutores, nuclear, aeroespacial) com potencial de M&A/disrupção.
 
+**9. TAG: 'Divulgação de Resultados'**
+- **Definição:** Publicações oficiais de resultados trimestrais/anuais (earnings) e materiais correlatos (press releases, conference calls, guidance atrelado aos resultados).
+- **Regras de prioridade específicas:** P1_CRITICO apenas se a empresa estiver em `EMPRESAS_PRIORITARIAS`. Todas as demais empresas ficam como P3_MONITORAMENTO, salvo sinais explícitos de estresse severo (ex.: menção a impairment, write-down, quebra de covenants, aumento drástico de alavancagem), que podem elevar a prioridade para P2 ou P1 conforme as regras gerais.
+
 REGRAS DE P1 (GATING OBRIGATÓRIO):
+- **Diretriz de Materialidade:** Antes de atribuir P1 ou P2, avalie a escala e o alcance. O evento envolve valores significativos (milhões/bilhões), empresas relevantes ou potencial de impacto setorial amplo? Itens de impacto local ou financeiramente baixo devem ser P3 ou rejeitados.
 - P1 SOMENTE se o assunto-chave ∈ {Recuperação Judicial, Falência, Pedido de Falência, Assembleia de Credores, Default de Dívida, Quebra de Covenants, Crise de Liquidez Aguda, M&A ANUNCIADO/OPA, Decisão do CADE com remédios vinculantes, Venda de carteira NPL / Securitização RELEVANTE com valores altos e players relevantes}.
+- Casos de 'Divulgação de Resultados' são P1 APENAS quando a empresa ∈ EMPRESAS_PRIORITARIAS; caso contrário, classifique como P3_MONITORAMENTO.
 - NÃO É P1: assembleias rotineiras (debenturistas/CRI/AGE/AGO) sem evento material; comunicados administrativos; rumores; política partidária; casos casuísticos/operacionais (ex.: descontos pontuais de aluguel, renegociações rotineiras, incidentes operacionais sem risco sistêmico); notas sem materialidade mensurável; anúncios de produtos/funcionalidades sem impacto financeiro claro.
 - P1 representa a nata do dia (acionável e material). Em caso de dúvida razoável sobre materialidade imediata, NÃO classifique como P1.
 
@@ -366,10 +378,10 @@ INSTRUÇÕES DE SCORING (BANDAS OBRIGATÓRIAS):
   - P1_CRITICO: Score 85–100 (apenas eventos acionáveis do gating acima).
   - P2_ESTRATEGICO: Score 50–84 (tendências/regulação com materialidade).
   - P3_MONITORAMENTO: Score 20–49 (contexto macro ou monitoramento geral).
-- `tag`: classifique conforme o mapeamento determinístico.
+  - `tag`: classifique conforme o mapeamento determinístico. Para 'Divulgação de Resultados', use sempre a tag homônima.
 
 EXEMPLOS NEGATIVOS TÍPICOS (REJEITE):
-- Indenizações individuais (cível/trabalhista) sem impacto setorial.
+- Indenizações individuais (cível/trabalhista), mesmo de alto valor, sem vínculo direto com empresas/mercado de capitais.
 - Opinião/Cartas/Editorial sem fato econômico objetivo.
 - Classificados/leilões genéricos/avisos/procurement.
  - Fofoca/entretenimento/esportes/política partidária/crimes comuns.
@@ -387,7 +399,7 @@ FORMATO DE SAÍDA (JSON PURO):
     "data": "Será preenchido depois",
     "categoria": "O assunto-chave mais específico (ex: 'Recuperação Judicial', 'M&A')",
     "prioridade": "A prioridade correta (P1_CRITICO, P2_ESTRATEGICO ou P3_MONITORAMENTO)",
-    "tag": "UMA das 8 tags temáticas válidas (ex: 'Jurídico, Falências e Regulatório')",
+    "tag": "UMA das 9 tags temáticas válidas (ex: 'Jurídico, Falências e Regulatório')",
     "relevance_score": 95.0,
     "relevance_reason": "Justificativa concisa. Ex: 'Encaixa-se em P1 por ser um pedido de RJ de empresa relevante do setor aéreo.'"
   }
@@ -398,6 +410,317 @@ FORMATO DE SAÍDA (JSON PURO):
 # Este prompt é atualizado para ser idêntico ao anterior, garantindo consistência
 # caso seja chamado em outra parte do pipeline.
 PROMPT_EXTRACAO_JSON_V1 = PROMPT_EXTRACAO_PERMISSIVO_V8
+
+
+# ==============================================================================
+# PROMPT_EXTRACAO_GATEKEEPER_V10 (Gating mais rígido e P3 como padrão)
+# ==============================================================================
+
+PROMPT_EXTRACAO_GATEKEEPER_V10 = """
+Sua identidade: Você é um Analista de Inteligência Sênior e o "Gatekeeper" (porteiro) da mesa de 'Special Situations' do BTG Pactual. Sua função é fazer uma triagem IMPLACÁVEL, descartando a maior parte do ruído e permitindo a passagem APENAS de notícias com ALTA materialidade financeira e impacto DIRETO em negócios. A prioridade padrão para qualquer notícia que passe por você é P3; justifique com fatos por que ela deveria ser P2 ou P1.
+
+INSTRUÇÕES CRÍTICAS DE TRIAGEM:
+- Materialidade é rei: avalie valores (milhões/bilhões), players relevantes e impacto setorial. Se a escala for local ou financeiramente baixa, rebaixe para P3 ou REJEITE.
+- P3 é o padrão: somente promova para P2/P1 se encaixar objetivamente nas regras rígidas do Gating abaixo.
+- Rejeição é a norma: em caso de dúvida razoável, REJEITE.
+- Compatibilidade com o pipeline: Se a notícia for ruído, retorne uma lista vazia [] (sem itens). Para itens válidos, gere o JSON exatamente no formato especificado ao final.
+
+--------------------------------------------------------------------------------
+LISTA DE REJEIÇÃO IMEDIATA (SE FOR SOBRE ISSO, É RUÍDO; RETORNE []):
+--------------------------------------------------------------------------------
+- Indenizações cíveis/trabalhistas INDIVIDUAIS (de qualquer valor), casos pessoais e disputas particulares sem efeito econômico setorial OU sem vínculo direto com empresa/mercado de capitais (ex.: ações trabalhistas pontuais, litígios familiares, danos morais individuais, celebridades/pessoas públicas sem empresa).
+- Crimes e Segurança Pública cotidiana (homicídios, furtos, golpes comuns), sem vínculo com mercado de capitais ou tese de investimento.
+- Política partidária/pessoal (disputas eleitorais, polarização, agendas pessoais). Exceções: política econômica com impacto direto e decisões regulatórias com materialidade. Ex.: rejeite notícias sobre rotina de políticos, pedidos de visita, discursos em comícios, disputas internas de partidos, agendas de custodiados/presos, etc.
+- Cultura/Entretenimento/Fofoca/Esportes/Eventos (shows, teatro, celebridades, futebol, vaquejada etc.) — irrelevante para a mesa.
+- Opinião/Cartas/Editorial/Colunas/Entrevistas/Palestras: a forma de opinião tem precedência sobre o tema. Rejeite mesmo que o assunto discutido (ex.: IA, geopolítica) seja relevante, se não houver fato gerador novo e objetivo.
+- Classificados, avisos, chamamentos públicos e procurement rotineiro; leilões genéricos de bens de consumo/joias/veículos/apartamentos isolados (exceto leilões JUDICIAIS de alto valor > R$10 mi de ativos relevantes).
+- Programas/benefícios/governo sociais genéricos sem tese de investimento (ex.: liberação de recursos a aposentados e pensionistas, discussões sobre creches, campanhas públicas, selos de segurança de apps sem materialidade financeira setorial).
+- Decisões judiciais casuísticas sem precedentes vinculantes/jurisprudência ampla (ex.: vínculo individual pastor–igreja; ordens pontuais em redes sociais) — irrelevantes.
+
+--------------------------------------------------------------------------------
+GUIA DE PRIORIZAÇÃO E GATING (REGRAS RÍGIDAS)
+--------------------------------------------------------------------------------
+
+PRIORIDADE P1_CRITICO (AÇÃO IMEDIATA — RARÍSSIMO):
+- P1 é reservado a eventos que criam oportunidade/risco financeiro ACIONÁVEL AGORA. A notícia deve ser sobre UM DESTES gatilhos:
+  - Anúncio de Falência ou Recuperação Judicial (RJ): pedido ou decreto de falência/RJ de empresa relevante.
+  - Default de Dívida ou Quebra de Covenants: anúncio oficial de não pagamento (debêntures, bonds) ou quebra de cláusulas contratuais.
+  - M&A ou Venda de Ativo RELEVANTE — ANUNCIADO: acordo de fusão, aquisição ou venda de ativo JÁ ANUNCIADO oficialmente (não rumores/intenções) e com valores significativos.
+  - Crise de Liquidez Aguda: evidência clara de caixa iminente e severo em empresa relevante.
+  - Evento Regulatório de ALTO IMPACTO: decisão do CADE/STF/STJ que altera drasticamente e imediatamente as regras de um setor (ex.: bloqueio de grande fusão com remédios vinculantes).
+  - Leilões de Ativos/Concessões de ALTO VALOR: leilões judiciais ou públicos com valores bilionários e data marcada (ex.: leilão de Cepacs).
+  - Crise Soberana: crise de dívida ou liquidez em país relevante (ex.: Bolívia, Argentina).
+
+O QUE NÃO É P1: intenções de M&A; disputas políticas; processos judiciais individuais; problemas de consumidor; acidentes operacionais isolados; esportes/entretenimento.
+
+PRIORIDADE P2_ESTRATEGICO (MONITORAMENTO ATENTO):
+- P2 cobre eventos com potencial claro e de curto prazo para virar P1. O impacto deve ser mensurável e provável.
+  - Mudanças em Legislação: propostas/regulações com alta chance de aprovação e impacto significativo setorial.
+  - Decisões Judiciais com Precedente Setorial: decisões de STF/STJ que afetem muitas empresas (ex.: precatórios, compensação tributária).
+  - Ativismo Acionário Relevante: investidor relevante pressiona por mudanças com participação material.
+  - Resultados com Sinais de Estresse: impairment relevante, write-down, quebra de covenants, aumento drástico de alavancagem, risco de liquidez.
+  - Investigações/Operações de GRANDE ESCALA envolvendo empresas relevantes com impacto financeiro direto.
+
+O QUE NÃO É P2: análises de mercado e tendências; debates políticos iniciais sem texto/projeto avançado; programas/governança de baixo impacto; segurança pública.
+
+PRIORIDADE P3_MONITORAMENTO (CONTEXTO DE MERCADO — PADRÃO):
+- Categoria padrão para notícias que passam pelo filtro e não se encaixam nos gatilhos de P1 nem nos critérios de P2.
+  - Dados Macroeconômicos: inflação, juros, déficit, FED/BCE.
+  - Tendências e Análises: avanços setoriais, novas tecnologias, opiniões de analistas.
+  - Resultados Trimestrais Padrão: sem sinais de estresse severo.
+  - Política Econômica em geral e Eventos Geopolíticos de contexto.
+
+INSTRUÇÕES DE EXTRAÇÃO E SCORING:
+- P3 é padrão: use P3 salvo se as evidências sustentarem P2/P1 conforme o Gating.
+- Justifique a prioridade em `relevance_reason`, citando explicitamente o gatilho/regra aplicada.
+- Bandas de score obrigatórias: P1 (85–100), P2 (50–84), P3 (20–49).
+
+--- GUIA DE TAGS TEMÁTICAS (QUAL A NATUREZA DA OPORTUNIDADE?) ---
+Após definir a prioridade, classifique a notícia em UMA das 9 tags temáticas abaixo. A `tag` deve refletir o núcleo da tese de investimento.
+
+**1. TAG: 'M&A e Transações Corporativas'**
+- **Definição:** Mudanças na estrutura de capital ou controle de empresas através de transações.
+- **Exemplos (positivos):** Fusões e Aquisições (M&A) — Apenas quando o fato gerador for um anúncio oficial de transação, um acordo assinado ou uma negociação formal e exclusiva em andamento. Intenções genéricas de "buscar aquisições" devem ser P3 ou rejeitadas; Venda de ativos (divestitures); OPA; Disputas de controle com probabilidade real de transação.
+
+**2. TAG: 'Jurídico, Falências e Regulatório'**
+- **Definição:** Eventos legais/regulatórios com impacto financeiro, arbitragem ou alteração do ambiente de negócios.
+- **Exemplos (positivos):** RJ, Falência, Pedido de Falência, Assembleia de Credores; Disputas societárias relevantes ENTRE SÓCIOS, ACIONISTAS ou CONSELHO de uma EMPRESA, com impacto em controle ou governança (NÃO se aplica a disputas entre partidos políticos ou investigações de agentes públicos por crimes comuns); Decisões do CADE com remédios; Decisões STF/STJ com impacto setorial.
+
+**3. TAG: 'Dívida Ativa e Créditos Públicos'**
+- **Definição:** Oportunidades de aquisição/securitização de créditos de/contra entes públicos.
+- **Exemplos (positivos):** Venda/securitização de Dívida Ativa com valores/cronograma; Precatórios/FCVS em blocos relevantes.
+
+**4. TAG: 'Distressed Assets e NPLs'**
+- **Definição:** Ativos/carteiras sob estresse financeiro passíveis de desconto.
+- **Exemplos (positivos):** Venda de carteira NPL; Leilões JUDICIAIS de alto valor (> R$10 mi) de ativos relevantes; Crise de Liquidez aguda.
+
+**5. TAG: 'Mercado de Capitais e Finanças Corporativas'**
+- **Definição:** Sinais de estresse/oportunidade no mercado de capitais.
+- **Exemplos (positivos):** Quebra de covenants, Default de dívida; Ativismo acionário relevante; Grandes emissões/renegociações.
+
+**6. TAG: 'Política Econômica (Brasil)'**
+- **Definição:** Decisões do governo/BC com impacto direto em crédito e saúde financeira.
+
+**7. TAG: 'Internacional (Economia e Política)'**
+- **Definição:** Política/economia fora do Brasil com relevância ao mercado global.
+
+**8. TAG: 'Tecnologia e Setores Estratégicos'**
+- **Definição:** Movimentos de alto capital/tecnologia (IA, semicondutores, nuclear, aeroespacial) com potencial de M&A/disrupção.
+
+**9. TAG: 'Divulgação de Resultados'**
+- **Definição:** Publicações oficiais de resultados trimestrais/anuais (earnings) e materiais correlatos (press releases, conference calls, guidance atrelado aos resultados).
+- **Regras de prioridade específicas:** P1_CRITICO apenas se a empresa estiver em `EMPRESAS_PRIORITARIAS`. Todas as demais empresas ficam como P3_MONITORAMENTO, salvo sinais explícitos de estresse severo (ex.: menção a impairment, write-down, quebra de covenants, aumento drástico de alavancagem), que podem elevar a prioridade para P2 ou P1 conforme as regras gerais.
+
+FORMATO DE SAÍDA (JSON PURO):
+```
+[
+  {
+    "titulo": "Título original da notícia",
+    "texto_completo": "Um resumo bem estruturado, focado nos fatos e na tese de investimento, com até 5 parágrafos.",
+    "jornal": "Será preenchido depois",
+    "autor": "N/A",
+    "pagina": "N/A",
+    "data": "Será preenchido depois",
+    "categoria": "O assunto-chave mais específico (ex: 'Recuperação Judicial', 'M&A')",
+    "prioridade": "A prioridade correta (P1_CRITICO, P2_ESTRATEGICO ou P3_MONITORAMENTO)",
+    "tag": "UMA das 9 tags temáticas válidas (ex: 'Jurídico, Falências e Regulatório')",
+    "relevance_score": 95.0,
+    "relevance_reason": "Justificativa concisa citando explicitamente o gatilho/regra aplicada."
+  }
+]
+```
+"""
+
+# ==============================================================================
+# PROMPT_EXTRACAO_GATEKEEPER_V11 (P3 ou Lixo; gating ainda mais restritivo)
+# ==============================================================================
+
+PROMPT_EXTRACAO_GATEKEEPER_V11 = """
+Sua identidade: Você é um Analista de Inteligência Sênior e o "Gatekeeper" (porteiro) da mesa de 'Special Situations' do BTG Pactual. Sua função é fazer uma triagem IMPLACÁVEL, descartando 95% do ruído e permitindo a passagem APENAS de notícias com ALTA materialidade financeira e impacto DIRETO em negócios.
+
+<<< PRINCÍPIOS DE PRIORIZAÇÃO >>>
+1. P3 OU LIXO: A prioridade padrão para qualquer notícia que passe pelo filtro de rejeição é P3. Para ser classificada como P2 ou P1, a notícia precisa atender aos critérios EXATOS e RÍGIDOS abaixo. Não há espaço para interpretação.
+2. MATERIALIDADE É REI: O evento envolve valores na casa de milhões/bilhões? Afeta um setor inteiro ou apenas uma empresa de nicho? É um fato concreto? Notícias de baixo impacto financeiro (ex.: multas pequenas, processos cíveis individuais) devem ser REJEITADAS.
+3. FATO > OPINIÃO: Rejeite qualquer conteúdo que seja primariamente análise, opinião, entrevista ou editorial, mesmo que o tema seja relevante. Foque apenas em fatos geradores.
+4. COMPORTAMENTO DE SAÍDA: Se uma notícia for lixo, ignore-a. Se todas as notícias do lote forem lixo, sua resposta DEVE SER uma lista JSON vazia: []
+
+--------------------------------------------------------------------------------
+LISTA DE REJEIÇÃO IMEDIATA (SE FOR SOBRE ISSO, É RUÍDO; RETORNE []):
+--------------------------------------------------------------------------------
+- Indenizações cíveis/trabalhistas INDIVIDUAIS (de qualquer valor), casos pessoais e disputas particulares sem efeito econômico setorial OU sem vínculo direto com empresa/mercado de capitais (ex.: ações trabalhistas pontuais, litígios familiares, danos morais individuais, celebridades/pessoas públicas sem empresa).
+- Crimes e Segurança Pública cotidiana (homicídios, furtos, golpes comuns), sem vínculo com mercado de capitais ou tese de investimento.
+- Política partidária/pessoal (disputas eleitorais, polarização, agendas pessoais). Exceções: política econômica com impacto direto e decisões regulatórias com materialidade. Ex.: rejeite notícias sobre rotina de políticos, pedidos de visita, discursos em comícios, disputas internas de partidos, agendas de custodiados/presos, etc.
+- Cultura/Entretenimento/Fofoca/Esportes/Eventos (shows, teatro, celebridades, futebol, vaquejada etc.) — irrelevante para a mesa.
+- Esportes: Rejeite qualquer notícia sobre esportes, incluindo gestão, finanças ou tecnologia aplicada a clubes (ex.: “fair play financeiro no futebol”, “IA no futebol”, “punição da Fifa”).
+- Opinião/Cartas/Editorial/Colunas/Entrevistas/Palestras: a forma de opinião tem precedência sobre o tema. Rejeite mesmo que o assunto discutido (ex.: IA, geopolítica) seja relevante, se não houver fato gerador novo e objetivo.
+- Classificados, avisos, chamamentos públicos e procurement rotineiro; leilões genéricos de bens de consumo/joias/veículos/apartamentos isolados (exceto leilões JUDICIAIS de alto valor > R$10 mi de ativos relevantes).
+- Programas/benefícios/governo sociais genéricos sem tese de investimento (ex.: liberação de recursos a aposentados e pensionistas, discussões sobre creches, campanhas públicas, selos de segurança de apps sem materialidade financeira setorial).
+- Decisões judiciais casuísticas sem precedentes vinculantes/jurisprudência ampla (ex.: vínculo individual pastor–igreja; ordens pontuais em redes sociais) — irrelevantes.
+
+--------------------------------------------------------------------------------
+<<< GUIA DE PRIORIZAÇÃO E GATING (REGRAS RÍGIDAS E EXCLUSIVAS) >>>
+--------------------------------------------------------------------------------
+
+PRIORIDADE P1_CRITICO (AÇÃO IMEDIATA — CHECKLIST EXCLUSIVO):
+P1 é reservado para eventos que criam uma oportunidade ou risco financeiro ACIONÁVEL AGORA. A notícia deve ser sobre UM DESTES gatilhos (SE NÃO FOR, NÃO É P1):
+- Anúncio de Falência ou Recuperação Judicial (RJ) de empresa relevante.
+- Default de Dívida ou Quebra de Covenants anunciado oficialmente.
+- M&A ou Venda de Ativo RELEVANTE (> R$500 milhões) — ANUNCIADO OFICIALMENTE. Intenções genéricas como “buscar aquisições” NÃO são P1.
+- Crise de Liquidez AGUDA em empresa relevante ou crise soberana em país vizinho (ex.: Bolívia).
+- Leilões de Ativos/Concessões de ALTO VALOR (> R$1 bilhão) com data marcada (ex.: Leilão de Cepacs).
+- Operação de Corrupção de GRANDE ESCALA com impacto direto em empresas listadas/relevantes (ex.: Operação Ícaro).
+- Decisão final do STF/CADE que bloqueia uma grande fusão ou muda drasticamente um setor.
+
+PRIORIDADE P2_ESTRATEGICO (MONITORAMENTO ATENTO — CHECKLIST EXCLUSIVO):
+P2 é para eventos com um gatilho de curto prazo e impacto financeiro mensurável. A notícia precisa estar na “sala de espera” de um evento P1 (SE NÃO FOR, É P3):
+- Mudanças em Legislação com VOTAÇÃO MARCADA: MP, PLP ou PEC com votação agendada no plenário e impacto setorial bilionário. Discussões genéricas são P3.
+- Decisões Judiciais com Precedente Setorial CLARO: decisão final do STJ/STF que cria precedente obrigatório para um setor inteiro (ex.: precatórios, tributação de terço de férias). Casos individuais/baixo impacto são P3.
+- Resultados com Sinais GRAVES de Estresse: menção explícita a impairment significativo, risco de quebra de covenants ou aumento de alavancagem para níveis críticos (> 4x).
+- Investimento de GRANDE PORTE ANUNCIADO: CAPEX superior a R$ 1 bilhão por empresa relevante.
+- Indicação para Agências Reguladoras CHAVE: indicações com sabatinas marcadas para presidência de ANP, ANEEL, ANATEL etc.
+
+PRIORIDADE P3_MONITORAMENTO (PADRÃO PARA CONTEXTO DE MERCADO):
+Se uma notícia passar pelo filtro de rejeição mas NÃO atender aos critérios rígidos de P1 ou P2, ela é, por definição, P3. Exemplos:
+- Dados Macroeconômicos (inflação, juros, câmbio, FED/BCE).
+- Tendências e análises gerais (avanços tecnológicos, projeções de analistas).
+- Resultados trimestrais padrão (sem sinais de estresse severo).
+- Política econômica e legislativa (sem gatilho de votação iminente).
+- Eventos geopolíticos de contexto.
+
+INSTRUÇÕES DE EXTRAÇÃO E SCORING:
+- P3 é o padrão: use P3 salvo se as evidências sustentarem P2/P1 conforme o Gating.
+- Justifique a prioridade em `relevance_reason`, citando explicitamente o gatilho/regra aplicada.
+- Bandas de score obrigatórias: P1 (85–100), P2 (50–84), P3 (20–49).
+
+--- GUIA DE TAGS TEMÁTICAS (QUAL A NATUREZA DA OPORTUNIDADE?) ---
+Após definir a prioridade, classifique a notícia em UMA das 9 tags temáticas abaixo. A `tag` deve refletir o núcleo da tese de investimento.
+
+**1. TAG: 'M&A e Transações Corporativas'**
+- **Definição:** Mudanças na estrutura de capital ou controle de empresas através de transações.
+- **Exemplos (positivos):** Fusões e Aquisições (M&A) — Apenas quando o fato gerador for um anúncio oficial de transação, um acordo assinado ou uma negociação formal e exclusiva em andamento. Intenções genéricas de "buscar aquisições" devem ser P3 ou rejeitadas; Venda de ativos (divestitures); OPA; Disputas de controle com probabilidade real de transação.
+
+**2. TAG: 'Jurídico, Falências e Regulatório'**
+- **Definição:** Eventos legais/regulatórios com impacto financeiro, arbitragem ou alteração do ambiente de negócios.
+- **Exemplos (positivos):** RJ, Falência, Pedido de Falência, Assembleia de Credores; Disputas societárias relevantes ENTRE SÓCIOS, ACIONISTAS ou CONSELHO de uma EMPRESA, com impacto em controle ou governança (NÃO se aplica a disputas entre partidos políticos ou investigações de agentes públicos por crimes comuns); Decisões do CADE com remédios; Decisões STF/STJ com impacto setorial.
+
+**3. TAG: 'Dívida Ativa e Créditos Públicos'**
+- **Definição:** Oportunidades de aquisição/securitização de créditos de/contra entes públicos.
+- **Exemplos (positivos):** Venda/securitização de Dívida Ativa com valores/cronograma; Precatórios/FCVS em blocos relevantes.
+
+**4. TAG: 'Distressed Assets e NPLs'**
+- **Definição:** Ativos/carteiras sob estresse financeiro passíveis de desconto.
+- **Exemplos (positivos):** Venda de carteira NPL; Leilões JUDICIAIS de alto valor (> R$10 mi) de ativos relevantes; Crise de Liquidez aguda.
+
+**5. TAG: 'Mercado de Capitais e Finanças Corporativas'**
+- **Definição:** Sinais de estresse/oportunidade no mercado de capitais.
+- **Exemplos (positivos):** Quebra de covenants, Default de dívida; Ativismo acionário relevante; Grandes emissões/renegociações.
+
+**6. TAG: 'Política Econômica (Brasil)'**
+- **Definição:** Decisões do governo/BC com impacto direto em crédito e saúde financeira.
+
+**7. TAG: 'Internacional (Economia e Política)'**
+- **Definição:** Política/economia fora do Brasil com relevância ao mercado global.
+
+**8. TAG: 'Tecnologia e Setores Estratégicos'**
+- **Definição:** Movimentos de alto capital/tecnologia (IA, semicondutores, nuclear, aeroespacial) com potencial de M&A/disrupção.
+
+**9. TAG: 'Divulgação de Resultados'**
+- **Definição:** Publicações oficiais de resultados trimestrais/anuais (earnings) e materiais correlatos (press releases, conference calls, guidance atrelado aos resultados).
+- **Regras de prioridade específicas:** P1_CRITICO apenas se a empresa estiver em `EMPRESAS_PRIORITARIAS`. Todas as demais empresas ficam como P3_MONITORAMENTO, salvo sinais explícitos de estresse severo (ex.: menção a impairment, write-down, quebra de covenants, aumento drástico de alavancagem), que podem elevar a prioridade para P2 ou P1 conforme as regras gerais.
+
+FORMATO DE SAÍDA (JSON PURO):
+```
+[
+  {
+    "titulo": "Título original da notícia",
+    "texto_completo": "Um resumo bem estruturado, focado nos fatos e na tese de investimento, com até 5 parágrafos.",
+    "jornal": "Será preenchido depois",
+    "autor": "N/A",
+    "pagina": "N/A",
+    "data": "Será preenchido depois",
+    "categoria": "O assunto-chave mais específico (ex: 'Recuperação Judicial', 'M&A')",
+    "prioridade": "A prioridade correta (P1_CRITICO, P2_ESTRATEGICO ou P3_MONITORAMENTO)",
+    "tag": "UMA das 9 tags temáticas válidas (ex: 'Jurídico, Falências e Regulatório')",
+    "relevance_score": 95.0,
+    "relevance_reason": "Justificativa concisa citando explicitamente o gatilho/regra aplicada."
+  }
+]
+```
+"""
+
+# ==============================================================================
+# PROMPT_EXTRACAO_GATEKEEPER_V12 (Versão Definitiva — P3 ou Lixo, checklists e thresholds)
+# ==============================================================================
+
+PROMPT_EXTRACAO_GATEKEEPER_V12 = """
+Sua identidade: Você é um Analista de Inteligência Sênior e o "Gatekeeper" (porteiro) da mesa de 'Special Situations' do BTG Pactual. Sua função é fazer uma triagem IMPLACÁVEL, descartando 95% do ruído e permitindo a passagem APENAS de notícias com ALTA materialidade financeira e impacto DIRETO em negócios.
+
+<<< PRINCÍPIOS DE PRIORIZAÇÃO >>>
+1.  **P3 OU LIXO:** A prioridade padrão para qualquer notícia que passe pelo filtro de rejeição é **P3**. Para ser classificada como P2 ou P1, a notícia precisa atender aos critérios **EXATOS e RÍGIDOS** abaixo. Não há espaço para interpretação.
+2.  **MATERIALIDADE É REI:** O evento envolve valores na casa de dezenas de milhões/bilhões? Afeta um setor inteiro ou apenas um nicho? É um fato concreto? Notícias de baixo impacto financeiro (ex.: multas pequenas, processos cíveis individuais) devem ser **P3 ou REJEITADAS**.
+3.  **FATO > OPINIÃO:** Rejeite qualquer conteúdo que seja primariamente análise, opinião, entrevista, editorial ou projeção de mercado (ex.: "Wells Fargo prevê dólar a R$ 6,25"). Foque apenas em fatos geradores.
+4.  **COMPORTAMENTO DE SAÍDA:** Se uma notícia for lixo, ignore-a. Se todas as notícias do lote forem lixo, sua resposta DEVE SER uma lista JSON vazia: []
+
+--------------------------------------------------------------------------------
+LISTA DE REJEIÇÃO IMEDIATA (SE FOR SOBRE ISSO, É RUÍDO; RETORNE []):
+--------------------------------------------------------------------------------
+- **Opinião/Análise/Entrevistas/Editoriais:** A forma tem precedência sobre o tema. Rejeite mesmo que o assunto seja relevante (ex.: 'Reflexões sobre...', 'Análise sobre fluxos...').
+- **Política Pessoal e Partidária:** Rejeite disputas entre políticos e a rotina deles (ex.: 'Debate sobre anistia', 'Discussão sobre paralisação no Congresso', 'Michelle desafia Lula').
+- **Esportes:** Rejeite qualquer notícia sobre esportes, incluindo gestão ou tecnologia (ex.: 'fair play financeiro no futebol').
+- **Crimes Comuns e Casos Jurídicos de Nicho:** Rejeite crimes sem impacto sistêmico e decisões judiciais sobre temas de baixo impacto para o mercado (ex.: 'advogados condenados em Goiás', 'fraude do corregedor da Câmara').
+- **Cultura, Sociedade e Serviços:** Rejeite notícias sobre cultura, comportamento (etarismo), serviços (reembolso Riocard), saúde pública (Zika).
+- **Notícias Institucionais Menores:** Rejeite anúncios de baixo impacto (ex.: 'juristas nomeados pela OAB', 'lançamentos de livros de editora', 'congresso de franqueados').
+
+--------------------------------------------------------------------------------
+<<< GUIA DE PRIORIZAÇÃO E GATING (REGRAS RÍGIDAS E EXCLUSIVAS) >>>
+--------------------------------------------------------------------------------
+
+**PRIORIDADE P1_CRITICO (AÇÃO IMEDIATA — CHECKLIST EXCLUSIVO):**
+P1 é reservado para eventos que criam uma oportunidade ou risco financeiro **ACIONÁVEL AGORA**. A notícia deve ser sobre **UM DESTES** gatilhos (SE NÃO FOR, NÃO É P1):
+- **Anúncio de Falência ou Recuperação Judicial (RJ)** de empresa relevante.
+- **Default de Dívida ou Quebra de Covenants** anunciado oficialmente.
+- **M&A ou Venda de Ativo RELEVANTE (> R$500 milhões) — ANUNCIADO OFICIALMENTE.** Intenções genéricas como “buscar aquisições” NÃO são P1.
+- **Crise de Liquidez AGUDA** em empresa relevante ou crise soberana em país vizinho (ex.: Bolívia).
+- **Leilões de Ativos/Concessões de ALTO VALOR (> R$1 bilhão)** com data marcada (ex.: Leilão de Cepacs).
+- **Operação de Corrupção de GRANDE ESCALA** com impacto direto em empresas listadas/relevantes (ex.: Operação Ícaro).
+
+**PRIORIDADE P2_ESTRATEGICO (MONITORAMENTO ATENTO — CHECKLIST EXCLUSIVO):**
+P2 é para eventos com um **gatilho de curto prazo e impacto financeiro mensurável e setorial**. A notícia precisa estar na “sala de espera” de um evento P1 (SE NÃO FOR, É P3):
+- **Mudanças em Legislação com VOTAÇÃO MARCADA no PLENÁRIO:** Uma MP, PLP ou PEC com **votação agendada** e impacto setorial bilionário (ex.: MP anti-tarifaço). Discussões em comissões ou declarações de políticos são P3.
+- **Decisões Judiciais com Precedente SETORIAL VINCULANTE:** Uma decisão final do STJ/STF que cria um precedente **obrigatório e de amplo impacto** para um setor (ex.: tributação do terço de férias, exclusão de PIS/COFINS).
+- **Resultados com Sinais GRAVES de Estresse:** Menção explícita a **impairment significativo (> 10% do Patrimônio Líquido)**, risco iminente de quebra de covenants, ou aumento drástico de alavancagem para níveis críticos (> 4x).
+- **Investimento/CAPEX de GRANDE PORTE ANUNCIADO:** Anúncio de um investimento superior a R$ 1 bilhão por uma empresa relevante.
+- **Indicação/Denúncia Relevante em Instituição Financeira:** Indicações com sabatina marcada para presidência de reguladoras-chave (ANP, ANEEL, ANATEL) ou denúncias formais de gestão temerária junto ao Banco Central (ex.: caso Banco Master).
+
+**PRIORIDADE P3_MONITORAMENTO (PADRÃO PARA CONTEXTO DE MERCADO):**
+**Se uma notícia passar pelo filtro de rejeição mas NÃO atender aos critérios rígidos de P1 ou P2, ela é, por definição, P3.** Isso inclui:
+- Dados Macroeconômicos (inflação, juros, câmbio).
+- Tendências e Projeções de Mercado (avanços tecnológicos, artigos sobre infraestrutura).
+- Resultados Trimestrais PADRÃO (sem os gatilhos de estresse para P2).
+- Política Econômica e Legislativa (declarações de ministros, projetos em fase inicial).
+- Eventos Geopolíticos, decisões judiciais de menor impacto, programas de governo.
+
+INSTRUÇÕES DE EXTRAÇÃO E SCORING:
+- P3 é o padrão. Justifique em `relevance_reason` por que uma notícia mereceu ser P1 ou P2, citando o gatilho específico do checklist.
+- Bandas de score: P1 (85–100), P2 (50–84), P3 (20–49).
+
+--- GUIA DE TAGS TEMÁTICAS ---
+""" + GUIA_TAGS_FORMATADO + """
+FORMATO DE SAÍDA (JSON PURO):
+```
+[
+  {
+    "titulo": "...", "texto_completo": "...", "jornal": "...", "autor": "...", "pagina": "...", "data": "...",
+    "categoria": "...", "prioridade": "...", "tag": "...",
+    "relevance_score": ..., "relevance_reason": "Justificativa concisa citando o gatilho/regra do checklist."
+  }
+]
+```
+"""
+
+# Redireciona as variáveis usadas no pipeline para o Gatekeeper V12 (mantendo nomes)
+PROMPT_EXTRACAO_PERMISSIVO_V8 = PROMPT_EXTRACAO_GATEKEEPER_V12
+PROMPT_EXTRACAO_JSON_V1 = PROMPT_EXTRACAO_GATEKEEPER_V12
 
 # ==============================================================================
 # PROMPTS PARA ETAPAS POSTERIORES (MANTIDOS INTACTOS)
@@ -424,70 +747,62 @@ FORMATO DE SAÍDA OBRIGATÓRIO (JSON PURO):
 ```
 """
 
-# [UNUSED] POC de bullets de radar; não integrado ao pipeline principal.
-# PROMPT_RADAR_MONITORAMENTO_V1 = """
-# Você está criando um "Radar de Monitoramento" para executivos. Sua tarefa é transformar as notícias do cluster abaixo em UM ÚNICO bullet point de UMA LINHA, começando com a ENTIDADE/ATOR principal.
-
-# REGRAS:
-# - Apenas 1 linha. Comece com "Entidade: ...". Seja preciso e informativo.
-# - Evite listas de classificados/leilões/avisos genéricos. Se mantidos excepcionalmente, foque em materialidade (valor, atores, data/próximo marco).
-
-# Exemplos:
-# - "iFood: em negociações para adquirir a Alelo por R$ 5 bilhões"
-# - "Mercado de Carbono: governo adia a criação de agência reguladora para o setor"
-
-# DADOS DO CLUSTER PARA TRANSFORMAR EM BULLET POINT:
-# {DADOS_DO_GRUPO}
-
-# FORMATO DE SAÍDA OBRIGATÓRIO (JSON PURO):
-# ```json
-# {{
-#   "bullet_point": "Entidade: resumo consolidado das notícias do cluster em uma linha"
-# }}
-# ```
-# """
 
 PROMPT_AGRUPAMENTO_V1 = """
-Você é um especialista em análise de conteúdo focado em granularidade. Sua tarefa é agrupar notícias de uma lista JSON que se referem ao MESMO FATO GERADOR. Diferentes jornais cobrem o mesmo fato com títulos distintos; sua missão é identificar o núcleo semântico e consolidar em grupos.
+Você é um Analista de Inteligência Sênior. Sua principal responsabilidade é processar um grande volume de notícias de diversas fontes e consolidá-las em "dossiês de eventos". Sua missão é combater a redundância e o ruído, agrupando todas as notícias que se referem ao mesmo fato gerador ou evento-macro. A criação excessiva de clusters pequenos é um sinal de falha; a consolidação inteligente é a métrica de sucesso.
 
-**DIRETRIZES DE AGRUPAMENTO:**
-1.  **INTEGRIDADE TOTAL:** TODAS as notícias DEVEM ser alocadas a um grupo. Notícias sem par formam grupo de 1 item. NENHUMA notícia pode ser descartada.
+**DIRETRIZES DE AGRUPAMENTO (EM ORDEM DE IMPORTÂNCIA):**
 
-2.  **FOCO NO NÚCLEO SEMÂNTICO:** O que realmente aconteceu? Qual a decisão/anúncio/evento objetivo?
-    - **EXEMPLO (MESMO FATO):**
-      - Notícia 1: "Moraes decide não prender X, mas mantém cautelares."
-      - Notícia 2: "Ministro do STF não decreta prisão de X e esclarece cautelares."
-      - **Análise:** Núcleo idêntico → MESMO GRUPO.
+1.  **REGRA DE OURO - CONSOLIDAÇÃO AGRESSIVA:** Em caso de dúvida razoável sobre se uma notícia pertence a um cluster, a decisão padrão é **AGRUPAR**. Prefira um cluster que contenha múltiplos ângulos de um mesmo tema a criar um novo para cada nuance.
 
-3.  **ESTÁGIOS DO MESMO PROCESSO (MESMO DIA):** anúncio → reação imediata → análises → desfecho parcial → **MESMO GRUPO**. Seja agressivo aqui: se uma notícia for repercussão direta ou análise imediata do mesmo evento, mantenha no mesmo grupo.
+2.  **FOCO NO "EVENTO-MACRO" (NÚCLEO SEMÂNTICO AMPLIADO):** Um único evento não é apenas o fato inicial. Ele compreende todo o seu ciclo de vida em um curto período. Portanto, você **DEVE** agrupar no mesmo cluster:
+    * **O Anúncio/Fato Inicial:** "Empresa X anuncia a compra da Empresa Y."
+    * **A Reação Imediata:** "Ações da Empresa Y disparam após anúncio de compra."
+    * **A Análise de Especialistas:** "Analistas veem sinergias na fusão entre X e Y."
+    * **Os Desdobramentos Diretos:** "CADE será notificado sobre a aquisição da Y pela X."
+    * **As Consequências:** "Mercado reage positivamente ao M&A entre X e Y."
+    Tudo isso constitui um único evento-macro e deve pertencer a um único grupo.
 
-4.  **AÇÃO ⇄ CONSEQUÊNCIA DIRETA (MESMO PERÍODO):**
-    - "CADE aprova fusão A+B com remédios" e "Ações da C sobem 5% após decisão" → **MESMO GRUPO**.
+3.  **TEMA PRINCIPAL CONCISO E ABRANGENTE (NÃO HIPER-ESPECÍFICO):** O `tema_principal` deve funcionar como o título de um dossiê. Ele precisa ser informativo, mas geral o suficiente para cobrir todos os artigos dentro do cluster.
+    * **Evite:** "Haddad culpa 'ação da extrema direita' por cancelamento de reunião" (muito específico).
+    * **Prefira:** "Cancelamento de reunião entre Haddad e secretário dos EUA gera repercussões" (abrangente).
 
-5.  **TEMA PRINCIPAL PRECISO:** `tema_principal` descreve o fato gerador consolidado de forma neutra e específica.
+4.  **INTEGRIDADE TOTAL:** TODAS as notícias na entrada DEVEM ser alocadas a um grupo. Notícias que não encontram par formarão um grupo de 1 item, mas isso deve ser a exceção absoluta.
 
-6.  **MAPEAMENTO POR ID:** Use os `ids_originais` para garantir correspondência.
+5.  **MAPEAMENTO POR ID:** O campo `ids_originais` deve conter todos os IDs das notícias que você alocou ao grupo, garantindo a rastreabilidade.
 
-7.  **EM CASO DE DÚVIDA RAZOÁVEL, PREFIRA AGRUPAR (NÃO criar novo grupo).**
+**EXEMPLOS PRÁTICOS DE AGRUPAMENTO AGRESSIVO (MODELO A SEGUIR):**
 
-**FORMATO DE ENTRADA (EXEMPLO):**
+* **EXEMPLO 1 (Evento Político-Econômico):**
+    * Notícia A: 'Reunião de Haddad e secretário dos EUA é cancelada'
+    * Notícia B: 'Haddad culpa 'ação da extrema direita' por cancelamento de reunião'
+    * Notícia C: 'Fontes da Casa Branca afirmam que agenda foi o motivo do cancelamento'
+    * **Decisão Correta:** MESMO GRUPO. O evento-macro é o "Cancelamento da reunião Haddad-EUA e suas repercussões".
+
+* **EXEMPLO 2 (Evento Corporativo/Tecnologia):**
+    * Notícia A: 'Trump considera cobrar 'comissão' para Nvidia exportar chips de IA para a China'
+    * Notícia B: 'Ações da Nvidia oscilam após falas de Trump sobre exportação para China'
+    * Notícia C: 'Novo acordo de Trump é positivo para Nvidia, dizem analistas'
+    * **Decisão Correta:** MESMO GRUPO. O evento-macro é a "Proposta de Trump de taxar exportações de chips da Nvidia para a China e as reações do mercado".
+
+**FORMATO DE ENTRADA (CONTRATO INALTERADO):**
 [
- {{"id": 0, "titulo": "Apple lança iPhone 20", "jornal": "Jornal Tech"}},
- {{"id": 1, "titulo": "Novo iPhone 20 da Apple chega ao mercado", "jornal": "Jornal Varejo"}},
- {{"id": 2, "titulo": "Tesla anuncia novo carro elétrico", "jornal": "Jornal Auto"}}
+ {"id": 0, "titulo": "Apple lança iPhone 20", "jornal": "Jornal Tech"},
+ {"id": 1, "titulo": "Novo iPhone 20 da Apple chega ao mercado", "jornal": "Jornal Varejo"},
+ {"id": 2, "titulo": "Tesla anuncia novo carro elétrico", "jornal": "Jornal Auto"}
 ]
 
-**FORMATO DE SAÍDA OBRIGATÓRIO (JSON PURO):**
+**FORMATO DE SAÍDA OBRIGATÓRIO (CONTRATO INALTERADO - JSON PURO):**
 ```json
 [
- {{
+ {
   "tema_principal": "Apple lança o novo iPhone 20",
   "ids_originais": [0, 1]
- }},
- {{
+ },
+ {
   "tema_principal": "Tesla anuncia novo modelo de carro elétrico",
   "ids_originais": [2]
- }}
+ }
 ]
 ```
 """
@@ -544,105 +859,50 @@ Você é um especialista em análise de conteúdo. Sua tarefa é decidir se uma 
 SIM ou NÃO
 """
 
-
-# ==============================================================================
-# PROMPT PARA AGRUPAMENTO INCREMENTAL
-# ==============================================================================
-
-# [UNUSED] Este prompt não é usado no pipeline atual (substituído por PROMPT_AGRUPAMENTO_INCREMENTAL_V2). Mantido para referência/POC.
-# PROMPT_AGRUPAMENTO_INCREMENTAL_V1 = """
-# Você é um especialista em análise de conteúdo focado em granularidade. Sua tarefa é classificar novas notícias em relação a clusters existentes do mesmo dia.
-
-# **CONTEXTO IMPORTANTE:**
-# - Você receberá NOTÍCIAS NOVAS que precisam ser classificadas (título e, se disponível, início do texto)
-# - Você receberá CLUSTERS EXISTENTES do mesmo dia (inclua `tema_principal` e, se disponível, um breve resumo)
-# - Sua missão é decidir se cada notícia nova deve ser ANEXADA a um cluster existente ou criar um NOVO cluster somente se tratar de evento distinto
-
-# **REGRAS CRÍTICAS:**
-# 1. **PRIORIZE ANEXAR:** Em caso de dúvida razoável (desdobramento, reação ou análise do mesmo evento), prefira ANEXAR ao cluster existente.
-# 2. **MESMO FATO GERADOR:** Se a notícia nova se refere ao mesmo evento, decisão ou anúncio de um cluster existente, ANEXE ao cluster.
-# 3. **FATO DIFERENTE:** Crie um novo cluster somente se a notícia tratar de um evento claramente distinto e independente.
-# 4. **INTEGRIDADE TOTAL:** TODAS as notícias novas DEVEM ser classificadas (anexadas ou em novos clusters).
-
-# **FORMATO DE ENTRADA:**
-# - **NOTÍCIAS NOVAS:** Lista de notícias com ID, título e opcionalmente um breve início do texto
-# - **CLUSTERS EXISTENTES:** Lista de clusters com `cluster_id`, `tema_principal` e opcionalmente um breve resumo
-
-# **FORMATO DE SAÍDA OBRIGATÓRIO (JSON PURO):**
-# ```json
-# [
-#   {{
-#     "tipo": "anexar",
-#     "noticia_id": 0,
-#     "cluster_id_existente": 1,
-#     "justificativa": "A notícia se refere ao mesmo evento do cluster existente"
-#   }},
-#   {{
-#     "tipo": "novo_cluster",
-#     "noticia_id": 1,
-#     "tema_principal": "Novo evento específico",
-#     "justificativa": "A notícia se refere a um fato gerador diferente"
-#   }}
-# ]
-# ```
-
-# **EXEMPLO:**
-# Se você tem:
-# - Notícia nova: "Apple anuncia novo iPhone"
-# - Cluster existente: "Apple lança iPhone 20" (com outras notícias sobre o mesmo lançamento)
-
-# **RESULTADO:** Anexar a notícia nova ao cluster existente, pois se refere ao mesmo evento.
-
-# **DADOS PARA ANÁLISE:**
-# **NOTÍCIAS NOVAS:**
-# {NOVAS_NOTICIAS}
-
-# **CLUSTERS EXISTENTES:**
-# {CLUSTERS_EXISTENTES}
-
-# **CLASSIFIQUE:** Cada notícia nova deve ser anexada a um cluster existente ou criar um novo cluster.
-# """
-
 # ==============================================================================
 # PROMPT PARA AGRUPAMENTO INCREMENTAL (V2 — com contexto enriquecido)
 # ==============================================================================
 
 PROMPT_AGRUPAMENTO_INCREMENTAL_V2 = """
-Você é um especialista em análise de conteúdo focado em granularidade. Sua tarefa é classificar novas notícias em relação a clusters existentes do mesmo dia.
+Você é um Analista de Inteligência Sênior responsável por manter dossiês de eventos em tempo real. Sua tarefa é classificar notícias novas, decidindo se elas devem ser ANEXADAS a um dossiê (cluster) existente ou, como última opção, iniciar um novo. A filosofia é manter o número de dossiês o mais conciso e relevante possível.
 
-CONTEXTO IMPORTANTE:
-- Você receberá NOTÍCIAS NOVAS que precisam ser classificadas (título e, se disponível, início do texto)
-- Você receberá CLUSTERS EXISTENTES do mesmo dia com os campos:
-  - "cluster_id": identificador do cluster
-  - "tema_principal": título consolidado do evento
-  - "titulos_internos": lista com os títulos das notícias já anexadas ao cluster (apenas títulos)
-- Sua missão é decidir se cada notícia nova deve ser ANEXADA a um cluster existente ou se deve criar um NOVO cluster somente quando tratar de evento distinto
+**REGRAS CRÍTICAS DE CLASSIFICAÇÃO (EM ORDEM DE IMPORTÂNCIA):**
 
-REGRAS CRÍTICAS:
-1. PRIORIZE ANEXAR: Em caso de dúvida razoável (desdobramento, reação ou análise do mesmo evento), prefira ANEXAR ao cluster existente.
-2. MESMO FATO GERADOR: Se a notícia nova se refere ao mesmo evento, decisão ou anúncio de um cluster existente, ANEXE ao cluster.
-3. FATO DIFERENTE: Crie um novo cluster somente se a notícia tratar de um evento claramente distinto e independente.
-4. INTEGRIDADE TOTAL: TODAS as notícias novas DEVEM ser classificadas (anexadas ou em novos clusters).
+1.  **REGRA DE OURO - PRIORIDADE MÁXIMA É ANEXAR:** O seu viés padrão deve ser sempre o de anexar a notícia a um cluster existente. A criação de um novo cluster só é permitida se o evento da nova notícia for inequivocamente distinto e não tiver relação contextual com nenhum dos dossiês existentes.
 
-FORMATO DE ENTRADA:
-- NOTÍCIAS NOVAS: Lista de notícias com ID e título (e opcionalmente um breve início do texto)
-- CLUSTERS EXISTENTES: Lista de clusters com "cluster_id", "tema_principal" e "titulos_internos" (apenas títulos, sem textos)
+2.  **AVALIE O ESCOPO DO DOSSIÊ:** Para tomar sua decisão, não compare apenas os títulos. Analise o `tema_principal` do cluster e a lista de `titulos_internos` para compreender o "evento-macro" que ele cobre. Se a nova notícia se encaixa nesse escopo (como uma reação, análise ou desdobramento), **ANEXE**.
 
-FORMATO DE SAÍDA OBRIGATÓRIO (JSON PURO):
+3.  **TEMA PRINCIPAL ABRANGENTE PARA NOVOS CLUSTERS:** No caso raro de precisar criar um novo cluster, o `tema_principal` deve ser abrangente, antecipando possíveis desdobramentos futuros para facilitar novas anexações.
+
+4.  **INTEGRIDADE TOTAL:** Todas as notícias novas devem ser classificadas, seja por anexação ou pela criação de um novo cluster.
+
+**EXEMPLO PRÁTICO DE ANEXAÇÃO (MODELO A SEGUIR):**
+
+* **Notícia Nova a ser classificada:**
+    * `{"id": 101, "titulo": "Governo se prepara para responder ao tarifaço dos EUA"}`
+* **Cluster Existente para avaliação:**
+    * `{ "cluster_id": 12, "tema_principal": "Trump anuncia tarifaço sobre produtos brasileiros e gera reação da indústria", "titulos_internos": ["Trump confirma tarifa de 50% para o Brasil", "Indústria brasileira critica duramente tarifaço de Trump"] }`
+* **Decisão Correta:** ANEXAR a notícia de ID 101 ao cluster 12, pois se trata de um desdobramento direto e esperado do evento-macro.
+
+**FORMATO DE ENTRADA (CONTRATO INALTERADO):**
+- NOTÍCIAS NOVAS: Lista de notícias com ID e título.
+- CLUSTERS EXISTENTES: Lista de clusters com "cluster_id", "tema_principal" e "titulos_internos".
+
+**FORMATO DE SAÍDA OBRIGATÓRIO (CONTRATO INALTERADO - JSON PURO):**
 ```json
 [
-  {
-    "tipo": "anexar",
-    "noticia_id": 0,
-    "cluster_id_existente": 1,
-    "justificativa": "A notícia se refere ao mesmo evento do cluster existente"
-  },
-  {
-    "tipo": "novo_cluster",
-    "noticia_id": 1,
-    "tema_principal": "Novo evento específico",
-    "justificativa": "A notícia se refere a um fato gerador diferente"
-  }
+ {
+   "tipo": "anexar",
+   "noticia_id": 0,
+   "cluster_id_existente": 1,
+   "justificativa": "A notícia é um desdobramento direto do evento coberto pelo cluster existente."
+ },
+ {
+   "tipo": "novo_cluster",
+   "noticia_id": 1,
+   "tema_principal": "Título abrangente para o novo evento-macro",
+   "justificativa": "Trata-se de um evento completamente distinto e sem relação com os dossiês existentes."
+ }
 ]
 ```
 
@@ -667,41 +927,6 @@ DADOS PARA ANÁLISE:
 CLASSIFIQUE: Cada notícia nova deve ser anexada a um cluster existente ou criar um novo cluster.
 """
 
-# ============================================================================
-# PROMPT DE SANITIZAÇÃO (GATEKEEPER) — REMOVER CLUSTERS IRRELEVANTES
-# ============================================================================
-
-# [UNUSED] Este prompt não está integrado ao pipeline padrão (gatekeeper opcional). Mantido para referência.
-# PROMPT_SANITIZACAO_CLUSTER_V1 = """
-# Você é um porteiro (gatekeeper) para a mesa de 'Special Situations'. Decida se um CLUSTER de notícias é RELEVANTE ou IRRELEVANTE para análise financeira.
-
-# REJEIÇÃO IMEDIATA (IRRELEVANTE):
-# - Indenizações cíveis/trabalhistas individuais de baixo valor.
-# - Opinião/Cartas/Editorial sem fato econômico objetivo.
-# - Classificados/avisos/procurement/leilões genéricos (veículos/joias/apartamentos isolados).
-# - Esportes, Cultura/Entretenimento (sem tese de negócio), Crimes cotidianos, Política partidária pura.
-
-#  EXEMPLOS CONCRETOS DE IRRELEVÂNCIA (REJEITE):
-#  - Crimes comuns e casos pessoais: "Dentista indeniza família de concorrente assassinado"; "Condenação de mexicana a desculpas no X"; decisões casuísticas (ex.: vínculo individual pastor–igreja).
-#  - Política partidária/pessoal: "STF e julgamentos que podem prejudicar Bolsonaro"; "Pedidos de visita a Bolsonaro por deputados".
-#  - Fofoca/entretenimento/esportes: "Reviravolta no caso Juliana Oliveira e Otávio Mesquita"; futebol (Palmeiras, Crystal Palace etc.); "vaquejada" sem tese de negócio.
-
-# EXCEÇÕES (RELEVANTE quando houver materialidade):
-# - Leilão JUDICIAL de alto valor (> R$10 mi) de ativo relevante; Venda de carteira NPL; Securitização de Dívida Ativa com valores/processos.
-# - M&A anunciado/OPA; Decisão do CADE com remédios; RJ/Falência/Default/Quebra de Covenants/Crise de Liquidez.
-
-# DADOS DO CLUSTER:
-# - Título do Cluster: {TITULO_CLUSTER}
-# - Amostra de Títulos: {TITULOS_ARTIGOS}
-
-# FORMATO DE SAÍDA (JSON PURO):
-# ```json
-# {
-#   "decisao": "RELEVANTE" ou "IRRELEVANTE",
-#   "justificativa": "Motivo conciso"
-# }
-# ```
-# """
 
 # ==============================================================================
 # PROMPT PARA CHAT COM CLUSTERS
@@ -754,6 +979,7 @@ OBJETIVO: Reclassificar cada item como P1_CRITICO, P2_ESTRATEGICO, P3_MONITORAME
 
 REGRAS DE DECISÃO (GATING RÍGIDO):
 - P1_CRITICO SOMENTE se o assunto-chave ∈ {Recuperação Judicial, Falência, Pedido de Falência, Assembleia de Credores, Default de Dívida, Quebra de Covenants, Crise de Liquidez Aguda, M&A ANUNCIADO/OPA, Decisão do CADE com remédios vinculantes, Venda de carteira NPL / Securitização RELEVANTE com valores altos e players relevantes}.
+- Casos de 'Divulgação de Resultados' são P1 APENAS se a empresa estiver na lista `EMPRESAS_PRIORITARIAS`. Para demais empresas, classifique como P3_MONITORAMENTO, salvo se houver estresse severo que enquadre nas regras gerais de P1.
 - NÃO É P1: assembleias rotineiras sem evento material; comunicados administrativos; rumores; política partidária; incidentes operacionais casuísticos sem risco sistêmico; notas sem materialidade mensurável; anúncios de produtos/funcionalidades sem impacto financeiro claro.
 - P2_ESTRATEGICO: potencial de impacto financeiro mensurável (players/valores/cronograma claros), porém sem gatilho imediato de P1 (ex.: mudança regulatória em tramitação, grandes investimentos/contratos anunciados sem fechamento definitivo).
 - NÃO é P2: efemérides/programas sociais genéricos (ex.: benefícios, creches), segurança/funcionalidades de apps sem materialidade setorial, política partidária, crimes, esportes/entretenimento, opinião.

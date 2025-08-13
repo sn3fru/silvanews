@@ -441,16 +441,24 @@ function setupEventListeners() {
 
     // Tabs do modal de prompts
     if (promptsTabs) promptsTabs.addEventListener('click', (e) => {
-        if (e.target.classList.contains('prompt-tab-btn')) {
-            promptsTabs.querySelectorAll('.prompt-tab-btn').forEach(btn => btn.classList.remove('ativo'));
-            promptTabContents.forEach(content => content.classList.add('oculto'));
-            
-            e.target.classList.add('ativo');
-            const targetTab = e.target.getAttribute('data-tab');
-            const targetContent = document.getElementById(targetTab);
-            if (targetContent) {
-                targetContent.classList.remove('oculto');
-            }
+        const btn = e.target.closest('.prompt-tab-btn');
+        if (!btn) return;
+
+        // Atualiza estado dos botões
+        promptsTabs.querySelectorAll('.prompt-tab-btn').forEach(b => b.classList.remove('ativo'));
+        btn.classList.add('ativo');
+
+        // Atualiza estado dos conteúdos (usa classe 'ativo' conforme CSS)
+        promptTabContents.forEach(content => {
+            content.classList.remove('ativo');
+            content.classList.add('oculto');
+        });
+
+        const targetTab = btn.getAttribute('data-tab');
+        const targetContent = document.getElementById(targetTab);
+        if (targetContent) {
+            targetContent.classList.remove('oculto');
+            targetContent.classList.add('ativo');
         }
     });
 

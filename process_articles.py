@@ -48,8 +48,8 @@ from backend.processing import (
     gerar_embedding, bytes_to_embedding, calcular_similaridade_cosseno,
     processar_artigo_pipeline, gerar_resumo_cluster, find_or_create_cluster
 )
-from backend.prompts import PROMPT_AGRUPAMENTO_V1, PROMPT_RESUMO_FINAL_V3, PROMPT_PRIORIZACAO_EXECUTIVA_V1
-from backend.utils import get_date_brasil_str, get_datetime_brasil_str
+from backend.prompts import PROMPT_AGRUPAMENTO_V1, PROMPT_RESUMO_FINAL_V3, PROMPT_PRIORIZACAO_EXECUTIVA_V1, TAGS_SPECIAL_SITUATIONS
+from backend.utils import get_date_brasil_str, get_datetime_brasil_str, corrigir_tag_invalida, corrigir_prioridade_invalida, eh_lixo_publicitario
 
 # Carrega variáveis de ambiente
 env_file = backend_dir / ".env"
@@ -265,14 +265,16 @@ def processar_artigos_pendentes(limite: int = 10) -> bool:
         resumos_gerados = 0
         
         for cluster in clusters_hoje:
-            print(f"  📝 Processando cluster {cluster.id}: '{cluster.titulo_cluster}'")
+            cid = cluster.id
+            titulo_tmp = cluster.titulo_cluster
+            print(f"  📝 Processando cluster {cid}: '{titulo_tmp}'")
             
             # Classifica o cluster usando prompts do prompts.py
-            if classificar_e_resumir_cluster(db, cluster.id, client):
+            if classificar_e_resumir_cluster(db, cid, client):
                 resumos_gerados += 1
-                print(f"    ✅ Cluster {cluster.id} - Classificado e resumido")
+                print(f"    ✅ Cluster {cid} - Classificado e resumido")
             else:
-                print(f"    ❌ Cluster {cluster.id} - Falha na classificação")
+                print(f"    ❌ Cluster {cid} - Falha na classificação")
         
         print(f"ETAPA 3 CONCLUIDA: Resumos gerados: {resumos_gerados}")
 
@@ -301,11 +303,38 @@ def processar_artigos_pendentes(limite: int = 10) -> bool:
 
 def mapear_tag_prompt_para_modelo(tag_prompt: str) -> str:
     """
-    Mapeia as tags do prompt para as tags válidas do modelo.
-    Agora as tags são as mesmas, então só retorna a tag original.
+    Normaliza uma tag retornada pelo LLM para uma tag CANÔNICA presente em TAGS_SPECIAL_SITUATIONS.
+    - Faz match case-insensitive com as chaves de TAGS_SPECIAL_SITUATIONS.
+    - Se não bater, tenta corrigir via corrigir_tag_invalida.
+    - Fallback seguro: 'Internacional (Economia e Política)'.
     """
-    # As tags do prompt já são as mesmas do modelo
-    return tag_prompt
+    try:
+        valid_tags = list(TAGS_SPECIAL_SITUATIONS.keys())
+        if not isinstance(tag_prompt, str) or not tag_prompt.strip():
+            return 'Internacional (Economia e Política)'
+
+        tag_limpa = tag_prompt.strip()
+
+        # Match exato
+        if tag_limpa in valid_tags:
+            return tag_limpa
+
+        # Match case-insensitive pelas chaves canônicas
+        mapa_lower_para_canonica = {t.lower(): t for t in valid_tags}
+        if tag_limpa.lower() in mapa_lower_para_canonica:
+            return mapa_lower_para_canonica[tag_limpa.lower()]
+
+        # Correção heurística usando utilitário
+        tag_corrigida = corrigir_tag_invalida(tag_limpa)
+        if tag_corrigida in valid_tags:
+            return tag_corrigida
+        if tag_corrigida.lower() in mapa_lower_para_canonica:
+            return mapa_lower_para_canonica[tag_corrigida.lower()]
+
+        # Fallback
+        return 'Internacional (Economia e Política)'
+    except Exception:
+        return 'Internacional (Economia e Política)'
 
 def migrar_tag_antiga_para_nova(tag_antiga: str) -> str:
     """
@@ -454,8 +483,15 @@ def classificar_e_resumir_cluster(db: Session, cluster_id: int, client, debug: b
         # Atualiza o cluster com a classificação
         prioridade_original = cluster.prioridade
         tag_original = cluster.tag
-        
-        cluster.prioridade = classificacao.get('prioridade', 'P3_MONITORAMENTO')
+
+        prioridade_sugerida = corrigir_prioridade_invalida(classificacao.get('prioridade'))
+        # Se a prioridade for irrelevante por invalidez, marca cluster como irrelevante e encerra
+        if prioridade_sugerida == 'IRRELEVANTE':
+            if debug:
+                print(f"    🚫 DEBUG: Prioridade inválida/ausente detectada. Marcando cluster {cluster_id} como IRRELEVANTE")
+            return marcar_cluster_irrelevante(db, cluster_id, debug)
+
+        cluster.prioridade = prioridade_sugerida
         cluster.tag = mapear_tag_prompt_para_modelo(classificacao.get('tag', 'Sem categoria'))
         
         if debug:
@@ -483,8 +519,10 @@ def classificar_e_resumir_cluster(db: Session, cluster_id: int, client, debug: b
                 print(f"    ❌ Falha ao gerar resumo {prioridade}")
                 return False
         else:
+            # Se cair aqui, algo saiu do esperado; reforça salvamento com prioridade válida
+            cluster.prioridade = corrigir_prioridade_invalida(prioridade)
             if debug:
-                print(f"    ⚠️ DEBUG: Prioridade {prioridade} não mapeada para nível de detalhe")
+                print(f"    ⚠️ DEBUG: Prioridade {prioridade} não mapeada. Normalizada para {cluster.prioridade}")
         
         # Salva as mudanças
         db.commit()
@@ -496,6 +534,10 @@ def classificar_e_resumir_cluster(db: Session, cluster_id: int, client, debug: b
         
     except Exception as e:
         print(f"❌ ERRO: Falha ao classificar e resumir cluster {cluster_id}: {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
         if debug:
             import traceback
             traceback.print_exc()
@@ -1231,14 +1273,20 @@ def processar_artigo_sem_cluster(db: Session, id_artigo: int, client) -> bool:
         else:
             # Para PDFs ou artigos sem estrutura, faz extração básica
             print(f"    📄 Artigo sem estrutura, fazendo extração básica")
-            
+
             # Extração básica sem LLM
             linhas = artigo.texto_bruto.split('\n')
             titulo = linhas[0].strip() if linhas else "Sem título"
-            
+
+            # Pré-filtro de lixo publicitário (curto-circuito)
+            if eh_lixo_publicitario(titulo, artigo.texto_bruto):
+                print("    🧹 Detectado conteúdo publicitário/lixo. Marcando artigo como irrelevante e pulando.")
+                update_artigo_status(db, id_artigo, 'irrelevante')
+                return True
+
             # Tenta identificar jornal/fonte dos metadados
             jornal = metadados.get('fonte_original') or 'Fonte desconhecida'
-            
+
             noticia_data = {
                 'titulo': titulo,
                 'texto_completo': artigo.texto_bruto,
@@ -1259,6 +1307,12 @@ def processar_artigo_sem_cluster(db: Session, id_artigo: int, client) -> bool:
         if 'tag' in noticia_data:
             noticia_data['tag'] = corrigir_tag_invalida(noticia_data['tag'])
         
+        # Pré-filtro de lixo publicitário com dados migrados também (dupla checagem)
+        if eh_lixo_publicitario(noticia_data.get('titulo'), noticia_data.get('texto_completo')):
+            print("    🧹 Detectado conteúdo publicitário/lixo (pós-migração). Marcando artigo como irrelevante.")
+            update_artigo_status(db, id_artigo, 'irrelevante')
+            return True
+
         # ETAPA 3: Validação com Pydantic
         try:
             print(f"    🔍 Validando dados com Pydantic...")

@@ -117,6 +117,64 @@ def corrigir_prioridade_invalida(prioridade_original: Optional[str]) -> str:
     return 'IRRELEVANTE'
 
 
+def eh_lixo_publicitario(titulo: Optional[str], texto: Optional[str]) -> bool:
+    """
+    Heurística simples para detectar conteúdo publicitário/anúncio e descartar cedo.
+    Retorna True quando o texto aparenta ser anúncio, promoção ou comunicados comerciais
+    sem materialidade noticiosa.
+
+    Critérios (qualquer um):
+    - Palavras-chave típicas de anúncio/promo
+    - Presença de faixas de horário e local típicos de evento (ex.: "10h às 12h", endereço)
+    - Muitos padrões de preço/contato (R$, WhatsApp, telefone)
+    - Termos de supermercado/loja, cupom, desconto
+    """
+    try:
+        conteudo = f"{titulo or ''}\n{texto or ''}".lower()
+
+        # Palavras-chave comuns em anúncios
+        palavras = [
+            r"anúncio", r"anuncio", r"publicitário", r"publicitario", r"promoção", r"promocao",
+            r"oferta", r"imperdível", r"imperdivel", r"liquidação", r"liquidacao", r"cupom",
+            r"desconto", r"brinde", r"compre", r"ingressos", r"ingresso", r"cadastre-se",
+            r"cadastre se", r"inscreva-se", r"inscreva se", r"patrocinado", r"publi"
+        ]
+
+        # Setores muito associados a varejo/mercado quando em tom promocional
+        varejo = [
+            r"supermarket", r"supermercado", r"hipermercado", r"loja", r"shopping",
+            r"farmácia", r"farmacia", r"eletro", r"móveis", r"moveis"
+        ]
+
+        # Padrões de horário e local típico de evento/ação
+        padroes_regex = [
+            r"\b\d{1,2}h\s*(às|as)\s*\d{1,2}h\b",
+            r"\b(?:r\.|rua|av\.|avenida|praça|praca|centro|shopping)\b",
+            r"\bwhatsapp\b",
+            r"\b(?:\(\d{2}\)\s*\d{4,5}-\d{4})\b",
+            r"\br\$\s*\d+[\.\d]*\b"
+        ]
+
+        # Se encontrar palavras-chave fortes de anúncio
+        if any(re.search(rf"\b{p}\b", conteudo) for p in palavras):
+            return True
+
+        # Se houver forte presença de varejo + preço/telefone/whatsapp
+        sinais_varejo = any(v in conteudo for v in varejo)
+        sinais_contato_preco = sum(1 for rgx in padroes_regex if re.search(rgx, conteudo))
+        if sinais_varejo and sinais_contato_preco >= 1:
+            return True
+
+        # Se houver múltiplos sinais de contato/preço/horário mesmo sem varejo explícito
+        if sinais_contato_preco >= 2:
+            return True
+
+        return False
+    except Exception:
+        # Em caso de erro na heurística, não bloquear
+        return False
+
+
 def limpar_nome_arquivo(nome: str) -> str:
     """Remove caracteres especiais e limita o comprimento do nome do arquivo."""
     if not nome:

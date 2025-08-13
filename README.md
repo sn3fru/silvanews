@@ -131,6 +131,36 @@ Rodar a partir da pasta `silva-front` ou `btg_alphafeed`:
   - `--meta-file btg_alphafeed/last_migration.txt`: armazena o último timestamp migrado
   - `--only clusters,artigos,logs`: restringe entidades
 
+### Replace do dia (produção) com reprocessamento local
+Use quando você reprocessou o dia localmente (novos prompts) e quer substituir o dia em produção de forma limpa (sem manter clusters antigos do mesmo dia).
+
+Passo a passo:
+1. Reprocessar localmente o dia (mantém brutos, limpa processados de hoje e reprocessa o pipeline completo):
+   ```bash
+   conda activate pymc2
+   cd btg_alphafeed
+   python reprocess_today.py
+   ```
+
+2. Replace no destino (produção) APENAS do dia desejado:
+   ```bash
+   conda activate pymc2
+   cd btg_alphafeed
+   python migrate_replace_today.py \
+     --source "postgresql+psycopg2://postgres_local@localhost:5433/devdb" \
+     --dest   "postgres://<usuario>:<senha>@<host>:5432/<db>" \
+     --day $(python -c "from datetime import date; print(date.today().isoformat())")
+   ```
+   O utilitário limpa no destino os dados do dia (desassocia artigos, remove clusters/alterações/chat/síntese do dia) e migra do origem os clusters/artigos/síntese do mesmo dia, forçando `cluster_id` dos artigos.
+
+3. (Opcional) Rodar incremental normal para demais dias/logs/chat:
+   ```bash
+   python -m btg_alphafeed.migrate_incremental \
+     --source "postgresql+psycopg2://postgres_local@localhost:5433/devdb" \
+     --dest   "postgres://<usuario>:<senha>@<host>:5432/<db>" \
+     --include-logs --include-chat
+   ```
+
 ## Tarefas Comuns
 - Reexecutar pipeline completo (ingestão + processamento):
   ```bash

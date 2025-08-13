@@ -209,11 +209,16 @@ def create_cluster(db: Session, cluster_data: ClusterEventoCreate) -> ClusterEve
         return cluster_existente
     
     # Cria novo cluster
+    # Normaliza prioridade inválida/None para evitar NOT NULL violations
+    from .utils import corrigir_prioridade_invalida
+
+    prioridade_normalizada = corrigir_prioridade_invalida(cluster_data.prioridade if cluster_data.prioridade else None)
+
     db_cluster = ClusterEvento(
         titulo_cluster=_truncate(cluster_data.titulo_cluster, 500),
         resumo_cluster=cluster_data.resumo_cluster,
         tag=_truncate(cluster_data.tag, 50),
-        prioridade=_truncate(cluster_data.prioridade, 20) if cluster_data.prioridade else None,
+        prioridade=_truncate(prioridade_normalizada, 20),
         embedding_medio=cluster_data.embedding_medio
     )
     db.add(db_cluster)
