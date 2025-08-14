@@ -706,6 +706,11 @@ INSTRUÇÕES DE EXTRAÇÃO E SCORING:
 
 --- GUIA DE TAGS TEMÁTICAS ---
 """ + GUIA_TAGS_FORMATADO + """
+REGRAS CRÍTICAS PARA A SAÍDA JSON:
+1. Validade do JSON é prioridade máxima: a resposta DEVE ser um JSON perfeitamente válido.
+2. Escape de caracteres especiais: dentro de strings, escape aspas duplas (\") e duplique barras invertidas (\\).
+3. Não truncar: feche todas as chaves, colchetes e aspas. Se for ruído, responda exatamente []
+
 FORMATO DE SAÍDA (JSON PURO):
 ```
 [

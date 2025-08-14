@@ -1019,6 +1019,94 @@ def get_cluster_com_artigos(db: Session, cluster_id: int) -> Optional[Dict[str, 
     }
 
 
+# ==============================================================================
+# CRUD - Jobs de Pesquisa (Deep e Social)
+# ==============================================================================
+
+def create_deep_research_job(db: Session, cluster_id: int, query: Optional[str]) -> int:
+    try:
+        from .database import DeepResearchJob
+    except ImportError:
+        from backend.database import DeepResearchJob
+    job = DeepResearchJob(cluster_id=cluster_id, query=query or None, status='PENDING', provider='gemini')
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return job.id
+
+
+def update_deep_research_job(db: Session, job_id: int, **kwargs) -> bool:
+    try:
+        from .database import DeepResearchJob
+    except ImportError:
+        from backend.database import DeepResearchJob
+    job = db.query(DeepResearchJob).filter(DeepResearchJob.id == job_id).first()
+    if not job:
+        return False
+    for k, v in kwargs.items():
+        setattr(job, k, v)
+    db.commit()
+    return True
+
+
+def get_deep_research_job(db: Session, job_id: int):
+    try:
+        from .database import DeepResearchJob
+    except ImportError:
+        from backend.database import DeepResearchJob
+    return db.query(DeepResearchJob).filter(DeepResearchJob.id == job_id).first()
+
+
+def list_deep_research_jobs_by_cluster(db: Session, cluster_id: int, limit: int = 20):
+    try:
+        from .database import DeepResearchJob
+    except ImportError:
+        from backend.database import DeepResearchJob
+    return db.query(DeepResearchJob).filter(DeepResearchJob.cluster_id == cluster_id).order_by(DeepResearchJob.created_at.desc()).limit(limit).all()
+
+
+def create_social_research_job(db: Session, cluster_id: int, query: Optional[str]) -> int:
+    try:
+        from .database import SocialResearchJob
+    except ImportError:
+        from backend.database import SocialResearchJob
+    job = SocialResearchJob(cluster_id=cluster_id, query=query or None, status='PENDING', provider='grok4')
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return job.id
+
+
+def update_social_research_job(db: Session, job_id: int, **kwargs) -> bool:
+    try:
+        from .database import SocialResearchJob
+    except ImportError:
+        from backend.database import SocialResearchJob
+    job = db.query(SocialResearchJob).filter(SocialResearchJob.id == job_id).first()
+    if not job:
+        return False
+    for k, v in kwargs.items():
+        setattr(job, k, v)
+    db.commit()
+    return True
+
+
+def get_social_research_job(db: Session, job_id: int):
+    try:
+        from .database import SocialResearchJob
+    except ImportError:
+        from backend.database import SocialResearchJob
+    return db.query(SocialResearchJob).filter(SocialResearchJob.id == job_id).first()
+
+
+def list_social_research_jobs_by_cluster(db: Session, cluster_id: int, limit: int = 20):
+    try:
+        from .database import SocialResearchJob
+    except ImportError:
+        from backend.database import SocialResearchJob
+    return db.query(SocialResearchJob).filter(SocialResearchJob.cluster_id == cluster_id).order_by(SocialResearchJob.created_at.desc()).limit(limit).all()
+
+
 def associate_artigo_to_existing_cluster(db: Session, artigo_id: int, cluster_id: int) -> bool:
     """
     Associa um artigo a um cluster existente.

@@ -157,6 +157,10 @@
                 <div class="modal-content">
                     <div id="tab-chat" class="tab-content ativo">
                         <div class="chat-container">
+                            <div class="chat-actions" style="display:flex;gap:.5rem;margin-bottom:.5rem;">
+                                <button id="btn-deep-research" class="btn btn-secundario" title="Pesquisa profunda (Gemini)">🔎 Deep Research</button>
+                                <button id="btn-social-research" class="btn btn-secundario" title="Social listening (Grok/X)">#️⃣ Social (Grok4)</button>
+                            </div>
                             <div class="chat-input-area">
                                 <input type="text" id="chat-input" placeholder="Qual o impacto para os credores?">
                                 <button id="chat-send-btn" class="btn">Enviar</button>
@@ -164,6 +168,7 @@
                             <div id="chat-messages" class="chat-messages">
                                 <div class="message system">Faça uma pergunta sobre este evento.</div>
                             </div>
+                            <div id="research-results" class="research-results"></div>
                         </div>
                     </div>
                     <div id="tab-gerenciar" class="tab-content oculto">

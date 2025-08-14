@@ -420,7 +420,8 @@ def get_gemini_model():
         raise ValueError("GEMINI_API_KEY não configurada")
     
     genai.configure(api_key=api_key)
-    return genai.GenerativeModel('gemini-2.0-flash')
+    # Usa o modelo Pro (mais capaz) especificamente para o chat do modal
+    return genai.GenerativeModel('gemini-2.5-flash')
 
 # ==============================================================================
 # UTILITÁRIOS DE DATA E FUSO HORÁRIO (GMT-3)

@@ -506,6 +506,8 @@ function setupEventListeners() {
     // Chat
     const chatInput = document.getElementById('chat-input');
     const chatSendBtn = document.getElementById('chat-send-btn');
+    const btnDeepResearch = document.getElementById('btn-deep-research');
+    const btnSocialResearch = document.getElementById('btn-social-research');
     
     if (chatInput && chatSendBtn) {
         chatSendBtn.addEventListener('click', enviarMensagemChat);
@@ -514,6 +516,13 @@ function setupEventListeners() {
                 enviarMensagemChat();
             }
         });
+    }
+
+    if (btnDeepResearch) {
+        btnDeepResearch.addEventListener('click', iniciarDeepResearch);
+    }
+    if (btnSocialResearch) {
+        btnSocialResearch.addEventListener('click', iniciarSocialResearch);
     }
 
     // Gerenciamento de tags
@@ -1069,6 +1078,78 @@ function renderizarChat(messages) {
     
     // Scroll para a última mensagem
     chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+async function iniciarDeepResearch() {
+    if (!currentClusterId) return;
+    try {
+        const resp = await fetch(`/api/research/deep/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cluster_id: currentClusterId })
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.detail || 'Falha ao iniciar deep research');
+        showNotification('Deep research iniciado', 'success');
+        acompanharJob('deep', data.job_id);
+    } catch (e) {
+        console.error(e);
+        showErrorMessage('Erro ao iniciar deep research');
+    }
+}
+
+async function iniciarSocialResearch() {
+    if (!currentClusterId) return;
+    try {
+        const resp = await fetch(`/api/research/social/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cluster_id: currentClusterId })
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.detail || 'Falha ao iniciar social research');
+        showNotification('Social research iniciado', 'success');
+        acompanharJob('social', data.job_id);
+    } catch (e) {
+        console.error(e);
+        showErrorMessage('Erro ao iniciar social research');
+    }
+}
+
+function renderizarResultadoPesquisa(prefixo, payload) {
+    const container = document.getElementById('research-results');
+    if (!container) return;
+    const header = `${prefixo === 'deep' ? '🔎 Deep Research' : '#️⃣ Social (Grok4)'} — ${payload.status}`;
+    const texto = payload.result_text || '';
+    const item = document.createElement('div');
+    item.className = 'job-item';
+    item.innerHTML = `
+        <div class="status">${header}</div>
+        ${texto ? `<div class="conteudo">${texto.replace(/\n/g, '<br>')}</div>` : ''}
+    `;
+    container.prepend(item);
+}
+
+async function acompanharJob(prefixo, jobId) {
+    const url = prefixo === 'deep' ? `/api/research/deep/${jobId}` : `/api/research/social/${jobId}`;
+    // Polling simples até finalizar
+    let tentativas = 0;
+    const maxTentativas = 120; // ~10 min se 5s
+    const intervalo = 5000;
+    const timer = setInterval(async () => {
+        try {
+            const resp = await fetch(url);
+            const data = await resp.json();
+            if (resp.ok) {
+                if (data.status === 'COMPLETED' || data.status === 'FAILED') {
+                    clearInterval(timer);
+                    renderizarResultadoPesquisa(prefixo, data);
+                }
+            }
+        } catch (e) {}
+        tentativas += 1;
+        if (tentativas >= maxTentativas) clearInterval(timer);
+    }, intervalo);
 }
 
 function carregarDadosEdicao(clusterData) {

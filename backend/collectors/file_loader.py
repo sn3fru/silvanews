@@ -85,14 +85,17 @@ class FileLoader:
 
     def _extrair_json_da_resposta(self, resposta: str) -> List[Dict[str, Any]]:
         """
-        Extrai JSON de forma robusta (compatível com a usada no poc_silva):
+        Extrai, higieniza e decodifica JSON retornado por LLMs de forma robusta.
         - Prioriza bloco ```json
         - Fallback para primeiro '[' ou '{'
-        - Retorna lista vazia em caso de falha, com logs mínimos
+        - Corrige aspas simples em chaves, remove quebras de linha dentro de strings
+        - Escapa barras invertidas inválidas (Invalid \escape)
+        - Tenta extração parcial quando há truncamento
         """
         if not isinstance(resposta, str) or not resposta.strip():
             print("  ❌ Resposta da API vazia.")
             return []
+
         match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', resposta, re.DOTALL)
         if match:
             json_str = match.group(1).strip()
@@ -109,12 +112,48 @@ class FileLoader:
                 print("  ❌ Nenhum marcador JSON encontrado na resposta.")
                 return []
             json_str = resposta[start:].strip()
+
+        # Pré-correções comuns antes do parse
+        try:
+            # Corrige chaves com aspas simples: {'key': ...} -> {"key": ...}
+            json_str = re.sub(r"\'(\w+)\':", r'"\1":', json_str)
+
+            # Remove quebras de linha internas em strings para evitar Unterminated string
+            def _compactar_strings(m: re.Match) -> str:
+                return m.group(0).replace('\n', r'\\n')
+            json_str = re.sub(r'"[^"\\]*(?:\\.[^"\\]*)*"', _compactar_strings, json_str)
+
+            # Escapa barras invertidas que não fazem parte de sequência JSON válida
+            json_str = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', json_str)
+        except Exception as e:
+            print(f"  ⚠️ Erro durante correção de string antes do parse: {e}")
+
+        # Tentativa 1: parse direto
         try:
             dados = json.loads(json_str)
-            return dados if isinstance(dados, list) else [dados] if isinstance(dados, dict) else []
-        except json.JSONDecodeError as e:
-            print(f"  ❌ Erro ao decodificar JSON: {e}")
+            if isinstance(dados, list):
+                return dados
+            if isinstance(dados, dict):
+                return [dados]
             return []
+        except json.JSONDecodeError as e:
+            print(f"  ❌ Erro ao decodificar JSON (1ª tentativa): {e}")
+
+        # Tentativa 2: extrair maior porção plausível entre [] ou {}
+        trecho_match = re.search(r'(\[.*\]|\{.*\})', json_str, re.DOTALL)
+        if trecho_match:
+            trecho = trecho_match.group(1)
+            try:
+                dados = json.loads(trecho)
+                if isinstance(dados, list):
+                    return dados
+                if isinstance(dados, dict):
+                    return [dados]
+            except json.JSONDecodeError as e:
+                print(f"  ❌ Erro ao decodificar JSON (tentativa final): {e}")
+
+        print("  ⚠️ Nenhum JSON válido foi extraído desta resposta.")
+        return []
 
     def _processar_chunk_pdf_com_ia(self, pdf_path: Path, nome_arquivo_original: str, numero_pagina: int | None = None) -> List[Dict[str, Any]]:
         """

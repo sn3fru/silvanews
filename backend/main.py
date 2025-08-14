@@ -19,6 +19,8 @@ from fastapi.responses import RedirectResponse
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 import google.generativeai as genai
+import json
+import os
 
 # Carrega variáveis de ambiente do arquivo .env
 env_file = Path(__file__).parent / ".env"
@@ -29,8 +31,8 @@ else:
     print(f"⚠️ Arquivo .env não encontrado: {env_file}")
 
 try:
-    from .database import get_db, init_database, ArtigoBruto, ClusterEvento, SinteseExecutiva
-    from .models import ProcessarArtigoRequest, StatusResponse, ArtigoBrutoCreate, ChatRequest, ChatResponse, ClusterUpdateRequest
+    from .database import get_db, init_database, ArtigoBruto, ClusterEvento, SinteseExecutiva, SessionLocal
+    from .models import ProcessarArtigoRequest, StatusResponse, ArtigoBrutoCreate, ChatRequest, ChatResponse, ClusterUpdateRequest, ResearchJobCreate, ResearchJobStatus
     from .crud import (
         get_artigos_pendentes, get_metricas_today, get_sintese_today,
         get_clusters_for_feed, get_cluster_by_id, get_artigos_by_cluster,
@@ -42,14 +44,16 @@ try:
         get_artigos_processados_hoje, get_clusters_existentes_hoje, get_cluster_com_artigos,
         associate_artigo_to_existing_cluster, create_cluster_for_artigo,
         agg_noticias_por_dia, agg_noticias_por_fonte, agg_noticias_por_autor,
-        create_feedback, list_feedback, mark_feedback_processed
+        create_feedback, list_feedback, mark_feedback_processed,
+        create_deep_research_job, update_deep_research_job, get_deep_research_job, list_deep_research_jobs_by_cluster,
+        create_social_research_job, update_social_research_job, get_social_research_job, list_social_research_jobs_by_cluster
     )
     from .processing import processar_artigo_pipeline, gerar_resumo_cluster, inicializar_processamento
     from .utils import gerar_hash_unico, formatar_timestamp_relativo, get_date_brasil, parse_date_brasil
 except ImportError:
     # Fallback para import absoluto quando executado fora do pacote
-    from backend.database import get_db, init_database, ArtigoBruto, ClusterEvento, SinteseExecutiva
-    from backend.models import ProcessarArtigoRequest, StatusResponse, ArtigoBrutoCreate, ChatRequest, ChatResponse, ClusterUpdateRequest
+    from backend.database import get_db, init_database, ArtigoBruto, ClusterEvento, SinteseExecutiva, SessionLocal
+    from backend.models import ProcessarArtigoRequest, StatusResponse, ArtigoBrutoCreate, ChatRequest, ChatResponse, ClusterUpdateRequest, ResearchJobCreate, ResearchJobStatus
     from backend.crud import (
         get_artigos_pendentes, get_metricas_today, get_sintese_today,
         get_clusters_for_feed, get_cluster_by_id, get_artigos_by_cluster,
@@ -59,7 +63,9 @@ except ImportError:
         get_chat_session_by_cluster, update_cluster_priority, update_cluster_tags,
         get_cluster_alteracoes, get_all_cluster_alteracoes,
         get_artigos_processados_hoje, get_clusters_existentes_hoje, get_cluster_com_artigos,
-        associate_artigo_to_existing_cluster, create_cluster_for_artigo
+        associate_artigo_to_existing_cluster, create_cluster_for_artigo,
+        create_deep_research_job, update_deep_research_job, get_deep_research_job, list_deep_research_jobs_by_cluster,
+        create_social_research_job, update_social_research_job, get_social_research_job, list_social_research_jobs_by_cluster
     )
     from backend.processing import processar_artigo_pipeline, gerar_resumo_cluster, inicializar_processamento
     from backend.utils import gerar_hash_unico, formatar_timestamp_relativo, get_date_brasil, parse_date_brasil
@@ -2501,6 +2507,188 @@ async def get_all_alteracoes_endpoint(
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
+# ======================================================================
+# Pesquisas Assíncronas: Deep Research (Gemini) e Social (Grok)
+# ======================================================================
+
+def _montar_contexto_cluster(db: Session, cluster_id: int) -> str:
+    cluster = get_cluster_by_id(db, cluster_id)
+    if not cluster:
+        return ""
+    artigos = get_artigos_by_cluster(db, cluster_id)
+    fontes = []
+    for a in artigos:
+        base = (a.texto_processado or a.texto_bruto or "")
+        trecho = (base[:500] + "...") if len(base) > 500 else base
+        fontes.append(f"- {a.jornal or 'Fonte'}: {trecho}")
+    return (
+        f"Evento: {cluster.titulo_cluster}\n"
+        f"Resumo: {cluster.resumo_cluster or ''}\n"
+        f"Tag: {cluster.tag} | Prioridade: {cluster.prioridade}\n\n"
+        f"Fontes:\n" + "\n".join(fontes)
+    )
+
+
+def _executar_deep_research(job_id: int, cluster_id: int, query: str | None, _db_ignored: Session = None):
+    # Cria uma nova sessão própria para o job em background
+    db = SessionLocal()
+    try:
+        update_deep_research_job(db, job_id, status='RUNNING', started_at=datetime.utcnow())
+        from .utils import get_gemini_model
+    except Exception as e:
+        update_deep_research_job(db, job_id, status='FAILED', error_message=str(e), finished_at=datetime.utcnow())
+        db.close()
+        return
+
+    contexto = _montar_contexto_cluster(db, cluster_id)
+    pergunta = query or "Realize uma pesquisa aprofundada e forneça um briefing executivo, bullets de insights, riscos, próximos passos e referências confiáveis. Responda em PT-BR."
+    prompt = (
+        "Você é um analista senior. Com base no contexto e também em seu conhecimento, conduza uma pesquisa aprofundada.\n"
+        "Contexto do evento:\n" + contexto + "\n\n"
+        f"Instrução: {pergunta}\n\n"
+        "Formato de saída: primeiro um resumo estruturado em texto; ao final, retorne um bloco JSON com campos { 'insights_chave': [], 'riscos': [], 'proximos_passos': [], 'fontes_sugeridas': [] }."
+    )
+    try:
+        model = get_gemini_model()
+        resp = model.generate_content(prompt)
+        texto = getattr(resp, 'text', '') or ''
+        try:
+            json_part = None
+            import re, json as _json
+            m = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", texto)
+            if m:
+                json_part = _json.loads(m.group(1))
+        except Exception:
+            json_part = None
+        update_deep_research_job(db, job_id, status='COMPLETED', result_text=texto, result_json=json_part, finished_at=datetime.utcnow())
+    except Exception as e:
+        update_deep_research_job(db, job_id, status='FAILED', error_message=str(e), finished_at=datetime.utcnow())
+    finally:
+        db.close()
+
+
+def _executar_social_research(job_id: int, cluster_id: int, query: str | None, _db_ignored: Session = None):
+    db = SessionLocal()
+    q = query or "O que as pessoas no X (Twitter) estão debatendo sobre este tópico? Resuma tópicos, sentimentos e contas relevantes."
+    try:
+        api_key = os.getenv('GROK_API_KEY')
+        if not api_key:
+            raise RuntimeError('GROK_API_KEY não configurada')
+
+        import requests
+        update_social_research_job(db, job_id, status='RUNNING', started_at=datetime.utcnow())
+
+        contexto = _montar_contexto_cluster(db, cluster_id)
+        user_prompt = (
+            "Você é um analista de social listening. Com base no contexto, pesquise no X/Twitter e resuma: tópicos em alta, sentimentos e contas chave."
+            " Liste também 10 posts representativos com autor (handle), data (ISO) e link. Responda em PT-BR.\n\n"
+            f"Contexto:\n{contexto}\n\n"
+            f"Pergunta: {q}"
+        )
+        model_name = os.getenv('GROK_MODEL', 'grok-2-latest')
+        url = 'https://api.x.ai/v1/chat/completions'
+        payload = {
+            'model': model_name,
+            'messages': [
+                {'role': 'system', 'content': 'Você tem acesso a dados públicos do X/Twitter. Responda com um resumo estruturado e um bloco JSON no final.'},
+                {'role': 'user', 'content': user_prompt}
+            ],
+            'temperature': 0.3
+        }
+        headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json'
+        }
+        r = requests.post(url, headers=headers, data=json.dumps(payload), timeout=120)
+        if r.status_code >= 400:
+            raise RuntimeError(f"Erro Grok API: HTTP {r.status_code} - {r.text[:200]}")
+        data = r.json()
+        texto = ''
+        try:
+            choices = data.get('choices') or []
+            if choices:
+                texto = choices[0].get('message', {}).get('content', '')
+        except Exception:
+            texto = r.text
+        try:
+            import re, json as _json
+            m = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", texto)
+            json_part = _json.loads(m.group(1)) if m else None
+        except Exception:
+            json_part = None
+        update_social_research_job(db, job_id, status='COMPLETED', result_text=texto, result_json=json_part, finished_at=datetime.utcnow())
+    except Exception as e:
+        update_social_research_job(db, job_id, status='FAILED', error_message=str(e), finished_at=datetime.utcnow())
+    finally:
+        db.close()
+
+
+@app.post("/api/research/deep/start")
+async def start_deep_research(request: ResearchJobCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    cluster = get_cluster_by_id(db, request.cluster_id)
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster não encontrado")
+    job_id = create_deep_research_job(db, request.cluster_id, request.query)
+    background_tasks.add_task(_executar_deep_research, job_id, request.cluster_id, request.query, db)
+    return {"job_id": job_id, "status": "PENDING"}
+
+
+@app.get("/api/research/deep/{job_id}")
+async def get_deep_research(job_id: int, db: Session = Depends(get_db)) -> ResearchJobStatus:
+    job = get_deep_research_job(db, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job não encontrado")
+    return ResearchJobStatus(
+        id=job.id, cluster_id=job.cluster_id, status=job.status, provider=job.provider,
+        result_text=job.result_text, result_json=job.result_json, error_message=job.error_message,
+        created_at=job.created_at, started_at=job.started_at, finished_at=job.finished_at, updated_at=job.updated_at
+    )
+
+
+@app.get("/api/research/deep/cluster/{cluster_id}")
+async def list_deep_research(cluster_id: int, limit: int = 20, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    jobs = list_deep_research_jobs_by_cluster(db, cluster_id, limit)
+    return {"jobs": [
+        {
+            "id": j.id, "status": j.status, "provider": j.provider,
+            "created_at": j.created_at.isoformat(), "finished_at": j.finished_at.isoformat() if j.finished_at else None
+        } for j in jobs
+    ]}
+
+
+@app.post("/api/research/social/start")
+async def start_social_research(request: ResearchJobCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    cluster = get_cluster_by_id(db, request.cluster_id)
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster não encontrado")
+    job_id = create_social_research_job(db, request.cluster_id, request.query)
+    background_tasks.add_task(_executar_social_research, job_id, request.cluster_id, request.query, db)
+    return {"job_id": job_id, "status": "PENDING"}
+
+
+@app.get("/api/research/social/{job_id}")
+async def get_social_research(job_id: int, db: Session = Depends(get_db)) -> ResearchJobStatus:
+    job = get_social_research_job(db, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job não encontrado")
+    return ResearchJobStatus(
+        id=job.id, cluster_id=job.cluster_id, status=job.status, provider=job.provider,
+        result_text=job.result_text, result_json=job.result_json, error_message=job.error_message,
+        created_at=job.created_at, started_at=job.started_at, finished_at=job.finished_at, updated_at=job.updated_at
+    )
+
+
+@app.get("/api/research/social/cluster/{cluster_id}")
+async def list_social_research(cluster_id: int, limit: int = 20, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    jobs = list_social_research_jobs_by_cluster(db, cluster_id, limit)
+    return {"jobs": [
+        {
+            "id": j.id, "status": j.status, "provider": j.provider,
+            "created_at": j.created_at.isoformat(), "finished_at": j.finished_at.isoformat() if j.finished_at else None
+        } for j in jobs
+    ]}
+
+
 # ==============================================================================
 # ENDPOINTS PARA CONFIGURAÇÃO DE PROMPTS
 # ==============================================================================
@@ -2653,4 +2841,3 @@ async def update_prompts_settings(
     except Exception as e:
         print(f"❌ Erro ao atualizar configurações de prompts: {e}")
         raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
-

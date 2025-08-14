@@ -329,6 +329,65 @@ class ClusterAlteracao(Base):
     )
 
 
+# ========================
+# Pesquisas Assíncronas
+# ========================
+
+class DeepResearchJob(Base):
+    """
+    Job para pesquisas profundas (Google/Gemini). Executado em background e pode demorar.
+    """
+    __tablename__ = "deep_research_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cluster_id = Column(Integer, ForeignKey('clusters_eventos.id'), nullable=False, index=True)
+    query = Column(Text, nullable=True)
+    status = Column(String(20), default='PENDING', nullable=False)  # PENDING, RUNNING, COMPLETED, FAILED
+    provider = Column(String(50), default='gemini', nullable=False)
+    result_text = Column(Text, nullable=True)
+    result_json = Column(JSON, default={})
+    error_message = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    cluster = relationship("ClusterEvento")
+
+    __table_args__ = (
+        Index('idx_deepresearch_cluster_status', 'cluster_id', 'status'),
+        Index('idx_deepresearch_created', 'created_at'),
+    )
+
+
+class SocialResearchJob(Base):
+    """
+    Job para pesquisas sociais (Grok/X/Twitter). Executado em background.
+    """
+    __tablename__ = "social_research_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cluster_id = Column(Integer, ForeignKey('clusters_eventos.id'), nullable=False, index=True)
+    query = Column(Text, nullable=True)
+    status = Column(String(20), default='PENDING', nullable=False)  # PENDING, RUNNING, COMPLETED, FAILED
+    provider = Column(String(50), default='grok4', nullable=False)
+    result_text = Column(Text, nullable=True)
+    result_json = Column(JSON, default={})
+    error_message = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    cluster = relationship("ClusterEvento")
+
+    __table_args__ = (
+        Index('idx_socialresearch_cluster_status', 'cluster_id', 'status'),
+        Index('idx_socialresearch_created', 'created_at'),
+    )
+
 # Função para criar todas as tabelas
 def create_tables():
     """Cria todas as tabelas no banco de dados."""

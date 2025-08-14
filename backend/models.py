@@ -193,6 +193,24 @@ class ChatResponse(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.utcnow, description="Timestamp da resposta")
 
 
+class ResearchJobCreate(BaseModel):
+    cluster_id: int
+    query: Optional[str] = None
+
+
+class ResearchJobStatus(BaseModel):
+    id: int
+    cluster_id: int
+    status: Literal['PENDING', 'RUNNING', 'COMPLETED', 'FAILED']
+    provider: str
+    result_text: Optional[str] = None
+    result_json: Optional[Dict[str, Any]] = None
+    error_message: Optional[str] = None
+    created_at: datetime
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    updated_at: datetime
+
 class ClusterAlteracao(BaseModel):
     """Modelo para alterações em clusters."""
     cluster_id: int = Field(..., description="ID do cluster")
