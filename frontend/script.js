@@ -2091,30 +2091,32 @@ function renderizarEditorPrioridades() {
     const container = document.getElementById('prioridades-config-container');
     if (!container || !promptsConfigData) return;
 
-    const prioridades = promptsConfigData.LISTA_RELEVANCIA_HIERARQUICA;
-    let html = '<div class="accordion">';
+    // Nova UI: edita apenas listas P1, P2, P3 do Gatekeeper
+    const listas = [
+        { key: 'P1_ITENS', titulo: 'P1_CRITICO — Itens (Gatekeeper)' },
+        { key: 'P2_ITENS', titulo: 'P2_ESTRATEGICO — Itens (Gatekeeper)' },
+        { key: 'P3_ITENS', titulo: 'P3_MONITORAMENTO — Itens (Gatekeeper)' }
+    ];
 
-    Object.entries(prioridades).forEach(([prioridade, prioridadeData]) => {
+    let html = '<div class="accordion">';
+    listas.forEach(({ key, titulo }) => {
+        const itens = Array.isArray(promptsConfigData[key]) ? promptsConfigData[key] : [];
         html += `
-            <div class="prioridade-config-item" data-prioridade="${prioridade}">
+            <div class="prioridade-config-item" data-lista="${key}">
                 <div class="prioridade-config-header">
-                    <button class="accordion-toggle" onclick="toggleAccordion(this)" aria-expanded="false">${prioridade}</button>
+                    <button class="accordion-toggle" onclick="toggleAccordion(this)" aria-expanded="false">${titulo}</button>
                 </div>
                 <div class="prioridade-config-content oculto">
                     <div class="tag-config-field">
-                        <label>Descrição:</label>
-                        <textarea class="prioridade-descricao" data-prioridade="${prioridade}">${prioridadeData.descricao}</textarea>
-                    </div>
-                    <div class="tag-config-field">
-                        <label>Assuntos:</label>
+                        <label>Itens:</label>
                         <div class="assuntos-list">
-                            ${prioridadeData.assuntos.map((assunto, i) => `
+                            ${itens.map((assunto, i) => `
                                 <div class="assunto-item">
-                                    <input type="text" value="${assunto}" data-prioridade="${prioridade}" data-index="${i}">
-                                    <button class="chip-close" onclick="removerAssunto('${prioridade}', ${i})">×</button>
+                                    <input type="text" value="${assunto}" data-lista="${key}" data-index="${i}">
+                                    <button class="chip-close" onclick="removerAssuntoLista('${key}', ${i})">×</button>
                                 </div>
                             `).join('')}
-                            <input type="text" class="assunto-inline" placeholder="Escreva um novo assunto e pressione Enter" onkeypress="if(event.key==='Enter'){adicionarAssuntoInline('${prioridade}', this)}">
+                            <input type="text" class="assunto-inline" placeholder="Escreva um novo item e pressione Enter" onkeypress="if(event.key==='Enter'){adicionarAssuntoListaInline('${key}', this)}">
                         </div>
                     </div>
                 </div>
@@ -2297,19 +2299,12 @@ function coletarDadosEditores() {
     });
     dados.TAGS_SPECIAL_SITUATIONS = tagsConfig;
 
-    // Coleta dados das prioridades
-    const prioridadesConfig = {};
-    document.querySelectorAll('.prioridade-config-item').forEach(prioridadeItem => {
-        const prioridade = prioridadeItem.getAttribute('data-prioridade');
-        const descricao = prioridadeItem.querySelector('.prioridade-descricao').value;
-        const assuntos = Array.from(prioridadeItem.querySelectorAll('.assunto-item input')).map(input => input.value);
-
-        prioridadesConfig[prioridade] = {
-            descricao: descricao,
-            assuntos: assuntos
-        };
+    // Coleta apenas listas Gatekeeper P1/P2/P3
+    const listas = ['P1_ITENS','P2_ITENS','P3_ITENS'];
+    listas.forEach(key => {
+        const inputs = Array.from(document.querySelectorAll(`.prioridade-config-item[data-lista="${key}"] .assunto-item input`));
+        dados[key] = inputs.map(i => i.value).filter(v => v && v.trim().length);
     });
-    dados.LISTA_RELEVANCIA_HIERARQUICA = prioridadesConfig;
 
     // Coleta dados do prompt principal (agora agrupamento)
     const promptTextarea = document.getElementById('prompt-principal-textarea');
@@ -2332,6 +2327,40 @@ function coletarDadosEditores() {
     }
 
     return dados;
+}
+
+// Helpers para editar listas P1/P2/P3
+function adicionarAssuntoListaInline(listaKey, inputEl) {
+    const value = (inputEl.value || '').trim();
+    if (!value) return;
+    const list = inputEl.closest('.assuntos-list');
+    const index = list.querySelectorAll('.assunto-item').length;
+    const html = `
+        <div class="assunto-item">
+            <input type="text" value="${value}" data-lista="${listaKey}" data-index="${index}">
+            <button class="chip-close" onclick="removerAssuntoLista('${listaKey}', ${index})">×</button>
+        </div>
+    `;
+    inputEl.insertAdjacentHTML('beforebegin', html);
+    inputEl.value = '';
+}
+
+function removerAssuntoLista(listaKey, index) {
+    const itens = document.querySelectorAll(`.prioridade-config-item[data-lista="${listaKey}"] .assunto-item`);
+    const alvo = Array.from(itens).find(el => {
+        const inp = el.querySelector('input');
+        return inp && parseInt(inp.getAttribute('data-index')) === index;
+    });
+    if (alvo) {
+        alvo.remove();
+        const restantes = document.querySelectorAll(`.prioridade-config-item[data-lista="${listaKey}"] .assunto-item`);
+        restantes.forEach((el, i) => {
+            const inp = el.querySelector('input');
+            const btn = el.querySelector('button');
+            if (inp) inp.setAttribute('data-index', i);
+            if (btn) btn.setAttribute('onclick', `removerAssuntoLista('${listaKey}', ${i})`);
+        });
+    }
 }
 
 // =============================

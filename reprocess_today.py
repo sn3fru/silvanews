@@ -26,6 +26,8 @@ from backend.database import (
     ChatMessage,
     ClusterAlteracao,
     SinteseExecutiva,
+    DeepResearchJob,
+    SocialResearchJob,
 )
 from backend.utils import get_date_brasil_str
 
@@ -80,6 +82,10 @@ def remover_clusters_hoje(db) -> int:
 
     removidos = 0
     for c in clusters:
+        # Remove jobs de pesquisa (deep e social)
+        db.query(DeepResearchJob).filter(DeepResearchJob.cluster_id == c.id).delete(synchronize_session=False)
+        db.query(SocialResearchJob).filter(SocialResearchJob.cluster_id == c.id).delete(synchronize_session=False)
+
         # Remove sessões de chat (e mensagens via cascade do ChatSession)
         sessions = db.query(ChatSession).filter(ChatSession.cluster_id == c.id).all()
         for s in sessions:

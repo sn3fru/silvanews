@@ -2727,8 +2727,13 @@ async def get_prompts_settings() -> Dict[str, Any]:
             prompt_chat_cluster = ""
 
         prompts_config = {
-            "TAGS_SPECIAL_SITUATIONS": prompts_module.TAGS_SPECIAL_SITUATIONS,
-            "LISTA_RELEVANCIA_HIERARQUICA": prompts_module.LISTA_RELEVANCIA_HIERARQUICA,
+            "TAGS_SPECIAL_SITUATIONS": getattr(prompts_module, "TAGS_SPECIAL_SITUATIONS", {}),
+            # Mantido apenas por compatibilidade; pode não existir mais no arquivo:
+            "LISTA_RELEVANCIA_HIERARQUICA": getattr(prompts_module, "LISTA_RELEVANCIA_HIERARQUICA", {}),
+            # Novas listas editáveis para o Gatekeeper
+            "P1_ITENS": getattr(prompts_module, "P1_ITENS", []),
+            "P2_ITENS": getattr(prompts_module, "P2_ITENS", []),
+            "P3_ITENS": getattr(prompts_module, "P3_ITENS", []),
             "PROMPT_EXTRACAO_PERMISSIVO_V8": getattr(prompts_module, "PROMPT_EXTRACAO_PERMISSIVO_V8", ""),
             "PROMPT_AGRUPAMENTO_V1": prompt_agrup,
             "PROMPT_RESUMO_CRITICO_V1": getattr(prompts_module, "PROMPT_RESUMO_CRITICO_V1", ""),
@@ -2775,15 +2780,32 @@ async def update_prompts_settings(
             content = re.sub(pattern, replacement, content, flags=re.DOTALL)
         
         if "LISTA_RELEVANCIA_HIERARQUICA" in dados and isinstance(dados["LISTA_RELEVANCIA_HIERARQUICA"], dict):
-            # Converte o dicionário para string Python
-            import json
+            import json, re
             relevancia_str = json.dumps(dados["LISTA_RELEVANCIA_HIERARQUICA"], indent=4, ensure_ascii=False)
-            # Mantemos aspas duplas para preservar JSON válido dentro do Python
-            
-            # Substitui a variável no arquivo
-            import re
-            pattern = r'LISTA_RELEVANCIA_HIERARQUICA\s*=\s*\{.*?\n\}'
+            pattern = r'LISTA_RELEVANCIA_HIERARQUICA\s*=\s*\{[\s\S]*?\}'
             replacement = f'LISTA_RELEVANCIA_HIERARQUICA = {relevancia_str}'
+            content = re.sub(pattern, replacement, content, flags=re.DOTALL)
+
+        # Novas listas editáveis para o Gatekeeper
+        if "P1_ITENS" in dados and isinstance(dados["P1_ITENS"], list):
+            import json, re
+            p1_str = json.dumps(dados["P1_ITENS"], indent=4, ensure_ascii=False)
+            pattern = r'P1_ITENS\s*=\s*\[[\s\S]*?\]'
+            replacement = f'P1_ITENS = {p1_str}'
+            content = re.sub(pattern, replacement, content, flags=re.DOTALL)
+
+        if "P2_ITENS" in dados and isinstance(dados["P2_ITENS"], list):
+            import json, re
+            p2_str = json.dumps(dados["P2_ITENS"], indent=4, ensure_ascii=False)
+            pattern = r'P2_ITENS\s*=\s*\[[\s\S]*?\]'
+            replacement = f'P2_ITENS = {p2_str}'
+            content = re.sub(pattern, replacement, content, flags=re.DOTALL)
+
+        if "P3_ITENS" in dados and isinstance(dados["P3_ITENS"], list):
+            import json, re
+            p3_str = json.dumps(dados["P3_ITENS"], indent=4, ensure_ascii=False)
+            pattern = r'P3_ITENS\s*=\s*\[[\s\S]*?\]'
+            replacement = f'P3_ITENS = {p3_str}'
             content = re.sub(pattern, replacement, content, flags=re.DOTALL)
         
         if "PROMPT_EXTRACAO_PERMISSIVO_V8" in dados and isinstance(dados["PROMPT_EXTRACAO_PERMISSIVO_V8"], str):

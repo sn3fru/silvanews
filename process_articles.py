@@ -57,7 +57,7 @@ load_dotenv(env_file)
 print(f"SUCESSO: Arquivo .env carregado: {env_file}")
 
 # Configuração de lotes para evitar truncamento
-BATCH_SIZE_AGRUPAMENTO = 150  # Lote maior para aumentar consolidação por fato
+BATCH_SIZE_AGRUPAMENTO = 150  # Mais conservador para garantir respostas completas do LLM
 
 # Configuração do Gemini
 api_key = os.getenv("GEMINI_API_KEY")
@@ -71,86 +71,153 @@ print("SUCESSO: Gemini configurado com sucesso!")
 
 def extrair_json_da_resposta(resposta: str) -> Any:
     """
-    Extrai e decodifica um objeto JSON de uma string de resposta do LLM,
-    com um fluxo de tentativas robusto e simplificado.
+    Extrai e repara JSON de forma robusta a partir da resposta do LLM.
+    Inclui sanitização de strings (aspas, quebras de linha) e fechamento
+    balanceado de colchetes/chaves quando possível. Mantém fallback por regex.
     """
     import json
     import re
+
+    def _extrair_bloco_json(texto: str) -> str:
+        match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', texto, re.DOTALL)
+        if match:
+            return match.group(1).strip()
+        # Sem bloco: pega a partir de '[' ou '{'
+        start_pos = texto.find('[')
+        if start_pos == -1:
+            start_pos = texto.find('{')
+        return texto[start_pos:].strip() if start_pos != -1 else ""
+
+    def _print_json_error_details(stage: str, text: str, err: Exception) -> None:
+        try:
+            import json as _json
+            if isinstance(err, _json.JSONDecodeError):
+                print(f"🧩 {stage}: {err.msg} (linha {err.lineno}, coluna {err.colno}, pos {err.pos})")
+                pos = err.pos
+                start = max(pos - 120, 0)
+                end = min(pos + 120, len(text))
+                trecho = text[start:end]
+                print("--- Trecho próximo ao erro ---")
+                print(trecho)
+                caret_pos = pos - start
+                if 0 <= caret_pos <= len(trecho):
+                    print(" " * max(caret_pos, 0) + "^")
+                if 0 <= pos < len(text):
+                    ch = text[pos]
+                    print(f"Caractere no erro: '{ch}' (ord={ord(ch)})")
+                print("------------------------------")
+        except Exception as _:
+            pass
+
+    def _sanitizar_json_like(json_like: str) -> str:
+        # Remove backticks residuais e caracteres de controle invisíveis
+        json_like = json_like.replace('```', '')
+        json_like = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', json_like)
+
+        # Passo estado: escapa quebras de linha CR/LF dentro de strings
+        resultado = []
+        in_str = False
+        backslash_run = 0
+        for ch in json_like:
+            if in_str:
+                if ch == '"' and backslash_run % 2 == 0:
+                    in_str = False
+                    resultado.append(ch)
+                    backslash_run = 0
+                    continue
+                if ch == '\n':
+                    # já é escape literal
+                    resultado.append(ch)
+                elif ch == '\r':
+                    resultado.append('\\r')
+                elif ch == '\n':
+                    resultado.append('\\n')
+                elif ch in ['\n', '\r']:
+                    # segurança extra (ambiente pode entregar real newline)
+                    if ch == '\n':
+                        resultado.append('\\n')
+                    else:
+                        resultado.append('\\r')
+                else:
+                    # Acumula o char
+                    resultado.append(ch)
+                backslash_run = backslash_run + 1 if ch == '\\' else 0
+            else:
+                if ch == '"' and backslash_run % 2 == 0:
+                    in_str = True
+                if ch not in ['\x00', '\x0b', '\x0c']:
+                    resultado.append(ch)
+                backslash_run = backslash_run + 1 if ch == '\\' else 0
+        sanitizado = ''.join(resultado)
+
+        # Remove vírgulas finais antes de ']' ou '}'
+        sanitizado = re.sub(r',\s*([}\]])', r'\1', sanitizado)
+
+        # Balanceamento simples de colchetes/chaves
+        def _balancear(s: str, abre: str, fecha: str) -> str:
+            dif = s.count(abre) - s.count(fecha)
+            if dif > 0:
+                s += fecha * dif
+            return s
+        sanitizado = _balancear(sanitizado, '[', ']')
+        sanitizado = _balancear(sanitizado, '{', '}')
+        return sanitizado
 
     if not isinstance(resposta, str) or not resposta.strip():
         print("❌ ERRO: Resposta da API está vazia.")
         return None
 
     print(f"🔍 Processando resposta de {len(resposta)} caracteres...")
-    
-    json_str = ""
-    # Tenta extrair de um bloco de código markdown primeiro, que é o formato mais confiável.
-    match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', resposta, re.DOTALL)
-    if match:
-        json_str = match.group(1).strip()
-        print(f"📋 JSON extraído de bloco de código: {len(json_str)} caracteres")
-    else:
-        # Se não houver bloco de código, busca pelo início de um objeto ou array.
-        start_pos = resposta.find('[')
-        if start_pos == -1:
-            start_pos = resposta.find('{')
-        
-        if start_pos != -1:
-            json_str = resposta[start_pos:].strip()
-            print(f"📋 JSON extraído por marcador de início: {len(json_str)} caracteres")
-        else:
-            print("❌ ERRO: Nenhum marcador de início de JSON ('[' ou '{') encontrado na resposta.")
-            return None
 
-    # --- FLUXO DE TENTATIVAS DE PARSING ---
+    bruto = _extrair_bloco_json(resposta)
+    if not bruto:
+        print("❌ ERRO: Nenhum marcador de início de JSON ('[' ou '{') encontrado na resposta.")
+        return None
 
-    # TENTATIVA 1: Parse Direto
+    # 1) Parse direto
     try:
-        return json.loads(json_str)
+        return json.loads(bruto)
     except json.JSONDecodeError as e:
-        print(f"⚠️ Falha na Tentativa 1 (Parse Direto): {e}")
+        _print_json_error_details("Falha na Tentativa 1 (Parse Direto)", bruto, e)
 
-    # TENTATIVA 2: Extrair a Parte Válida (para JSONs truncados)
-    json_parcial = extrair_json_valido(json_str)
-    if json_parcial:
-        print(f"🔧 Tentativa 2 (Extração Parcial) obteve um JSON de {len(json_parcial)} caracteres.")
-        try:
-            return json.loads(json_parcial)
-        except json.JSONDecodeError as e:
-            print(f"⚠️ Falha na Tentativa 2 mesmo após extração parcial: {e}")
+    # 2) Sanitização agressiva
+    reparado = _sanitizar_json_like(bruto)
+    try:
+        return json.loads(reparado)
+    except json.JSONDecodeError as e:
+        _print_json_error_details("Falha após sanitização", reparado, e)
 
-    # TENTATIVA 3: Correção de Strings (como último recurso)
-    json_corrigido = corrigir_json_strings(json_str)
-    if json_corrigido != json_str:
-        print(f"🔧 Tentativa 3 (Correção de Strings) alterou o JSON para {len(json_corrigido)} caracteres.")
-        try:
-            return json.loads(json_corrigido)
-        except json.JSONDecodeError as e:
-            print(f"⚠️ Falha na Tentativa 3 mesmo após correção: {e}")
+    # 3) Corte no último fechamento válido
+    try:
+        last_close = max(reparado.rfind('}'), reparado.rfind(']'))
+        if last_close != -1:
+            truncado = reparado[:last_close + 1]
+            # Fecha array se foi iniciado como array
+            if truncado.strip().startswith('[') and truncado.strip().count('[') > truncado.strip().count(']'):
+                truncado += ']'
+            return json.loads(truncado)
+    except json.JSONDecodeError as e:
+        _print_json_error_details("Falha no parse truncado", truncado if 'truncado' in locals() else reparado, e)
 
     print("❌ ERRO FINAL: Todas as tentativas de extrair um JSON válido falharam.")
     print(f"📋 Primeiros 500 caracteres da resposta problemática: {resposta[:500]}...")
+
+    # 4) Fallback mínimo por regex (prioridade/tag)
+    fallback = extrair_campos_minimos_por_regex(resposta)
+    if fallback is not None:
+        print("🔁 Fallback: Extração mínima via regex aplicada com sucesso.")
+        return fallback
+
     return None
 
 def corrigir_json_strings(json_str: str) -> str:
-    """
-    Realiza correções básicas e seguras em uma string JSON.
-    O foco é remover caracteres inválidos e garantir que o escape de aspas
-    seja consistente, sem tentar adivinhar o conteúdo de strings truncadas.
-    """
     import re
-    
-    # 1. Remove caracteres de controle ASCII, exceto os comuns como \n, \r, \t.
-    # Isso limpa "lixo" invisível que quebra o parser.
     json_corrigido = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', json_str)
-    
-    # 2. Garante que barras invertidas que não são parte de uma sequência de escape válida
-    # sejam escapadas. Ex: "caminho\no_arquivo" -> "caminho\\no_arquivo"
-    # Isso evita erros de "invalid escape sequence".
-    # A expressão (?!["\\/bfnrtu]) é um "negative lookahead", garantindo que não vamos
-    # escapar barras que já fazem parte de uma sequência válida.
     json_corrigido = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', json_corrigido)
-    
+    # Escapa quebras de linha não escapadas
+    json_corrigido = json_corrigido.replace('\r\n', '\\n').replace('\n', '\\n').replace('\r', '\\r')
+    # Remove vírgulas finais inválidas
+    json_corrigido = re.sub(r',\s*([}\]])', r'\1', json_corrigido)
     return json_corrigido
 
 def extrair_json_valido(json_str: str) -> str:
@@ -178,6 +245,211 @@ def extrair_json_valido(json_str: str) -> str:
     # Se não encontrou '},', pode ser um JSON com um único objeto ou já válido.
     # Como fallback, retorna None, pois a extração falhou em encontrar um ponto de corte seguro.
     return None
+
+def extrair_campos_minimos_por_regex(resposta: str) -> Optional[list]:
+    """
+    Fallback robusto para quando o modelo retorna um JSON malformado.
+    Extrai apenas os campos essenciais para o pipeline continuar: 'prioridade' e 'tag'.
+    Retorna uma lista com um único dicionário no mesmo formato esperado pela pipeline
+    de classificação ou None se não conseguir extrair com confiança.
+    """
+    try:
+        import re
+        # 1) Tenta extrair prioridade no formato JSON explícito
+        m_prior = re.search(r'"prioridade"\s*:\s*"([^"]+)"', resposta, re.IGNORECASE)
+        prioridade = None
+        if m_prior:
+            prioridade = m_prior.group(1).strip()
+        else:
+            # 2) Se não houver chave explícita, procura pelos valores canônicos no texto
+            prioridades_validas = [
+                'P1_CRITICO', 'P2_ESTRATEGICO', 'P3_MONITORAMENTO', 'IRRELEVANTE'
+            ]
+            for p in prioridades_validas:
+                if re.search(rf'\b{re.escape(p)}\b', resposta):
+                    prioridade = p
+                    break
+
+        # 3) Tenta extrair tag no formato JSON explícito
+        m_tag = re.search(r'"tag"\s*:\s*"([^"]+)"', resposta, re.IGNORECASE)
+        tag_extraida = m_tag.group(1).strip() if m_tag else None
+
+        # 4) Se não encontrou tag explícita, faz heurística pelas tags conhecidas
+        if not tag_extraida:
+            try:
+                from backend.prompts import TAGS_SPECIAL_SITUATIONS
+                tags_canonicas = list(TAGS_SPECIAL_SITUATIONS.keys())
+                mapa_lower_para_canonica = {t.lower(): t for t in tags_canonicas}
+                # Procura por qualquer citação exata de tag entre aspas
+                m_tag_texto = re.search(r'"(M&A e Transações Corporativas|Jurídico, Falências e Regulatório|Dívida Ativa e Créditos Públicos|Distressed Assets e NPLs|Mercado de Capitais e Finanças Corporativas|Política Econômica \(Brasil\)|Internacional \(Economia e Política\)|Tecnologia e Setores Estratégicos|Divulgação de Resultados)"', resposta)
+                if m_tag_texto:
+                    bruto = m_tag_texto.group(1)
+                    tag_extraida = mapa_lower_para_canonica.get(bruto.lower(), bruto)
+            except Exception:
+                pass
+
+        if not prioridade:
+            return None
+
+        # Normaliza prioridade com utilitário do pipeline
+        prioridade = corrigir_prioridade_invalida(prioridade)
+        if prioridade == 'IRRELEVANTE':
+            # Mantém sem tag em caso de irrelevante
+            item = {"prioridade": prioridade, "tag": 'IRRELEVANTE'}
+            return [item]
+
+        # Se ainda sem tag, aplica fallback seguro
+        if not tag_extraida:
+            tag_extraida = 'Internacional (Economia e Política)'
+
+        item = {
+            "prioridade": prioridade,
+            "tag": tag_extraida
+        }
+        return [item]
+    except Exception:
+        return None
+
+def extrair_grupos_agrupamento_seguro(resposta: str) -> Optional[List[Dict[str, Any]]]:
+    """
+    Extrai grupos de agrupamento de forma tolerante a erros para ETAPA 2 (agrupamento em lote).
+    1) Tenta via extrair_json_da_resposta (JSON completo válido)
+    2) Fallback: usa regex para capturar blocos com "tema_principal" e "ids_originais"
+       mesmo se o JSON estiver truncado/quebrado. Deduplica temas e normaliza ids.
+    Retorna lista de objetos {"tema_principal": str, "ids_originais": [int, ...]} ou None.
+    """
+    try:
+        bruto = extrair_json_da_resposta(resposta)
+        if isinstance(bruto, list):
+            return bruto
+
+        import re
+        grupos_map: Dict[str, set] = {}
+
+        padrao = re.compile(
+            r"\{\s*\"tema_principal\"\s*:\s*\"(.*?)\"\s*,\s*\"ids_originais\"\s*:\s*\[([\s\S]*?)\]\s*\}",
+            re.DOTALL | re.IGNORECASE,
+        )
+        encontrados = list(padrao.finditer(resposta))
+
+        for m in encontrados:
+            tema = (m.group(1) or "").strip()
+            ids_str = m.group(2) or ""
+            if not tema:
+                continue
+            # Extrai inteiros da lista, tolerando espaços e vírgulas finais
+            ids = []
+            for token in re.split(r"[,\s]+", ids_str.strip()):
+                if not token:
+                    continue
+                try:
+                    # Remove possíveis sufixos indesejados (e.g., '270]}' em truncamentos)
+                    token_limpo = re.sub(r"[^0-9-]", "", token)
+                    if token_limpo:
+                        ids.append(int(token_limpo))
+                except Exception:
+                    continue
+            if not ids:
+                continue
+            if tema not in grupos_map:
+                grupos_map[tema] = set()
+            grupos_map[tema].update(ids)
+
+        # Passo 2: Fallback ainda mais tolerante (tema + ids próximos, mesmo sem colchete de fechamento)
+        if not grupos_map:
+            try:
+                tema_iter = re.finditer(r'"tema_principal"\s*:\s*"([^"]+)"', resposta, re.IGNORECASE)
+                for tmatch in tema_iter:
+                    tema = (tmatch.group(1) or "").strip()
+                    if not tema:
+                        continue
+                    start = tmatch.end()
+                    window = resposta[start:start + 800]
+                    ids_m = re.search(r'"ids_originais"\s*:\s*\[([^\]]*)', window, re.IGNORECASE | re.DOTALL)
+                    ids = []
+                    if ids_m:
+                        raw_ids = ids_m.group(1) or ""
+                        for token in re.split(r"[,\s]+", raw_ids.strip()):
+                            if not token:
+                                continue
+                            token_limpo = re.sub(r"[^0-9-]", "", token)
+                            if token_limpo:
+                                try:
+                                    ids.append(int(token_limpo))
+                                except Exception:
+                                    pass
+                    if ids:
+                        if tema not in grupos_map:
+                            grupos_map[tema] = set()
+                        grupos_map[tema].update(ids)
+            except Exception:
+                pass
+
+        if not grupos_map:
+            return None
+
+        grupos = [
+            {"tema_principal": tema, "ids_originais": sorted(list(ids_set))}
+            for tema, ids_set in grupos_map.items()
+        ]
+
+        print(f"🔁 Fallback agrupamento: recuperados {len(grupos)} grupos via regex seguro")
+        return grupos
+    except Exception as e:
+        print(f"❌ ERRO: Fallback de extração de grupos falhou: {e}")
+        return None
+
+def extrair_classificacoes_incremental_seguro(resposta: str) -> Optional[List[Dict[str, Any]]]:
+    """
+    Extrai classificações do modo incremental (ETAPA 2 incremental) de forma tolerante a erros.
+    Estrutura alvo por item:
+      { "tipo": "anexar"|"novo_cluster", "noticia_id": int, "cluster_id_existente"?: int, "tema_principal"?: str }
+
+    1) Tenta via extrair_json_da_resposta.
+    2) Fallback: captura blocos com "tipo" usando regex e extrai campos essenciais.
+    """
+    try:
+        bruto = extrair_json_da_resposta(resposta)
+        if isinstance(bruto, list):
+            return bruto
+
+        import re
+
+        resultados: List[Dict[str, Any]] = []
+        # Captura objetos rasos contendo a chave "tipo"
+        obj_pattern = re.compile(r"\{[^{}]*\"tipo\"\s*:\s*\"(anexar|novo_cluster)\"[^{}]*\}", re.IGNORECASE | re.DOTALL)
+        for m in obj_pattern.finditer(resposta):
+            bloco = m.group(0)
+
+            tipo_m = re.search(r'\"tipo\"\s*:\s*\"(anexar|novo_cluster)\"', bloco, re.IGNORECASE)
+            noticia_m = re.search(r'\"noticia_id\"\s*:\s*(\d+)', bloco)
+            cluster_m = re.search(r'\"cluster_id_existente\"\s*:\s*(\d+)', bloco)
+            tema_m = re.search(r'\"tema_principal\"\s*:\s*\"(.*?)\"', bloco, re.IGNORECASE | re.DOTALL)
+
+            if not tipo_m or not noticia_m:
+                continue
+
+            item: Dict[str, Any] = {
+                "tipo": tipo_m.group(1).lower(),
+                "noticia_id": int(noticia_m.group(1)),
+            }
+            if cluster_m:
+                try:
+                    item["cluster_id_existente"] = int(cluster_m.group(1))
+                except Exception:
+                    pass
+            if tema_m:
+                item["tema_principal"] = (tema_m.group(1) or "").strip()
+
+            resultados.append(item)
+
+        if resultados:
+            print(f"🔁 Fallback incremental: recuperadas {len(resultados)} classificações via regex seguro")
+            return resultados
+        return None
+    except Exception as e:
+        print(f"❌ ERRO: Fallback incremental falhou: {e}")
+        return None
 
 def processar_artigos_pendentes(limite: int = 10) -> bool:
     """
@@ -266,8 +538,8 @@ def processar_artigos_pendentes(limite: int = 10) -> bool:
         
         for cluster in clusters_hoje:
             cid = cluster.id
-            titulo_tmp = cluster.titulo_cluster
-            print(f"  📝 Processando cluster {cid}: '{titulo_tmp}'")
+            titulo_tmp = (cluster.titulo_cluster or "").replace("\n", " ").strip()[:100]
+            print(f"📝 Cluster {cid}: '{titulo_tmp}'")
             
             # Classifica o cluster usando prompts do prompts.py
             if classificar_e_resumir_cluster(db, cid, client):
@@ -376,162 +648,107 @@ def marcar_cluster_irrelevante(db: Session, cluster_id: int, debug: bool = True)
 
 def classificar_e_resumir_cluster(db: Session, cluster_id: int, client, debug: bool = True) -> bool:
     """
-    Classifica e resume um cluster usando os prompts do prompts.py.
-    Esta função usa o PROMPT_EXTRACAO_PERMISSIVO_V8 para classificar o cluster
-    e depois gera o resumo apropriado baseado na prioridade.
+    Classifica e resume um cluster com lógica de retentativa robusta:
+    - Tentativa 1: artigo âncora + títulos
+    - Tentativa 2: apenas títulos (super leve)
+    - Falha geral: marca como P3_REVISAR (erro controlado)
     """
     try:
+        from backend.prompts import PROMPT_EXTRACAO_GATEKEEPER_V13 as _PROMPT
+
         cluster = get_cluster_by_id(db, cluster_id)
-        if not cluster:
-            if debug:
-                print(f"    ❌ DEBUG: Cluster {cluster_id} não encontrado")
-            return False
-        
         artigos = get_artigos_by_cluster(db, cluster_id)
-        if not artigos:
-            if debug:
-                print(f"    ❌ DEBUG: Nenhum artigo encontrado para cluster {cluster_id}")
+        if not cluster or not artigos:
             return False
-        
-        if debug:
-            print(f"    🔍 DEBUG: Cluster {cluster_id} tem {len(artigos)} artigos")
-        
-        # Coleta todos os textos dos artigos para análise
-        textos = []
+
+        print(f"[Cluster {cluster_id}] {len(artigos)} notícias")
+        vistos = set()
         for i, artigo in enumerate(artigos):
-            if artigo.texto_processado:
-                texto_artigo = f"FONTE: {artigo.jornal or 'Desconhecida'}\n{artigo.texto_processado}"
-                textos.append(texto_artigo)
+            titulo_base = (artigo.titulo_extraido or artigo.texto_processado or "").replace("\n", " ").strip()[:100]
+            if titulo_base and titulo_base not in vistos:
+                vistos.add(titulo_base)
+                print(f"  - {i+1}. {titulo_base}")
+
+        # Preparos
+        artigo_ancora = max(artigos, key=lambda a: len(a.texto_processado or ""))
+        outros_titulos = [f"- {a.titulo_extraido or 'N/A'} (Fonte: {a.jornal or 'N/A'})" for a in artigos if a.id != artigo_ancora.id]
+
+        def _chamar(prompt: str, max_tokens: int = 2048):
+            return client.generate_content(prompt, generation_config={'temperature': 0.1, 'top_p': 0.9, 'max_output_tokens': max_tokens})
+
+        # Tentativa 1: âncora + títulos
+        try:
+            texto_anchor = (artigo_ancora.texto_processado or "")
+            bloco = f"ARTIGO PRINCIPAL:\nTítulo: {artigo_ancora.titulo_extraido or 'N/A'}\nFonte: {artigo_ancora.jornal or 'N/A'}\nTexto: {texto_anchor}\n\nTITULOS ADICIONAIS DO MESMO GRUPO:\n" + ("\n".join(outros_titulos) if outros_titulos else "Nenhum")
+            prompt_1 = f"{_PROMPT}\n\nNOTÍCIA PARA ANÁLISE:\n{bloco}"
+            if debug:
+                print(f"    🤖 Tentativa 1 (âncora+títulos) len={len(prompt_1)}")
+            resp1 = _chamar(prompt_1, max_tokens=4096)
+            resultado = extrair_json_da_resposta(resp1.text or "")
+        except Exception as e1:
+            if debug:
+                print(f"    ⚠️ Tentativa 1 falhou: {e1}")
+            resultado = None
+
+        # Tentativa 2: apenas títulos
+        if not resultado or (isinstance(resultado, list) and len(resultado) == 0):
+            try:
+                titulos_todos = [f"- {a.titulo_extraido or 'N/A'} (Fonte: {a.jornal or 'N/A'})" for a in artigos]
+                bloco2 = "TÍTULOS DAS NOTÍCIAS DO GRUPO:\n" + "\n".join(titulos_todos)
+                prompt_2 = f"{_PROMPT}\n\nNOTÍCIA PARA ANÁLISE (APENAS TÍTULOS):\n{bloco2}"
                 if debug:
-                    print(f"    📄 DEBUG: Artigo {i+1}: {artigo.titulo_extraido or 'Sem título'}")
-                    print(f"    📄 DEBUG: Texto: {artigo.texto_processado[:100]}...")
-        
-        texto_completo = "\n\n".join(textos)
-        
+                    print(f"    🤖 Tentativa 2 (títulos) len={len(prompt_2)}")
+                resp2 = _chamar(prompt_2, max_tokens=2048)
+                resultado = extrair_json_da_resposta(resp2.text or "")
+            except Exception as e2:
+                if debug:
+                    print(f"    ❌ Tentativa 2 falhou: {e2}")
+                return marcar_cluster_como_erro(db, cluster_id, "Falha em ambas as tentativas de classificação")
+
         if debug:
-            print(f"    📝 DEBUG: Texto completo para análise ({len(texto_completo)} chars):")
-            print(f"    {'='*50}")
-            print(texto_completo[:500] + "..." if len(texto_completo) > 500 else texto_completo)
-            print(f"    {'='*50}")
-        
-        # Usa o prompt de extração para classificar o cluster
-        from backend.prompts import PROMPT_EXTRACAO_PERMISSIVO_V8
-        
-        prompt_classificacao = f"""
-        {PROMPT_EXTRACAO_PERMISSIVO_V8}
-        
-        NOTÍCIA PARA ANÁLISE:
-        {texto_completo}
-        
-        Analise esta notícia e retorne a classificação conforme o guia acima.
-        """
-        
-        if debug:
-            print(f"    🤖 DEBUG: Enviando prompt para Gemini...")
-            print(f"    🤖 DEBUG: Tamanho do prompt: {len(prompt_classificacao)} chars")
-            print(f"    🤖 DEBUG: Primeiros 300 chars do prompt:")
-            print(f"    {'='*50}")
-            print(prompt_classificacao[:300] + "...")
-            print(f"    {'='*50}")
-        
-        response = client.generate_content(
-            prompt_classificacao,
-            generation_config={
-                'temperature': 0.3,
-                'top_p': 0.9,
-                'max_output_tokens': 1024
-            }
-        )
-        
-        if not response.text:
-            if debug:
-                print(f"    ❌ DEBUG: API retornou resposta vazia para cluster {cluster_id}")
-            return False
-        
-        if debug:
-            print(f"    🤖 DEBUG: Resposta do Gemini ({len(response.text)} chars):")
-            print(f"    {'='*50}")
-            print(response.text)
-            print(f"    {'='*50}")
-        
-        # Extrai JSON da resposta
-        resultado = extrair_json_da_resposta(response.text)
-        
-        if debug:
-            print(f"    🔍 DEBUG: Resultado extraído: {resultado}")
-        
-        # PRIMEIRO, verifica se a resposta é uma lista vazia, que significa "irrelevante"
+            if isinstance(resultado, list):
+                if len(resultado) > 0 and isinstance(resultado[0], dict):
+                    _t = (resultado[0].get('titulo') or '')[:140]
+                    _rr = (resultado[0].get('relevance_reason') or '')[:200]
+                    print(f"    🔍 Extração OK: titulo='{_t}' | relevance_reason='{_rr}'")
+                else:
+                    print("    🔍 Extração: lista vazia")
+            else:
+                print(f"    🔍 Extração: tipo inválido ({type(resultado)})")
+
         if isinstance(resultado, list) and len(resultado) == 0:
-            if debug:
-                print(f"    🚫 DEBUG: Notícia irrelevante detectada (API retornou lista vazia)")
             return marcar_cluster_irrelevante(db, cluster_id, debug)
-        
-        # DEPOIS, continua com a validação original para outros tipos de erro
-        if not resultado or not isinstance(resultado, list):
-            if debug:
-                print(f"    ❌ DEBUG: Resposta inválida para cluster {cluster_id}")
-                print(f"    ❌ DEBUG: Tipo do resultado: {type(resultado)}")
-                print(f"    ❌ DEBUG: Conteúdo: {resultado}")
-            return False
-        
-        # Pega o primeiro resultado (deveria ser só um)
+        if not resultado or not isinstance(resultado, list) or not resultado[0]:
+            return marcar_cluster_como_erro(db, cluster_id, "Resposta final inválida")
+
         classificacao = resultado[0]
-        
-        if debug:
-            print(f"    ✅ DEBUG: Classificação extraída: {classificacao}")
-        
-        # Atualiza o cluster com a classificação
-        prioridade_original = cluster.prioridade
-        tag_original = cluster.tag
+        faltando = [k for k in ("titulo", "prioridade", "tag") if not classificacao.get(k)]
+        if faltando:
+            print(f"  ⚠️ Campos ausentes no resultado: {', '.join(faltando)}")
 
         prioridade_sugerida = corrigir_prioridade_invalida(classificacao.get('prioridade'))
-        # Se a prioridade for irrelevante por invalidez, marca cluster como irrelevante e encerra
         if prioridade_sugerida == 'IRRELEVANTE':
-            if debug:
-                print(f"    🚫 DEBUG: Prioridade inválida/ausente detectada. Marcando cluster {cluster_id} como IRRELEVANTE")
             return marcar_cluster_irrelevante(db, cluster_id, debug)
 
         cluster.prioridade = prioridade_sugerida
         cluster.tag = mapear_tag_prompt_para_modelo(classificacao.get('tag', 'Sem categoria'))
-        
-        if debug:
-            print(f"    🔄 DEBUG: Prioridade: {prioridade_original} → {cluster.prioridade}")
-            print(f"    🔄 DEBUG: Tag: {tag_original} → {cluster.tag}")
-        
-        # Gera resumo baseado na prioridade usando função unificada
-        prioridade = cluster.prioridade
-        
-        # Mapeia prioridade para nível de detalhe
+        print(f"  => Classificação: {cluster.prioridade} | Tag: {cluster.tag}")
+
         mapa_niveis = {
             'P1_CRITICO': 'Executivo (P1_CRITICO)',
             'P2_ESTRATEGICO': 'Padrão (P2_ESTRATEGICO)',
             'P3_MONITORAMENTO': 'Conciso (P3_MONITORAMENTO)'
         }
-        
-        nivel_detalhe = mapa_niveis.get(prioridade)
-        if nivel_detalhe:
-            if debug:
-                print(f"    📝 DEBUG: Gerando resumo {prioridade} com nível {nivel_detalhe}...")
-            
-            if gerar_resumo_unificado(db, cluster_id, client, nivel_detalhe):
-                print(f"    📝 {prioridade}: Resumo gerado com sucesso")
-            else:
-                print(f"    ❌ Falha ao gerar resumo {prioridade}")
-                return False
+        nivel_detalhe = mapa_niveis.get(cluster.prioridade, 'Conciso (P3_MONITORAMENTO)')
+        if gerar_resumo_unificado(db, cluster_id, client, nivel_detalhe):
+            print(f"    📝 {cluster.prioridade}: Resumo gerado com sucesso")
         else:
-            # Se cair aqui, algo saiu do esperado; reforça salvamento com prioridade válida
-            cluster.prioridade = corrigir_prioridade_invalida(prioridade)
-            if debug:
-                print(f"    ⚠️ DEBUG: Prioridade {prioridade} não mapeada. Normalizada para {cluster.prioridade}")
-        
-        # Salva as mudanças
+            print(f"    ❌ Falha ao gerar resumo {cluster.prioridade}")
+            # Mantém classificação mesmo sem resumo
+
         db.commit()
-        
-        if debug:
-            print(f"    ✅ DEBUG: Cluster {cluster_id} salvo com sucesso")
-        
         return True
-        
+
     except Exception as e:
         print(f"❌ ERRO: Falha ao classificar e resumir cluster {cluster_id}: {e}")
         try:
@@ -541,6 +758,25 @@ def classificar_e_resumir_cluster(db: Session, cluster_id: int, client, debug: b
         if debug:
             import traceback
             traceback.print_exc()
+        return marcar_cluster_como_erro(db, cluster_id, str(e))
+
+def marcar_cluster_como_erro(db: Session, cluster_id: int, motivo: str) -> bool:
+    try:
+        cluster = get_cluster_by_id(db, cluster_id)
+        if not cluster:
+            return False
+        cluster.prioridade = "P3_REVISAR"
+        cluster.tag = "ERRO"
+        cluster.resumo_cluster = f"Falha na classificação automática. Motivo: {motivo[:200]}"
+        db.commit()
+        print(f"  ⚠️ Cluster {cluster_id} marcado para revisão manual.")
+        return True
+    except Exception as e:
+        print(f"  ❌ Falha ao marcar cluster {cluster_id} como erro: {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
         return False
 
 def gerar_resumo_unificado(db: Session, cluster_id: int, client, nivel_detalhe: str) -> bool:
@@ -598,7 +834,7 @@ def gerar_resumo_unificado(db: Session, cluster_id: int, client, nivel_detalhe: 
         if not response.text:
             return False
         
-        # Extrai JSON da resposta
+        # Extrai JSON da resposta (robusto)
         resultado_json = extrair_json_da_resposta(response.text)
         
         if resultado_json and 'resumo_final' in resultado_json:
@@ -736,14 +972,14 @@ def agrupar_noticias_incremental(db: Session, client) -> bool:
             ClusterEvento.status == 'ativo'
         ).all()
         
-        print(f"🔗 AGRUPAMENTO INCREMENTAL: {len(artigos_novos)} artigos novos, {len(clusters_existentes)} clusters existentes")
+        print(f"🔗 AGRUPAMENTO INCREMENTAL: {len(artigos_novos)} notícias novas, {len(clusters_existentes)} clusters existentes")
         
         # Determina se precisa processar em lotes
-        TAMANHO_LOTE_MAXIMO = 150  # Máximo de notícias por lote (incremental mais abrangente)
+        TAMANHO_LOTE_MAXIMO = 200  # Máximo de notícias por lote (incremental mais abrangente)
         processar_em_lotes = len(artigos_novos) > TAMANHO_LOTE_MAXIMO
         
         if processar_em_lotes:
-            print(f"📦 PROCESSAMENTO EM LOTES: {len(artigos_novos)} notícias divididas em lotes de {TAMANHO_LOTE_MAXIMO}")
+            print(f"📦 Lotes: {len(artigos_novos)} notícias em blocos de {TAMANHO_LOTE_MAXIMO}")
             
             # Divide artigos em lotes
             lotes = [artigos_novos[i:i + TAMANHO_LOTE_MAXIMO] for i in range(0, len(artigos_novos), TAMANHO_LOTE_MAXIMO)]
@@ -752,7 +988,7 @@ def agrupar_noticias_incremental(db: Session, client) -> bool:
             total_novos_clusters = 0
             
             for i, lote in enumerate(lotes, 1):
-                print(f"\n📦 PROCESSANDO LOTE {i}/{len(lotes)} ({len(lote)} notícias)...")
+                print(f"\n📦 Lote {i}/{len(lotes)} ({len(lote)} notícias)")
                 
                 sucesso_lote = processar_lote_incremental(db, client, lote, clusters_existentes, i)
                 
@@ -760,12 +996,12 @@ def agrupar_noticias_incremental(db: Session, client) -> bool:
                     anexacoes, novos_clusters = sucesso_lote
                     total_anexacoes += anexacoes
                     total_novos_clusters += novos_clusters
-                    print(f"✅ LOTE {i} CONCLUIDO: {anexacoes} anexações, {novos_clusters} novos clusters")
+                    print(f"✅ Lote {i}: {anexacoes} anexações, {novos_clusters} novos clusters")
                 else:
-                    print(f"❌ LOTE {i} FALHOU")
+                    print(f"❌ Lote {i} falhou")
                     return False
             
-            print(f"🎉 AGRUPAMENTO INCREMENTAL CONCLUIDO: {total_anexacoes} anexações, {total_novos_clusters} novos clusters")
+            print(f"🎉 Incremental concluído: {total_anexacoes} anexações, {total_novos_clusters} novos clusters")
             
             # Marca artigos como "processado" após clusterização
             marcar_artigos_processados(db, artigos_novos)
@@ -840,8 +1076,7 @@ def processar_lote_incremental(db: Session, client, artigos_lote: List[ArtigoBru
             NOVAS_NOTICIAS=json.dumps(novas_noticias, indent=2, ensure_ascii=False),
             CLUSTERS_EXISTENTES=json.dumps(clusters_existentes_data, indent=2, ensure_ascii=False)
         )
-        
-        print(f"📤 ENVIANDO LOTE {numero_lote}: {len(novas_noticias)} notícias para análise incremental...")
+        print(f"📤 Enviando lote {numero_lote}: {len(novas_noticias)} notícias para análise...")
         
         # Chama a API para análise incremental
         try:
@@ -858,18 +1093,16 @@ def processar_lote_incremental(db: Session, client, artigos_lote: List[ArtigoBru
             if not response.text:
                 print("❌ ERRO: API retornou resposta vazia para agrupamento incremental")
                 return False
+            # Resposta detalhada desativada por padrão
             
-            print(f"📥 RESPOSTA RECEBIDA LOTE {numero_lote}: {len(response.text)} caracteres")
-            
-            # Extrai JSON da resposta
-            classificacoes = extrair_json_da_resposta(response.text)
+            # Extrai JSON da resposta (com fallback robusto)
+            classificacoes = extrair_classificacoes_incremental_seguro(response.text)
             
             if not classificacoes or not isinstance(classificacoes, list):
                 print("❌ ERRO: Resposta de agrupamento incremental inválida")
                 print(f"📋 Resposta recebida: {response.text[:500]}...")
                 return False
-            
-            print(f"✅ SUCESSO LOTE {numero_lote}: {len(classificacoes)} classificações recebidas")
+            print(f"✅ Lote {numero_lote}: {len(classificacoes)} classificações")
             
             # Processa cada classificação
             anexacoes = 0
@@ -894,7 +1127,9 @@ def processar_lote_incremental(db: Session, client, artigos_lote: List[ArtigoBru
                         if cluster_existente:
                             associate_artigo_to_cluster(db, artigo.id, cluster_existente.id)
                             anexacoes += 1
-                            print(f"  ✅ Anexado: '{artigo.titulo_extraido}' → Cluster {cluster_existente.id}")
+                            # Linha concisa, 100 chars
+                            tprev = (artigo.titulo_extraido or artigo.texto_processado or "").replace("\n"," ")[:100]
+                            print(f"  ✔ anexar: '{tprev}' → cluster {cluster_existente.id}")
                         else:
                             print(f"  ❌ Cluster {cluster_id_existente} não encontrado")
                     
@@ -920,7 +1155,8 @@ def processar_lote_incremental(db: Session, client, artigos_lote: List[ArtigoBru
                         cluster = create_cluster(db, cluster_data)
                         associate_artigo_to_cluster(db, artigo.id, cluster.id)
                         novos_clusters += 1
-                        print(f"  ✅ Novo Cluster: '{tema_principal}' com '{artigo.titulo_extraido}'")
+                        tprev = (artigo.titulo_extraido or artigo.texto_processado or "").replace("\n"," ")[:100]
+                        print(f"  ✚ novo-cluster: '{tema_principal[:100]}' com '{tprev}'")
                     
                     else:
                         print(f"  ⚠️ Tipo de classificação inválido: {tipo}")
@@ -958,7 +1194,7 @@ def agrupar_noticias_com_prompt(db: Session, client) -> bool:
             print("INFO: Nenhum artigo novo para agrupamento.")
             return True
         
-        print(f"🔗 INICIANDO AGRUPAMENTO: {len(artigos_para_agrupar)} artigos a serem processados em lotes de {BATCH_SIZE_AGRUPAMENTO}.")
+        print(f"🔗 INICIANDO AGRUPAMENTO: {len(artigos_para_agrupar)} em lotes de {BATCH_SIZE_AGRUPAMENTO}.")
         
         # Mapeamento de ID para artigo original para todo o conjunto
         mapa_id_para_artigo = {i: artigo for i, artigo in enumerate(artigos_para_agrupar)}
@@ -970,7 +1206,7 @@ def agrupar_noticias_com_prompt(db: Session, client) -> bool:
         artigos_agrupados_total = 0
 
         for num_lote, lote_artigos in enumerate(lotes, 1):
-            print(f"\n--- Processando Lote {num_lote}/{len(lotes)} ({len(lote_artigos)} artigos) ---")
+            print(f"\n--- Lote {num_lote}/{len(lotes)} ({len(lote_artigos)} artigos) ---")
             
             # Prepara dados apenas para o lote atual
             noticias_lote_para_prompt = []
@@ -1018,7 +1254,7 @@ IMPORTANTE: Retorne APENAS o JSON válido para este lote.
                 print(f"📥 RESPOSTA RECEBIDA para o Lote {num_lote}: {len(response.text)} caracteres")
                 
                 # Usa a nova função de extração robusta
-                grupos_brutos = extrair_json_da_resposta(response.text)
+                grupos_brutos = extrair_grupos_agrupamento_seguro(response.text)
                 
                 if not grupos_brutos or not isinstance(grupos_brutos, list):
                     print(f"❌ ERRO: Resposta de agrupamento inválida para o lote {num_lote}.")
@@ -1069,7 +1305,7 @@ IMPORTANTE: Retorne APENAS o JSON válido para este lote.
                             associate_artigo_to_cluster(db, artigo.id, cluster.id)
                             artigos_agrupados_total += 1
                         
-                        print(f"  ✅ Grupo: '{tema_principal}' - {len(artigos_do_grupo)} artigos")
+                        print(f"  ✅ Grupo: '{tema_principal[:100]}' - {len(artigos_do_grupo)} artigos")
                         
                     except Exception as e:
                         print(f"  ❌ Erro ao processar grupo no lote {num_lote}: {e}")
@@ -1252,7 +1488,7 @@ def processar_artigo_sem_cluster(db: Session, id_artigo: int, client) -> bool:
         
         # Se já tem dados estruturados (JSON), usa diretamente
         if metadados.get('titulo') and metadados.get('fonte_original'):
-            print(f"    📄 Artigo já estruturado, usando metadados existentes")
+            # sucesso silencioso: sem prints verbose
             
             # Migra tag antiga se necessário
             tag_original = metadados.get('tag', 'Economia e Tecnologia')
@@ -1271,8 +1507,7 @@ def processar_artigo_sem_cluster(db: Session, id_artigo: int, client) -> bool:
             }
             
         else:
-            # Para PDFs ou artigos sem estrutura, faz extração básica
-            print(f"    📄 Artigo sem estrutura, fazendo extração básica")
+            # Para PDFs ou artigos sem estrutura, faz extração básica (silencioso em sucesso)
 
             # Extração básica sem LLM
             linhas = artigo.texto_bruto.split('\n')
@@ -1280,7 +1515,8 @@ def processar_artigo_sem_cluster(db: Session, id_artigo: int, client) -> bool:
 
             # Pré-filtro de lixo publicitário (curto-circuito)
             if eh_lixo_publicitario(titulo, artigo.texto_bruto):
-                print("    🧹 Detectado conteúdo publicitário/lixo. Marcando artigo como irrelevante e pulando.")
+                prev = (titulo or "").replace("\n"," ")[:120]
+                print(f"    EXCLUIDO: LIXO_PUBLICITARIO (pré-migração) - '{prev}'")
                 update_artigo_status(db, id_artigo, 'irrelevante')
                 return True
 
@@ -1309,17 +1545,16 @@ def processar_artigo_sem_cluster(db: Session, id_artigo: int, client) -> bool:
         
         # Pré-filtro de lixo publicitário com dados migrados também (dupla checagem)
         if eh_lixo_publicitario(noticia_data.get('titulo'), noticia_data.get('texto_completo')):
-            print("    🧹 Detectado conteúdo publicitário/lixo (pós-migração). Marcando artigo como irrelevante.")
+            prev = (noticia_data.get('titulo') or "").replace("\n"," ")[:120]
+            print(f"    EXCLUIDO: LIXO_PUBLICITARIO (pós-migração) - '{prev}'")
             update_artigo_status(db, id_artigo, 'irrelevante')
             return True
 
         # ETAPA 3: Validação com Pydantic
         try:
-            print(f"    🔍 Validando dados com Pydantic...")
-            
             noticia_obj = Noticia(**noticia_data)
             noticia_validada = noticia_obj.model_dump()
-            print(f"    ✅ Validação Pydantic bem-sucedida")
+            # sucesso silencioso em validação
         except Exception as e:
             print(f"    ❌ Erro de validação Pydantic: {e}")
             create_log(db, "ERROR", "processor", 
@@ -1363,6 +1598,9 @@ def processar_artigo_sem_cluster(db: Session, id_artigo: int, client) -> bool:
         
         create_log(db, "INFO", "processor", 
                   f"Artigo {id_artigo} pronto para agrupamento")
+        # Sucesso mínimo: imprime apenas o título
+        titulo_ok = (noticia_validada['titulo'] or '').replace('\n',' ')[:140]
+        print(f"    OK: '{titulo_ok}'")
         return True
         
     except Exception as e:
