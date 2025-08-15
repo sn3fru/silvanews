@@ -695,6 +695,16 @@ hr { border: none; border-top: 1px solid var(--cor-borda); margin: 1.5rem 0; }
     align-self: flex-start;
 }
 
+/* Estilo do conteúdo em Markdown nas mensagens do Estagiário */
+.estagiario-msg.assistant h1 { font-size: 1.4rem; margin-top: 1rem; margin-bottom: .35rem; }
+.estagiario-msg.assistant h2 { font-size: 1.25rem; margin-top: .85rem; margin-bottom: .25rem; }
+.estagiario-msg.assistant h3 { font-size: 1.1rem; margin-top: .8rem; margin-bottom: .2rem; }
+.estagiario-msg.assistant p { margin: .15rem 0 .6rem 0; }
+.estagiario-msg.assistant ul { margin: .2rem 0 .6rem 1.25rem; }
+.estagiario-msg.assistant ol { margin: .2rem 0 .6rem 1.25rem; }
+.estagiario-msg.assistant li { margin: .15rem 0; }
+.estagiario-msg.assistant strong { font-weight: 700; }
+
 .message.system {
     background-color: #e3f2fd;
     color: #1976d2;

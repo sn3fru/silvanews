@@ -30,6 +30,7 @@ from backend.database import (
     SocialResearchJob,
 )
 from backend.utils import get_date_brasil_str
+from process_articles import processar_artigos_pendentes, priorizacao_executiva_final, consolidacao_final_clusters, client
 
 
 def resetar_artigos_hoje(db) -> int:
@@ -125,16 +126,31 @@ def reprocessar_hoje() -> None:
         qtd_clusters = remover_clusters_hoje(db)
         print(f"🗑️  Clusters removidos do dia: {qtd_clusters}")
 
-        # 3) Rodar pipeline completo com prompts atuais
-        print("🚀 Iniciando reprocessamento com prompts atuais...")
-        # Import tardio para carregar .env e configurar Gemini conforme process_articles.py
-        from process_articles import processar_artigos_pendentes
-
+        # 3) Rodar pipeline completo com prompts atuais (Etapas 1–3)
+        print("🚀 Iniciando reprocessamento (Etapas 1–3)...")
         sucesso = processar_artigos_pendentes(limite=999)
-        if sucesso:
-            print("🎉 Reprocessamento concluído com sucesso!")
+        if not sucesso:
+            print("❌ Reprocessamento falhou nas Etapas 1–3. Verifique os logs.")
+            return
+
+        # 4) Executar Etapa 4 (Priorização Executiva + Consolidação Final)
+        print("\n⚙️ Executando Etapa 4: Priorização Executiva + Consolidação Final...")
+        db4 = SessionLocal()
+        try:
+            ok_prio = priorizacao_executiva_final(db4, client)
+        finally:
+            db4.close()
+
+        db5 = SessionLocal()
+        try:
+            ok_cons = consolidacao_final_clusters(db5, client)
+        finally:
+            db5.close()
+
+        if ok_prio and ok_cons:
+            print("🎉 Reprocessamento concluído com sucesso (Etapas 1–4)!")
         else:
-            print("❌ Reprocessamento falhou. Verifique os logs acima.")
+            print("❌ Reprocessamento concluiu com falhas na Etapa 4. Verifique os logs.")
 
     finally:
         db.close()

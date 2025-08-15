@@ -49,6 +49,7 @@ from backend.processing import (
     processar_artigo_pipeline, gerar_resumo_cluster, find_or_create_cluster
 )
 from backend.prompts import PROMPT_AGRUPAMENTO_V1, PROMPT_RESUMO_FINAL_V3, PROMPT_PRIORIZACAO_EXECUTIVA_V1, TAGS_SPECIAL_SITUATIONS
+from backend.prompts import PROMPT_CONSOLIDACAO_CLUSTERS_V1
 from backend.utils import get_date_brasil_str, get_datetime_brasil_str, corrigir_tag_invalida, corrigir_prioridade_invalida, eh_lixo_publicitario
 
 # Carrega variáveis de ambiente
@@ -550,18 +551,14 @@ def processar_artigos_pendentes(limite: int = 10) -> bool:
         
         print(f"ETAPA 3 CONCLUIDA: Resumos gerados: {resumos_gerados}")
 
-        # ETAPA 4: Priorização Executiva Final (reclassificação rígida)
-        print(f"\nETAPA 4: Priorização Executiva Final...")
-        if priorizacao_executiva_final(db, client):
-            print("ETAPA 4 CONCLUIDA: Priorização executiva aplicada")
-        else:
-            print("ETAPA 4 FALHOU: Erro na priorização executiva")
+        # ETAPA 4 é executada externamente (no main ou por chamadores como reprocess_today)
+        print(f"\nETAPA 4: será executada pelo orquestrador (main) ou chamador externo.")
         
         # Resumo final
         print(f"\nPROCESSAMENTO CONCLUIDO:")
         print(f"  Artigos processados: {sucessos}")
         print(f"  Resumos gerados: {resumos_gerados}")
-        print(f"  Priorização executiva: concluída")
+        print(f"  Priorização executiva: delegada ao orquestrador")
         
         return True
         
@@ -872,81 +869,507 @@ def priorizacao_executiva_final(db: Session, client, debug: bool = True) -> bool
                 print("ℹ️ Priorização executiva: nenhum cluster ativo hoje")
             return True
 
-        itens_finais = []
-        id_map = {}
+        # Tenta ONE-SHOT com todos os itens e max de tokens; se falhar, faz fallback para lotes
+        itens_finais_all = []
+        id_map_all = {}
         for idx, c in enumerate(clusters_hoje):
-            itens_finais.append({
+            itens_finais_all.append({
                 "id": idx,
                 "cluster_id": c.id,
                 "titulo_final": c.titulo_cluster,
                 "prioridade_atribuida_inicial": c.prioridade,
                 "tag_atribuida_inicial": c.tag,
                 "score_inicial": None,
-                "resumo_final": (c.resumo_cluster or "")[:1200]
+                "resumo_final": (c.resumo_cluster or "")[:400]
             })
-            id_map[idx] = c.id
+            id_map_all[idx] = c.id
 
-        prompt = PROMPT_PRIORIZACAO_EXECUTIVA_V1.format(
-            ITENS_FINAIS=json.dumps(itens_finais, indent=2, ensure_ascii=False)
+        prompt_all = PROMPT_PRIORIZACAO_EXECUTIVA_V1.format(
+            ITENS_FINAIS=json.dumps(itens_finais_all, indent=2, ensure_ascii=False)
         )
 
         if debug:
-            print(f"🧮 DEBUG: Enviando priorização executiva para {len(itens_finais)} itens...")
+            print(f"🧮 DEBUG: Priorização one-shot para {len(itens_finais_all)} itens...")
 
-        response = client.generate_content(
-            prompt,
-            generation_config={
-                'temperature': 0.1,
-                'top_p': 0.8,
-                'max_output_tokens': 2048
-            }
-        )
-
-        if not response.text:
+        try:
+            resp_all = client.generate_content(
+                prompt_all,
+                generation_config={
+                    'temperature': 0.1,
+                    'top_p': 0.8,
+                    'max_output_tokens': 8192
+                }
+            )
+        except Exception as e:
             if debug:
-                print("❌ Priorização executiva: resposta vazia")
-            return False
+                print(f"❌ Priorização one-shot falhou na chamada: {e}")
+            resp_all = None
 
-        resultado = extrair_json_da_resposta(response.text)
-        if not isinstance(resultado, list):
+        if resp_all and resp_all.text:
             if debug:
-                print("❌ Priorização executiva: formato inválido")
-            return False
+                prev = resp_all.text[:500].replace('\n', ' ')
+                print(f"📥 Priorização one-shot (prev 500): {prev}")
+            resultado_all = extrair_json_da_resposta(resp_all.text)
+            if not isinstance(resultado_all, list) or len(resultado_all) == 0:
+                resultado_all = extrair_priorizacao_executiva_seguro(resp_all.text)
+            # Se veio uma lista mas sem 'id', faz fallback regex
+            if isinstance(resultado_all, list) and resultado_all and not any(isinstance(it, dict) and it.get('id') is not None for it in resultado_all):
+                resultado_all = extrair_priorizacao_executiva_seguro(resp_all.text)
+            if isinstance(resultado_all, list) and len(resultado_all) > 0:
+                alteracoes = 0
+                for item in resultado_all:
+                    try:
+                        rid = item.get("id")
+                        decisao = item.get("decisao_prioridade_final")
+                        tag = item.get("tag_final") or item.get("tag_atribuida_inicial")
+                        justificativa = item.get("justificativa_executiva")
+                        cid = id_map_all.get(rid)
+                        if cid is None:
+                            continue
+                        cluster = get_cluster_by_id(db, cid)
+                        if not cluster:
+                            continue
+                        if decisao and decisao != cluster.prioridade:
+                            update_cluster_priority(db, cid, decisao, motivo=justificativa or "priorização executiva")
+                            alteracoes += 1
+                        if tag and tag != cluster.tag:
+                            update_cluster_tags(db, cid, [tag], motivo="priorização executiva")
+                            alteracoes += 1
+                    except Exception:
+                        continue
+                if debug:
+                    print(f"✅ Priorização executiva (one-shot) aplicada. Alterações: {alteracoes}")
+                return True
 
-        alteracoes = 0
-        for item in resultado:
-            try:
-                rid = item.get("id")
-                decisao = item.get("decisao_prioridade_final")
-                tag = item.get("tag_final") or item.get("tag_atribuida_inicial")
-                justificativa = item.get("justificativa_executiva")
+        # Fallback: Batching dos itens para evitar truncamento e JSON quebrado
+        TAMANHO_LOTE_PRIORIZACAO = 80
+        lotes = [clusters_hoje[i:i + TAMANHO_LOTE_PRIORIZACAO] for i in range(0, len(clusters_hoje), TAMANHO_LOTE_PRIORIZACAO)]
 
-                if rid is None or id_map.get(rid) is None:
-                    continue
-                cluster_id = id_map[rid]
-                cluster = get_cluster_by_id(db, cluster_id)
-                if not cluster:
-                    continue
+        alteracoes_total = 0
+        for idx, lote in enumerate(lotes, 1):
+            itens_finais = []
+            id_map = {}
+            for j, c in enumerate(lote):
+                itens_finais.append({
+                    "id": j,
+                    "cluster_id": c.id,
+                    "titulo_final": c.titulo_cluster,
+                    "prioridade_atribuida_inicial": c.prioridade,
+                    "tag_atribuida_inicial": c.tag,
+                    "score_inicial": None,
+                    "resumo_final": (c.resumo_cluster or "")[:400]
+                })
+                id_map[j] = c.id
 
-                # Atualiza prioridade se diferente
-                if decisao and decisao != cluster.prioridade:
-                    update_cluster_priority(db, cluster_id, decisao, motivo=justificativa or "priorização executiva")
-                    alteracoes += 1
+            prompt = PROMPT_PRIORIZACAO_EXECUTIVA_V1.format(
+                ITENS_FINAIS=json.dumps(itens_finais, indent=2, ensure_ascii=False)
+            )
 
-                # Atualiza tag se fornecida e válida
-                if tag and tag != cluster.tag:
-                    update_cluster_tags(db, cluster_id, [tag], motivo="priorização executiva")
-                    alteracoes += 1
-            except Exception:
+            if debug:
+                print(f"🧮 DEBUG: Lote priorização {idx}/{len(lotes)} com {len(itens_finais)} itens...")
+
+            response = client.generate_content(
+                prompt,
+                generation_config={
+                    'temperature': 0.1,
+                    'top_p': 0.8,
+                    'max_output_tokens': 4096
+                }
+            )
+
+            if not response.text:
+                if debug:
+                    print(f"❌ Priorização executiva: resposta vazia no lote {idx}")
                 continue
 
+            if debug:
+                prev = response.text[:500].replace('\n', ' ') if isinstance(response.text, str) else 'N/A'
+                print(f"📥 Lote {idx} priorização (prev 500): {prev}")
+
+            resultado = extrair_json_da_resposta(response.text)
+            if not isinstance(resultado, list) or len(resultado) == 0:
+                resultado = extrair_priorizacao_executiva_seguro(response.text)
+            # Fallback adicional: lista sem 'id' útil
+            if isinstance(resultado, list) and resultado and not any(isinstance(it, dict) and it.get('id') is not None for it in resultado):
+                resultado = extrair_priorizacao_executiva_seguro(response.text)
+            if not isinstance(resultado, list) or len(resultado) == 0:
+                if debug:
+                    print(f"ℹ️ Priorização executiva: nenhuma decisão válida no lote {idx}")
+                continue
+
+            alteracoes = 0
+            for item in resultado:
+                try:
+                    rid = item.get("id")
+                    decisao = item.get("decisao_prioridade_final")
+                    tag = item.get("tag_final") or item.get("tag_atribuida_inicial")
+                    justificativa = item.get("justificativa_executiva")
+
+                    if rid is None or id_map.get(rid) is None:
+                        continue
+                    cluster_id = id_map[rid]
+                    cluster = get_cluster_by_id(db, cluster_id)
+                    if not cluster:
+                        continue
+
+                    if decisao and decisao != cluster.prioridade:
+                        update_cluster_priority(db, cluster_id, decisao, motivo=justificativa or "priorização executiva")
+                        alteracoes += 1
+
+                    if tag and tag != cluster.tag:
+                        update_cluster_tags(db, cluster_id, [tag], motivo="priorização executiva")
+                        alteracoes += 1
+                except Exception:
+                    continue
+
+            alteracoes_total += alteracoes
+
         if debug:
-            print(f"✅ Priorização executiva concluída. Alterações aplicadas: {alteracoes}")
+            print(f"✅ Priorização executiva concluída. Alterações aplicadas (total): {alteracoes_total}")
         return True
 
     except Exception as e:
         print(f"❌ ERRO: Priorização executiva falhou: {e}")
         return False
+
+
+def consolidacao_final_clusters(db: Session, client, debug: bool = True) -> bool:
+    """
+    Etapa 4 (reagrupamento): Consolida clusters redundantes do dia com base em títulos, tags e prioridades já definidas.
+    - Prepara uma lista de clusters do dia (exclui IRRELEVANTE e sem prioridade/tag)
+    - Envia para o prompt de consolidação pedindo sugestões de merges/keeps
+    - Aplica merges conservadores via utilitário de merge no CRUD
+    """
+    try:
+        hoje = get_date_brasil_str()
+        # Seleciona clusters ativos do dia, excluindo irrelevantes
+        clusters = db.query(ClusterEvento).filter(
+            ClusterEvento.status == 'ativo',
+            ClusterEvento.created_at >= hoje,
+            ClusterEvento.prioridade != 'IRRELEVANTE',
+            ClusterEvento.tag != 'IRRELEVANTE'
+        ).all()
+
+        if not clusters:
+            if debug:
+                print("ℹ️ Consolidação final: nenhum cluster elegível hoje")
+            return True
+
+        # Monta payload leve por cluster
+        itens = []
+        for c in clusters:
+            # Títulos internos (curtos) para dar contexto
+            arts = get_artigos_by_cluster(db, c.id)
+            titulos_internos = [(a.titulo_extraido or (a.texto_processado or '')[:80]) for a in arts[:4]]
+            itens.append({
+                "id": c.id,
+                "titulo": c.titulo_cluster,
+                "tag": c.tag,
+                "prioridade": c.prioridade,
+                "titulos_internos": titulos_internos
+            })
+
+        from backend.crud import merge_clusters, update_cluster_title, update_cluster_priority, update_cluster_tags
+
+        # ONE-SHOT: tenta enviar todos os clusters de uma vez com max tokens; se falhar, fallback para lotes (código abaixo)
+        prompt_all = PROMPT_CONSOLIDACAO_CLUSTERS_V1.format(
+            CLUSTERS_DO_DIA=json.dumps(itens, indent=2, ensure_ascii=False)
+        )
+        if debug:
+            print(f"🧩 Consolidação one-shot: enviando {len(itens)} clusters")
+        try:
+            resp_all = client.generate_content(
+                prompt_all,
+                generation_config={'temperature': 0.1, 'top_p': 0.8, 'max_output_tokens': 8192}
+            )
+        except Exception as e:
+            if debug:
+                print(f"❌ Consolidação one-shot falhou na chamada: {e}")
+            resp_all = None
+
+        if resp_all and resp_all.text:
+            if debug:
+                prev = resp_all.text[:500].replace('\n', ' ')
+                print(f"📥 Consolidação one-shot (prev 500): {prev}")
+            sugestoes_all = extrair_sugestoes_consolidacao_seguro(resp_all.text)
+            if isinstance(sugestoes_all, list) and len(sugestoes_all) > 0:
+                merges_aplicados_total = 0
+                keeps_total = 0
+                for s in sugestoes_all:
+                    try:
+                        if not isinstance(s, dict):
+                            continue
+                        tipo = (s.get('tipo') or '').lower()
+                        if tipo == 'keep' and s.get('cluster_id'):
+                            keeps_total += 1
+                            continue
+                        if tipo == 'merge':
+                            destino = s.get('destino')
+                            fontes = s.get('fontes') or []
+                            novo_titulo = s.get('novo_titulo')
+                            nova_tag = s.get('nova_tag')
+                            nova_prioridade = s.get('nova_prioridade')
+                            if not destino or not fontes:
+                                continue
+                            merge_clusters(
+                                db,
+                                destino_id=int(destino),
+                                fontes_ids=[int(x) for x in fontes if isinstance(x, (int, str))],
+                                novo_titulo=novo_titulo,
+                                nova_tag=nova_tag,
+                                nova_prioridade=corigir_prioridade(nova_prioridade) if nova_prioridade else None,
+                                motivo='consolidação etapa 4'
+                            )
+                            merges_aplicados_total += 1
+                    except Exception:
+                        continue
+                if debug:
+                    print(f"✅ Consolidação final (one-shot) aplicada. merges={merges_aplicados_total}, keeps={keeps_total}")
+                return True
+
+        # Fallback: Processa em lotes para evitar respostas truncadas
+        TAMANHO_LOTE_CONSOLIDACAO = 80
+        lotes = [itens[i:i + TAMANHO_LOTE_CONSOLIDACAO] for i in range(0, len(itens), TAMANHO_LOTE_CONSOLIDACAO)]
+
+        merges_aplicados_total = 0
+        keeps_total = 0
+
+        for idx, lote in enumerate(lotes, 1):
+            prompt = PROMPT_CONSOLIDACAO_CLUSTERS_V1.format(
+                CLUSTERS_DO_DIA=json.dumps(lote, indent=2, ensure_ascii=False)
+            )
+
+            if debug:
+                print(f"🧩 Consolidação: enviando lote {idx}/{len(lotes)} com {len(lote)} clusters")
+
+            response = client.generate_content(
+                prompt,
+                generation_config={
+                    'temperature': 0.1,
+                    'top_p': 0.8,
+                    'max_output_tokens': 8192
+                }
+            )
+
+            if not response.text:
+                if debug:
+                    print(f"❌ Consolidação: resposta vazia no lote {idx}")
+                continue
+
+            if debug:
+                prev = response.text[:500].replace('\n', ' ') if isinstance(response.text, str) else 'N/A'
+                print(f"📥 Lote {idx} resposta (prev 500): {prev}")
+
+            sugestoes = extrair_sugestoes_consolidacao_seguro(response.text)
+            if not isinstance(sugestoes, list) or not sugestoes:
+                if debug:
+                    print(f"ℹ️ Consolidação: nenhuma sugestão válida no lote {idx} — aplicando fallback estrito por título/tag")
+                # Fallback: de-duplicação ultra-conservadora por título normalizado + mesma tag
+                try:
+                    import unicodedata, re as _re
+                    def _norm(t: str) -> str:
+                        if not isinstance(t, str):
+                            return ''
+                        t = unicodedata.normalize('NFKD', t)
+                        t = ''.join(c for c in t if not unicodedata.combining(c))
+                        t = t.lower()
+                        t = _re.sub(r"[^a-z0-9]+", " ", t).strip()
+                        return t
+                    # mapa por (norm_title, tag)
+                    grupos = {}
+                    for it in lote:
+                        chave = (_norm(it.get('titulo') or ''), it.get('tag'))
+                        if not chave[0] or not chave[1]:
+                            continue
+                        grupos.setdefault(chave, []).append(it)
+                    merges_aplicados_fallback = 0
+                    for (_, _tag), items in grupos.items():
+                        if len(items) <= 1:
+                            continue
+                        # destino: menor id
+                        destino_id = min(i['id'] for i in items)
+                        fontes_ids = [i['id'] for i in items if i['id'] != destino_id]
+                        from backend.crud import merge_clusters as _merge
+                        _merge(db, destino_id=destino_id, fontes_ids=fontes_ids, motivo='fallback titulo/tag etapa 4')
+                        merges_aplicados_fallback += 1
+                    if debug:
+                        print(f"   ↪ fallback merges aplicados: {merges_aplicados_fallback}")
+                except Exception as _e:
+                    if debug:
+                        print(f"   ⚠️ Fallback estrito falhou: {_e}")
+                continue
+
+            if debug:
+                print(f"🔎 Lote {idx}: {len(sugestoes)} sugestões válidas")
+                for ex in sugestoes[:2]:
+                    try:
+                        print(f"   ↪ exemplo: {json.dumps(ex)[:240]}")
+                    except Exception:
+                        pass
+
+            merges_aplicados = 0
+            keeps = 0
+            for s in sugestoes:
+                try:
+                    if not isinstance(s, dict):
+                        continue
+                    tipo = (s.get('tipo') or '').lower()
+                    if tipo == 'keep' and s.get('cluster_id'):
+                        keeps += 1
+                        continue
+                    if tipo == 'merge':
+                        destino = s.get('destino')
+                        fontes = s.get('fontes') or []
+                        novo_titulo = s.get('novo_titulo')
+                        nova_tag = s.get('nova_tag')
+                        nova_prioridade = s.get('nova_prioridade')
+
+                        if not destino or not fontes:
+                            continue
+
+                        merge_clusters(
+                            db,
+                            destino_id=int(destino),
+                            fontes_ids=[int(x) for x in fontes if isinstance(x, (int, str))],
+                            novo_titulo=novo_titulo,
+                            nova_tag=nova_tag,
+                            nova_prioridade=corigir_prioridade(nova_prioridade) if nova_prioridade else None,
+                            motivo='consolidação etapa 4'
+                        )
+                        merges_aplicados += 1
+                except Exception as e:
+                    if debug:
+                        try:
+                            print(f"   ⚠️ Erro ao aplicar sugestão: {e} | item={json.dumps(s)[:240]}")
+                        except Exception:
+                            print(f"   ⚠️ Erro ao aplicar sugestão: {e}")
+                    continue
+
+            merges_aplicados_total += merges_aplicados
+            keeps_total += keeps
+
+        if debug:
+            print(f"✅ Consolidação final aplicada. merges={merges_aplicados_total}, keeps={keeps_total}")
+        return True
+
+    except Exception as e:
+        print(f"❌ ERRO: Consolidação final falhou: {e}")
+        return False
+
+
+def corigir_prioridade(valor: Optional[str]) -> Optional[str]:
+    try:
+        if not valor:
+            return None
+        return corrigir_prioridade_invalida(valor)
+    except Exception:
+        return None
+
+
+def extrair_sugestoes_consolidacao_seguro(resposta: str) -> Optional[List[Dict[str, Any]]]:
+    """
+    Extrai sugestões da etapa 4 de forma robusta:
+      1) Tenta parse JSON direto via extrair_json_da_resposta
+      2) Fallback: regex para objetos com campos essenciais (tipo, destino/fontes/cluster_id)
+    Retorna lista de dicts padronizados: {tipo, destino?, fontes?, cluster_id?, novo_titulo?, nova_tag?, nova_prioridade?}
+    """
+    try:
+        bruto = extrair_json_da_resposta(resposta)
+        itens: List[Dict[str, Any]] = []
+        if isinstance(bruto, list):
+            for obj in bruto:
+                if isinstance(obj, dict) and ('tipo' in obj):
+                    itens.append(obj)
+        if itens:
+            return itens
+
+        # Fallback por regex
+        import re
+        padrao_obj = re.compile(r"\{[\s\S]*?\}")
+        candidatos = padrao_obj.findall(resposta)
+        resultados: List[Dict[str, Any]] = []
+        for cand in candidatos:
+            try:
+                texto = cand
+                # Normaliza aspas/backticks
+                texto = texto.replace('```', '')
+                # Extrai campos
+                tipo_m = re.search(r'"tipo"\s*:\s*"(merge|keep)"', texto, re.IGNORECASE)
+                if not tipo_m:
+                    continue
+                item: Dict[str, Any] = {"tipo": tipo_m.group(1).lower()}
+                dest_m = re.search(r'"destino"\s*:\s*(\d+)', texto)
+                fontes_m = re.search(r'"fontes"\s*:\s*\[([^\]]*)\]', texto, re.DOTALL)
+                keep_m = re.search(r'"cluster_id"\s*:\s*(\d+)', texto)
+                nt_m = re.search(r'"novo_titulo"\s*:\s*"(.*?)"', texto, re.DOTALL)
+                tag_m = re.search(r'"nova_tag"\s*:\s*"(.*?)"', texto, re.DOTALL)
+                pr_m = re.search(r'"nova_prioridade"\s*:\s*"(P1_CRITICO|P2_ESTRATEGICO|P3_MONITORAMENTO)"', texto)
+
+                if item['tipo'] == 'merge':
+                    if dest_m:
+                        item['destino'] = int(dest_m.group(1))
+                    fontes = []
+                    if fontes_m:
+                        for t in re.split(r"[,\s]+", (fontes_m.group(1) or '').strip()):
+                            if not t:
+                                continue
+                            tnum = re.sub(r"[^0-9]", "", t)
+                            if tnum:
+                                try:
+                                    fontes.append(int(tnum))
+                                except Exception:
+                                    pass
+                    if fontes:
+                        item['fontes'] = fontes
+                    if nt_m:
+                        item['novo_titulo'] = nt_m.group(1).strip()
+                    if tag_m:
+                        item['nova_tag'] = tag_m.group(1).strip()
+                    if pr_m:
+                        item['nova_prioridade'] = pr_m.group(1).strip()
+                else:
+                    if keep_m:
+                        item['cluster_id'] = int(keep_m.group(1))
+
+                # Valida mínimos
+                if item['tipo'] == 'merge' and (not item.get('destino') or not item.get('fontes')):
+                    continue
+                resultados.append(item)
+            except Exception:
+                continue
+        return resultados
+    except Exception:
+        return None
+
+
+def extrair_priorizacao_executiva_seguro(resposta: str) -> Optional[List[Dict[str, Any]]]:
+    """
+    Fallback robusto para a priorização executiva: extrai uma lista de itens com
+    campos chaves (id, decisao_prioridade_final, tag_final opcional) mesmo que o JSON venha truncado.
+    """
+    try:
+        import re
+        objetos = re.findall(r"\{[\s\S]*?\}", resposta)
+        resultados: List[Dict[str, Any]] = []
+        for obj in objetos:
+            try:
+                rid_m = re.search(r'"id"\s*:\s*(\d+)', obj)
+                dec_m = re.search(r'"decisao_prioridade_final"\s*:\s*"(P1_CRITICO|P2_ESTRATEGICO|P3_MONITORAMENTO|IRRELEVANTE)"', obj)
+                tag_m = re.search(r'"tag_final"\s*:\s*"(.*?)"', obj)
+                if not rid_m or not dec_m:
+                    continue
+                item = {
+                    "id": int(rid_m.group(1)),
+                    "decisao_prioridade_final": dec_m.group(1)
+                }
+                if tag_m:
+                    item["tag_final"] = tag_m.group(1)
+                resultados.append(item)
+            except Exception:
+                continue
+        return resultados
+    except Exception:
+        return None
 
 def agrupar_noticias_incremental(db: Session, client) -> bool:
     """
@@ -1661,21 +2084,55 @@ def main():
     print("=" * 60)
     
     # Configuração
-    limite = 999  # Limite para desenvolvimento
-    modo_incremental = True  # True = incremental, False = em lote
+    # Le flags simples via args: --stage 1|2|3|4|all ; --modo incremental|lote ; --limite N
+    limite = 999
+    modo_incremental = True
+    stage = 'all'
+    args = sys.argv[1:]
+    for i, arg in enumerate(args):
+        if arg == '--stage' and i + 1 < len(args):
+            stage = args[i + 1].lower()
+        if arg == '--modo' and i + 1 < len(args):
+            modo_incremental = (args[i + 1].lower() != 'lote')
+        if arg == '--limite' and i + 1 < len(args):
+            try:
+                limite = int(args[i + 1])
+            except Exception:
+                pass
     
     print(f"📊 Limite de artigos: {limite}")
     print(f"🎯 Modo: {'Incremental' if modo_incremental else 'Em Lote'}")
+    print(f"🧭 Stage: {stage}")
     
     # Verifica configuração inicial
     print(f"🔧 GEMINI_API_KEY configurada: {'Sim' if os.getenv('GEMINI_API_KEY') else 'Não'}")
     print(f"🔧 DATABASE_URL configurada: {'Sim' if os.getenv('DATABASE_URL') else 'Não'}")
     
-    # Executa processamento
-    if modo_incremental:
-        sucesso = processar_artigos_pendentes(limite)
-    else:
-        sucesso = processar_artigos_em_lote(limite)
+    # Execução por estágios
+    sucesso = True
+    if stage in ('1', 'all'):
+        if modo_incremental:
+            sucesso = processar_artigos_pendentes(limite)
+        else:
+            sucesso = processar_artigos_em_lote(limite)
+        if not sucesso and stage != 'all':
+            print("\n❌ Falhou na Etapa 1")
+            return
+
+    if stage in ('2', 'all') and sucesso:
+        # A Etapa 2 já é executada dentro do fluxo de Etapa 1 no incremental/em lote.
+        # Quando chamada isoladamente, apenas informa.
+        print("ℹ️ Etapa 2 é executada automaticamente após a Etapa 1 neste orquestrador.")
+
+    if stage in ('3', 'all') and sucesso:
+        # A Etapa 3 é executada dentro de processar_artigos_pendentes após a 2.
+        print("ℹ️ Etapa 3 é executada automaticamente após a Etapa 2 neste orquestrador.")
+
+    if stage in ('4', 'all') and sucesso:
+        print("\nETAPA 4: Consolidação final de clusters...")
+        ok = priorizacao_executiva_final(SessionLocal(), client)
+        ok2 = consolidacao_final_clusters(SessionLocal(), client)
+        sucesso = ok and ok2
     
     if sucesso:
         print("\n🎉 Processamento completo concluído com sucesso!")

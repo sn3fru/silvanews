@@ -959,6 +959,127 @@ def update_cluster_tags(db: Session, cluster_id: int, novas_tags: List[str], mot
     return True
 
 
+def update_cluster_title(db: Session, cluster_id: int, novo_titulo: str, motivo: str = None) -> bool:
+    """Atualiza o título de um cluster e registra a alteração."""
+    try:
+        from .database import ClusterAlteracao
+    except ImportError:
+        from backend.database import ClusterAlteracao
+
+    cluster = db.query(ClusterEvento).filter(ClusterEvento.id == cluster_id).first()
+    if not cluster:
+        return False
+
+    alteracao = ClusterAlteracao(
+        cluster_id=cluster_id,
+        campo_alterado='titulo_cluster',
+        valor_anterior=cluster.titulo_cluster,
+        valor_novo=str(novo_titulo)[:500],
+        motivo=motivo,
+        usuario='sistema'
+    )
+    db.add(alteracao)
+
+    cluster.titulo_cluster = str(novo_titulo)[:500]
+    cluster.updated_at = datetime.utcnow()
+    db.commit()
+    return True
+
+
+def soft_delete_cluster(db: Session, cluster_id: int, motivo: str = None) -> bool:
+    """Arquiva (soft delete) um cluster marcando status='descartado' e registra alteração."""
+    try:
+        from .database import ClusterAlteracao
+    except ImportError:
+        from backend.database import ClusterAlteracao
+
+    cluster = db.query(ClusterEvento).filter(ClusterEvento.id == cluster_id).first()
+    if not cluster:
+        return False
+
+    alteracao = ClusterAlteracao(
+        cluster_id=cluster_id,
+        campo_alterado='status',
+        valor_anterior=cluster.status,
+        valor_novo='descartado',
+        motivo=motivo or 'merge de consolidação',
+        usuario='sistema'
+    )
+    db.add(alteracao)
+
+    cluster.status = 'descartado'
+    cluster.updated_at = datetime.utcnow()
+    db.commit()
+    return True
+
+
+def merge_clusters(db: Session, destino_id: int, fontes_ids: List[int],
+                   novo_titulo: Optional[str] = None,
+                   nova_tag: Optional[str] = None,
+                   nova_prioridade: Optional[str] = None,
+                   motivo: str = 'merge de consolidação') -> Dict[str, Any]:
+    """
+    Consolida múltiplos clusters "fontes" dentro de um cluster "destino":
+    - Reatribui todos os artigos dos clusters fontes para o destino
+    - Atualiza métricas do destino
+    - Opcionalmente ajusta título, tag e prioridade do destino
+    - Marca clusters fontes como descartados (soft delete)
+    Retorna um dicionário com contagens de artigos movidos e clusters encerrados.
+    """
+    resultado = {"artigos_movidos": 0, "clusters_descartados": 0}
+
+    destino = db.query(ClusterEvento).filter(ClusterEvento.id == destino_id, ClusterEvento.status == 'ativo').first()
+    if not destino:
+        return resultado
+
+    # Reatribui artigos das fontes
+    for cid in fontes_ids:
+        if cid == destino_id:
+            continue
+        fonte = db.query(ClusterEvento).filter(ClusterEvento.id == cid, ClusterEvento.status == 'ativo').first()
+        if not fonte:
+            continue
+        artigos = get_artigos_by_cluster(db, cid)
+        for art in artigos:
+            associate_artigo_to_cluster(db, art.id, destino_id)
+            resultado["artigos_movidos"] += 1
+
+        # Soft delete da fonte
+        if soft_delete_cluster(db, cid, motivo=motivo):
+            resultado["clusters_descartados"] += 1
+
+    # Ajustes opcionais no destino
+    if novo_titulo:
+        update_cluster_title(db, destino_id, novo_titulo, motivo)
+    if nova_tag:
+        update_cluster_tags(db, destino_id, [nova_tag], motivo)
+    if nova_prioridade:
+        update_cluster_priority(db, destino_id, nova_prioridade, motivo)
+
+    # Recalcula total_artigos e embedding_medio do destino
+    artigos_destino = db.query(ArtigoBruto).filter(ArtigoBruto.cluster_id == destino_id).all()
+    destino.total_artigos = len(artigos_destino)
+    try:
+        import numpy as np
+        emb_list = []
+        for a in artigos_destino:
+            if a.embedding:
+                try:
+                    from .processing import bytes_to_embedding as _b2e  # type: ignore
+                except Exception:
+                    from backend.processing import bytes_to_embedding as _b2e  # type: ignore
+                emb_list.append(_b2e(a.embedding))
+        if emb_list:
+            destino.embedding_medio = np.mean(emb_list, axis=0).tobytes()
+    except Exception:
+        pass
+
+    destino.updated_at = datetime.utcnow()
+    db.commit()
+
+    return resultado
+
+
 def get_cluster_alteracoes(db: Session, cluster_id: int) -> List['ClusterAlteracao']:
     """Obtém todas as alterações de um cluster."""
     try:

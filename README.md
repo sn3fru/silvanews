@@ -16,7 +16,7 @@ Plataforma de inteligência de mercado que transforma alto volume de notícias e
 ### Novidades recentes (pipeline mais rigoroso)
 - Endurecimento do `PROMPT_EXTRACAO_PERMISSIVO_V8`: lista de rejeição ampliada (crimes comuns, casos pessoais, fofoca/entretenimento, esportes, política partidária, efemérides e programas sociais sem tese) e gating P1/P2/P3 mais duro.
 - Priorização Executiva Final integrada: etapa adicional pós-resumo/pós-agrupamento que reclassifica como P1/P2/P3/IRRELEVANTE com justificativa e ação recomendada (`PROMPT_PRIORIZACAO_EXECUTIVA_V1`).
-- O fluxo automático acionado pelo botão “Processar Artigos Pendentes” também aplica essa priorização final.
+- Nova Etapa 4 – Consolidação Final de Clusters: reagrupamento conservador de clusters do dia usando `PROMPT_CONSOLIDACAO_CLUSTERS_V1` com base em títulos, tags e prioridades já atribuídos. A maioria dos clusters permanece inalterada; quando há duplicidade (p.ex. variações de “PGFN arrecadação recorde”), a etapa sugere merges, move artigos para um destino, ajusta título/tag/prioridade quando necessário e arquiva (soft delete) os duplicados.
 
 ### Filtros e visualização (frontend)
 - Seletor de data no topo: alterna entre hoje e datas históricas (tudo GMT-3).
@@ -25,16 +25,15 @@ Plataforma de inteligência de mercado que transforma alto volume de notícias e
 - Deep-dive: modal por evento com resumo, fontes e abas (chat com cluster e gerenciamento).
 
 ### Tags e Prioridades (como configurar)
-- Tags oficiais: editar `backend/prompts.py` em `TAGS_SPECIAL_SITUATIONS` (única fonte da verdade).
-- Prioridades: editar `LISTA_RELEVANCIA_HIERARQUICA` no mesmo arquivo para ajustar critérios e exemplos.
-- O mapeamento determinístico assunto ➜ (prioridade, tag) é gerado a partir dessas estruturas.
+- Tags oficiais: editar `backend/prompts.py` em `TAGS_SPECIAL_SITUATIONS` (fonte da verdade única).
+- Gating de prioridade: ajustar listas `P1_ITENS`, `P2_ITENS`, `P3_ITENS` no mesmo arquivo (definem gatilhos/checagens por prioridade).
 
 ### Pipeline (passo a passo)
 1) Ingestão: `load_news.py` lê PDFs/JSONs e grava artigos brutos (status `pendente`).
 2) Processamento inicial: extrai dados, gera embeddings e marca `pronto_agrupar`.
 3) Agrupamento: cria/atualiza clusters por fato gerador (modo em lote ou incremental automático).
 4) Classificação e Resumos: define prioridade/tag e gera resumo no tamanho certo.
-5) Priorização Executiva Final: reclassifica rigidamente P1/P2/P3/IRRELEVANTE e ajusta decisão final.
+5) Priorização Executiva Final e Consolidação Final (Etapa 4): reclassifica rigidamente P1/P2/P3/IRRELEVANTE e, em seguida, consolida clusters redundantes do dia via `PROMPT_CONSOLIDACAO_CLUSTERS_V1` (merges conservadores, soft delete dos duplicados, preservando resumos existentes).
 6) Exposição: API `FastAPI` alimenta o frontend; CRUD e endpoints admin.
 
 ```mermaid
@@ -55,10 +54,10 @@ graph TD
 - Extração e triagem inicial: `PROMPT_EXTRACAO_PERMISSIVO_V8`.
 - Agrupamento em lote: `PROMPT_AGRUPAMENTO_V1`.
 - Agrupamento incremental (novas notícias do dia): `PROMPT_AGRUPAMENTO_INCREMENTAL_V2` (contexto enriquecido com `titulos_internos`).
-- Resumo executivo por prioridade: `PROMPT_RESUMO_FINAL_V3` e `PROMPT_RADAR_MONITORAMENTO_V1` (bullets P3).
-- Sanitização (gatekeeper): `PROMPT_SANITIZACAO_CLUSTER_V1`.
+- Resumo executivo por prioridade: `PROMPT_RESUMO_FINAL_V3`.
 - Chat com cluster: `PROMPT_CHAT_CLUSTER_V1`.
 - Priorização executiva (pós-pipeline): `PROMPT_PRIORIZACAO_EXECUTIVA_V1`.
+- Consolidação final de clusters (Etapa 4): `PROMPT_CONSOLIDACAO_CLUSTERS_V1`.
 
 Prompts opcionais/POC (não usados no pipeline padrão):
 - `PROMPT_RESUMO_CRITICO_V1` (POC de resumo crítico)
@@ -70,7 +69,7 @@ Prompts opcionais/POC (não usados no pipeline padrão):
 
 ### Arquitetura em 1 minuto
 - Backend FastAPI + SQLAlchemy (PostgreSQL 5433)
-- Frontend estático em `backend/frontend`
+- Frontend estático em `frontend/`
 - Orquestração por scripts CLI para ingestão e processamento
 
 ## Guia Rápido
@@ -102,6 +101,14 @@ cd "C:\Users\marcos.silva\OneDrive - ENFORCE GESTAO DE ATIVOS S.A\jupyter\projet
 - Processar artigos (extração → agrupamento → resumos):
   ```bash
   python process_articles.py
+  ```
+  - Rodar somente a Etapa 4 (Priorização + Consolidação Final):
+  ```bash
+  python process_articles.py --stage 4
+  ```
+  - Rodar em modo em lote (em vez de incremental) e selecionar etapa:
+  ```bash
+  python process_articles.py --modo lote --stage all
   ```
 - Iniciar o backend (use apenas se não houver outro servidor rodando):
   ```bash
@@ -332,7 +339,7 @@ python test_fluxo_completo.py
 
 ### Regras de contribuição (para evitar duplicação e lógica fora do lugar)
 - Orquestração em scripts (CLI): `load_news.py` e `process_articles.py` apenas chamam o backend.
-- Lógica de negócio: `backend/processing.py` + `backend/crud.py` (nunca em CLI nem em rotas diretamente).
+- Lógica de negócio: `backend/processing.py` + `backend/crud.py` (nunca em CLI nem em rotas diretamente). A lógica de consolidação (Etapa 4) usa utilitários em `backend/crud.py` para merges seguros: `merge_clusters`, `update_cluster_title`, `update_cluster_priority`, `update_cluster_tags` e `soft_delete_cluster`.
 - Esquema de dados (DB): `backend/database.py` (modelos/relacionamentos) e migrations externas quando necessário.
 - Prompts/taxonomia: `backend/prompts.py` (fonte única). O frontend consome tags vindas dos dados reais (sem listas fixas).
 
@@ -342,4 +349,13 @@ python test_fluxo_completo.py
 - Buscar feed por data: `backend/main.py::get_feed`
 - Upload via API: `backend/main.py::upload_file_endpoint` e progresso em `upload_progress`
 - Processar pendentes (admin): `backend/main.py::processar_artigos_pendentes` → chama funções do pipeline
+
+## Agente Estagiário (beta)
+
+- O que é: agente de consulta sobre as notícias do dia. Reusa ORM/CRUD do backend e pode sintetizar respostas em Markdown quando `GEMINI_API_KEY` estiver configurada.
+- Modo ReAct (opcional): defina `ESTAGIARIO_REACT=1` no ambiente para ativar o executor que orquestra ferramentas formais (`agents/estagiario/tools`).
+- Endpoints:
+  - `POST /api/estagiario/start` — inicia sessão de chat do dia.
+  - `POST /api/estagiario/send` — envia pergunta e retorna resposta do agente.
+  - `GET /api/estagiario/messages/{session_id}` — histórico de mensagens.
 

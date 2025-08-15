@@ -72,6 +72,19 @@ class EstagiarioAgent:
         except Exception as e:
             print(f"[Estagiario] LLM indisponível: {e}")
 
+        # Catálogo de prioridades e tags permitidas
+        self.prioridades_permitidas = [
+            "P1_CRITICO", "P2_ESTRATEGICO", "P3_MONITORAMENTO", "IRRELEVANTE"
+        ]
+        try:
+            from backend.prompts import TAGS_SPECIAL_SITUATIONS  # type: ignore
+            self.tags_permitidas = [t.get('nome') for t in TAGS_SPECIAL_SITUATIONS if isinstance(t, dict) and t.get('nome')]
+        except Exception:
+            self.tags_permitidas = [
+                "Jurídico", "M&A", "Mercado de Capitais", "Política Econômica",
+                "Internacional", "Tecnologia e Setores Estratégicos", "Distressed Assets", "Outros"
+            ]
+
     def _open_db(self):
         print("[Estagiario] Abrindo sessão DB...")
         return SessionLocal()
@@ -117,25 +130,26 @@ class EstagiarioAgent:
                     "tag": it.get("tag"),
                     "prioridade": it.get("prioridade"),
                     "fontes": it.get("fontes", []),
+                    "artigos": it.get("artigos", []),
                 })
             prompt = (
-                "Você é um analista do BTG na mesa de Special Situations. Responda em Markdown, direto ao ponto,"
-                " com foco em ação e rastreabilidade (sempre inclua FONTES com URLs e IDs).\n\n"
+                "Você é um analista do BTG na mesa de Special Situations. Produza um RELATÓRIO em Markdown, direto ao ponto,"
+                " usando as notícias como insumos. Vá além de listar notícias; sintetize insights e impactos.\n\n"
                 "KB (resumo):\n" + (self.kb_text[:6000]) + "\n\n"
                 "Amostra de dados (clusters do dia):\n" + str(exemplos) + "\n\n"
                 "Instruções de resposta (obrigatório):\n"
-                "- Proibido descrever etapas, ferramentas ou plano ('Buscar clusters', 'Filtrar', 'Resultados esperados', 'Próximos passos') — apenas a resposta.\n"
-                "- Vá direto ao ponto; sem frases como 'Com base nos dados fornecidos'.\n"
-                "- Estruture com títulos (##) e bullets; use tabela apenas se indispensável.\n"
-                "- Inclua prioridades/tags quando relevantes.\n"
-                "- Finalize com a seção 'Notícias pesquisadas:' listando: [ID] Título — URL (Jornal).\n\n"
+                "- Proibido descrever etapas, ferramentas ou plano.\n"
+                "- Estruture com (exemplo de seções): ## Panorama, ## Principais Sinais (bullets), ## Preços/Promoções (tabela, se cabível), ## Riscos, ## Oportunidades, ## Ações sugeridas.\n"
+                "- Traga nomes de autores e jornais quando disponíveis; cite prioridades/tags quando agregarem contexto.\n"
+                "- Evite frases como 'Com base nos dados fornecidos'.\n"
+                "- Finalize com 'Notícias pesquisadas:' numerada no formato [ID] Título — URL (Jornal).\n\n"
                 "Pergunta do usuário: " + question + "\n"
             )
             print("[Estagiario] Síntese LLM iniciada...")
             resp = self.model.generate_content(prompt, generation_config={
-                'temperature': 0.2,
+                'temperature': 0.3,
                 'top_p': 0.8,
-                'max_output_tokens': 768
+                'max_output_tokens': 5_000
             })
             txt = (resp.text or "").strip()
             print(f"[Estagiario] Síntese LLM concluída. Len={len(txt)}")
@@ -361,6 +375,62 @@ class EstagiarioAgent:
 
             q = (question or "").lower()
 
+            # Executor ReAct (opcional por flag) para casos genéricos
+            if os.getenv("ESTAGIARIO_REACT") == "1":
+                try:
+                    from .executor import EstagiarioExecutor
+                    execu = EstagiarioExecutor()
+                    out = execu.run(user_input=question, chat_history=[])
+                    final = out.get("final") or "Em construção"
+                    trace = out.get("trace") or []
+                    return AgentAnswer(True, final, {"react_trace": trace})
+                except Exception as e:
+                    print(f"[Estagiario] Falha executor ReAct: {e}")
+                    # cai para heurística abaixo
+
+            # Caso: comandos de edição (seguros e sempre unitários)
+            if q.startswith("atualize ") or q.startswith("troque ") or q.startswith("mude ") or q.startswith("merge ") or q.startswith("unir ") or q.startswith("unifica "):
+                print("[Estagiario] Caso: comando de edição")
+                import re
+                # update prioridade: "atualize prioridade do cluster 123 para p2"
+                m = re.search(r"prioridade.*cluster\s+(\d+)\s+para\s+(p1|p2|p3|irrelevante)", q)
+                if m:
+                    cluster_id = int(m.group(1))
+                    alvo = m.group(2).upper()
+                    mapa = {"P1": "P1_CRITICO", "P2": "P2_ESTRATEGICO", "P3": "P3_MONITORAMENTO", "IRRELEVANTE": "IRRELEVANTE"}
+                    nova_pr = mapa.get(alvo)
+                    if nova_pr and nova_pr in self.prioridades_permitidas:
+                        from backend.crud import update_cluster_priority
+                        ok = update_cluster_priority(db, cluster_id, nova_pr, motivo=f"Estagiario: ajuste solicitado '{question}'")
+                        return AgentAnswer(bool(ok), ("✅ Prioridade atualizada." if ok else "Falha ao atualizar prioridade."))
+                    return AgentAnswer(False, "Prioridade não permitida.")
+
+                # update tag: "troque a tag do cluster 456 para Internacional"
+                m = re.search(r"tag.*cluster\s+(\d+)\s+para\s+([\wãáàâêíçõéú-]+)", q)
+                if m:
+                    cluster_id = int(m.group(1))
+                    tag = m.group(2)
+                    # valida contra catálogo
+                    if any(tag.lower() == t.lower() for t in self.tags_permitidas):
+                        from backend.crud import update_cluster_tags
+                        ok = update_cluster_tags(db, cluster_id, [tag], motivo=f"Estagiario: ajuste solicitado '{question}'")
+                        return AgentAnswer(bool(ok), ("✅ Tag atualizada." if ok else "Falha ao atualizar tag."))
+                    return AgentAnswer(False, "Tag não permitida.")
+
+                # merge: "merge o cluster 111 no 222" (sempre unitário; nunca múltiplos)
+                m = re.search(r"merge.*cluster\s+(\d+)\s+no\s+(\d+)", q)
+                if m:
+                    origem = int(m.group(1))
+                    destino = int(m.group(2))
+                    if origem == destino:
+                        return AgentAnswer(False, "IDs de origem e destino iguais.")
+                    from backend.crud import merge_clusters
+                    res = merge_clusters(db, destino_id=destino, fontes_ids=[origem], motivo=f"Estagiario: merge solicitado '{question}'")
+                    # não reescreve título/tag/prioridade por padrão; mantém destino como autoridade
+                    return AgentAnswer(True, f"✅ Merge efetuado. Artigos movidos: {res.get('artigos_movidos',0)}; Clusters encerrados: {res.get('clusters_descartados',0)}.")
+
+                return AgentAnswer(False, "Comando de edição não reconhecido. Exemplos: 'atualize prioridade do cluster 123 para p2', 'troque a tag do cluster 456 para Internacional', 'merge o cluster 111 no 222'.")
+
             # Caso 1: contagem de IRRELEVANTES
             if "irrelevante" in q and ("quantas" in q or "liste" in q or "conta" in q):
                 print("[Estagiario] Caso: contar irrelevantes")
@@ -368,53 +438,127 @@ class EstagiarioAgent:
                 print("[Estagiario] Resposta pronta")
                 return AgentAnswer(True, f"Irrelevantes hoje: {irrelevantes}")
 
-            # Caso 2: promoções de carros até 200 mil
-            if ("carro" in q or "carros" in q) and ("promo" in q or "promoção" in q or "promocao" in q):
-                print("[Estagiario] Caso: promoções de carros ≤ 200k")
+            # Caso 2: promoções de carros (dinâmico; sem preço padrão)
+            if ("carro" in q or "carros" in q) and ("promo" in q or "promoção" in q or "promocao" in q or "desconto" in q or "oferta" in q):
+                print("[Estagiario] Caso: promoções de carros (dinâmico)")
+                import re
+                # Extrai preço alvo se presente (ex.: 200 mil, 200k, 200.000, r$ 200.000)
+                preco_alvo = None
+                m = re.search(r"r\$\s*([\d\.]+)", q)
+                if m:
+                    try:
+                        preco_alvo = int(m.group(1).replace('.', ''))
+                    except Exception:
+                        preco_alvo = None
+                if not preco_alvo:
+                    m = re.search(r"(\d+)\s*mil", q)
+                    if m:
+                        try:
+                            preco_alvo = int(m.group(1)) * 1000
+                        except Exception:
+                            preco_alvo = None
+                if not preco_alvo:
+                    m = re.search(r"(\d+)\s*k", q)
+                    if m:
+                        try:
+                            preco_alvo = int(m.group(1)) * 1000
+                        except Exception:
+                            preco_alvo = None
+
                 candidatos = self._fetch_clusters(db, target_date, priority=None)
-                print(f"[Estagiario] Candidatos: {len(candidatos)}")
+                print(f"[Estagiario] Candidatos: {len(candidatos)} preço_alvo={preco_alvo}")
                 achados = []
+                termos_base = ["carro", "automóvel", "veículo", "concessionária", "oferta", "desconto", "promo", "ipva", "financiamento"]
+                termos_ev = ["elétrico", "eletrico", "ev", "veículo elétrico", "veiculo eletrico"]
                 for c in candidatos:
                     t = (c.get("titulo_final") or "").lower()
                     r = (c.get("resumo_final") or "").lower()
-                    if any(k in t or k in r for k in ["carro", "automóvel", "veículo", "concessionária", "oferta", "desconto", "promo", "ipva", "financiamento"]):
-                        # heurística simples de preço (inclui variações)
-                        if any(k in r for k in ["100 mil", "150 mil", "200 mil", "r$ 100.000", "r$ 150.000", "r$ 200.000", "r$100 mil", "r$150 mil", "r$200 mil"]):
+                    blob = t + "\n" + r
+                    if any(k in blob for k in termos_base):
+                        # Se o usuário falou "elétrico", dá preferência a EV
+                        if ("elétrico" in q or "eletrico" in q) and not any(ev in blob for ev in termos_ev):
+                            continue
+                        if preco_alvo:
+                            # Heurística: aceitar se houver menção numérica plausível (mil/k/valores próximos)
+                            if re.search(r"(\d+\.?\d*\s*mil|r\$\s*[\d\.]+|\d+\s*k)", blob):
+                                achados.append({"id": c["id"], "titulo": c.get("titulo_final"), "resumo": c.get("resumo_final")})
+                        else:
                             achados.append({"id": c["id"], "titulo": c.get("titulo_final"), "resumo": c.get("resumo_final")})
                 print(f"[Estagiario] Achados: {len(achados)}")
                 if not achados:
-                    return AgentAnswer(True, "Nenhuma promoção de carros até 200 mil encontrada hoje.")
+                    return AgentAnswer(True, "Nenhuma promoção de carros encontrada hoje.")
                 llm_txt = self._llm_answer(question, achados)
                 if llm_txt:
                     return AgentAnswer(True, llm_txt, {"itens": achados[:10]})
                 return AgentAnswer(True, f"{len(achados)} ofertas encontradas.", {"itens": achados[:10]})
 
-            # Caso 3: impactos por prioridade (P1/P2/P3) na relação EUA x Rússia
+            # Caso 3: impactos por prioridade (P1/P2/P3) na relação EUA x Rússia — resiliente e multi-stratégia
             if ("eua" in q and ("russia" in q or "rússia" in q)) and ("p1" in q or "prioridade p1" in q or "p2" in q or "prioridade p2" in q or "p3" in q or "prioridade p3" in q):
-                alvo = "P1_CRITICO" if ("p1" in q or "prioridade p1" in q) else ("P2_ESTRATEGICO" if ("p2" in q or "prioridade p2" in q) else "P3_MONITORAMENTO")
-                print(f"[Estagiario] Caso: impactos {alvo} EUA–Rússia")
-                lista = self._fetch_clusters(db, target_date, priority=alvo)
-                print(f"[Estagiario] {alvo} carregados: {len(lista)}")
-                chaves = ["eua", "estados unidos", "washington", "rússia", "russia", "putin", "kremlin"]
+                prios = []
+                if ("p1" in q or "prioridade p1" in q): prios.append("P1_CRITICO")
+                if ("p2" in q or "prioridade p2" in q): prios.append("P2_ESTRATEGICO")
+                if ("p3" in q or "prioridade p3" in q): prios.append("P3_MONITORAMENTO")
+                if not prios:
+                    prios = ["P1_CRITICO"]
+                print(f"[Estagiario] Caso: impactos {','.join(prios)} EUA–Rússia")
+                # 1) Coleta por prioridades solicitadas
+                candidatos: List[Dict[str, Any]] = []
+                for p in prios:
+                    lista = self._fetch_clusters(db, target_date, priority=p)
+                    print(f"[Estagiario] {p} carregados: {len(lista)}")
+                    candidatos.extend(lista)
+                # 2) Heurística léxica inicial
+                chaves = ["eua", "estados unidos", "washington", "rússia", "russia", "putin", "kremlin", "nato", "otan", "sanção", "sancao", "guerra", "ucrania", "ucrânia"]
                 relevantes = []
-                for c in lista:
-                    blob = (c.get("titulo_final") or "") + "\n" + (c.get("resumo_final") or "")
-                    L = blob.lower()
+                for c in candidatos:
+                    L = ((c.get("titulo_final") or "") + "\n" + (c.get("resumo_final") or "")).lower()
                     if any(k in L for k in chaves):
-                        relevantes.append({
-                            "id": c["id"],
-                            "titulo": c.get("titulo_final"),
-                            "resumo": c.get("resumo_final"),
-                            "tag": c.get("tag"),
-                        })
-                print(f"[Estagiario] Relevantes EUA–Rússia: {len(relevantes)}")
-                if not relevantes:
-                    return AgentAnswer(True, f"Nenhum impacto {alvo.split('_')[0]} EUA–Rússia encontrado hoje.")
-                llm_txt = self._llm_answer(question, relevantes)
-                if llm_txt:
-                    return AgentAnswer(True, llm_txt, {"itens": relevantes[:10]})
-                bullets = [f"- {it['titulo']}: {it['resumo']}" for it in relevantes[:8]]
-                return AgentAnswer(True, f"Principais impactos ({alvo.split('_')[0]}) EUA–Rússia:\n" + "\n".join(bullets))
+                        relevantes.append(c)
+                print(f"[Estagiario] Relevantes (lexical): {len(relevantes)}")
+                # 3) Triagem semântica via LLM se ainda pouca aderência
+                base_para_triagem = relevantes if len(relevantes) >= 3 else candidatos
+                selecionados_ids = self._llm_select_candidates("Impactos na relação EUA–Rússia", base_para_triagem)
+                if selecionados_ids:
+                    idset = set(selecionados_ids)
+                    selecionados = [c for c in base_para_triagem if c.get("id") in idset]
+                else:
+                    selecionados = relevantes[:12] if relevantes else candidatos[:12]
+                print(f"[Estagiario] Selecionados p/ síntese: {len(selecionados)}")
+                if not selecionados:
+                    return AgentAnswer(True, "Nenhum impacto relevante encontrado nas prioridades solicitadas.")
+                # 4) Detalhes + síntese (resumos) → fallback raw
+                top_ids = [c.get("id") for c in selecionados[:10] if c.get("id") is not None]
+                detalhes = self._fetch_details_for(db, top_ids, limit=6)
+                retrieved = []
+                for d in detalhes:
+                    retrieved.append({
+                        "id": d.get("id"),
+                        "titulo": d.get("titulo_final") or d.get("titulo_cluster") or d.get("titulo"),
+                        "resumo": d.get("resumo_final") or d.get("resumo_cluster") or d.get("resumo"),
+                        "tag": d.get("tag"),
+                        "prioridade": d.get("prioridade"),
+                        "fontes": d.get("fontes", []),
+                    })
+                llm_txt = self._llm_answer(question, retrieved if retrieved else selecionados)
+                if llm_txt and len(llm_txt) > 80:
+                    return AgentAnswer(True, llm_txt, {"itens": selecionados[:12]})
+                if detalhes:
+                    raw_txt = self._llm_summarize_from_raw(question, detalhes)
+                    if raw_txt and len(raw_txt) > 80:
+                        return AgentAnswer(True, raw_txt, {"itens": selecionados[:12]})
+                # 5) Amostra em Markdown
+                simples = []
+                for c in selecionados[:8]:
+                    simples.append({
+                        "id": c.get('id'),
+                        "titulo": c.get('titulo_final'),
+                        "resumo": c.get('resumo_final'),
+                        "prioridade": c.get('prioridade'),
+                        "tag": c.get('tag'),
+                        "fontes": []
+                    })
+                md = self._compose_markdown_from_retrieved(question, simples)
+                return AgentAnswer(True, md, {"itens": selecionados[:12]})
 
             # Caso 4: busca genérica com plano (inferir filtros → filtrar → ranquear → aprofundar → síntese Markdown)
             try:
@@ -449,7 +593,7 @@ class EstagiarioAgent:
                     top_ids = [c.get("id") for c in ranked[:12] if c.get("id") is not None]
                 else:
                     top_ids = selected_ids[:12]
-                detalhes = self._fetch_details_for(db, top_ids, limit=6)
+                detalhes = self._fetch_details_for(db, top_ids, limit=8)
                 # Monta retrieved enriquecido com fontes
                 retrieved: List[Dict[str, Any]] = []
                 for d in detalhes:
@@ -460,11 +604,12 @@ class EstagiarioAgent:
                         "tag": d.get("tag"),
                         "prioridade": d.get("prioridade"),
                         "fontes": d.get("fontes", []),
+                        "artigos": d.get("artigos", []),
                     })
                 # Síntese LLM em Markdown
                 base_para_sintese = retrieved if retrieved else [c for c in candidatos if (c.get("id") in top_ids)][:10]
                 llm_txt = self._llm_answer(question, base_para_sintese)
-                if llm_txt:
+                if llm_txt and len(llm_txt) > 500:
                     return AgentAnswer(True, llm_txt, {"itens": base_para_sintese[:15]})
                 # Se a síntese acima falhar, tenta construir resumo a partir dos artigos brutos
                 if detalhes:
@@ -480,7 +625,8 @@ class EstagiarioAgent:
                         "resumo": c.get('resumo_final'),
                         "prioridade": c.get('prioridade'),
                         "tag": c.get('tag'),
-                        "fontes": []
+                        "fontes": [],
+                        "artigos": [],
                     }
                     for c in candidatos if c.get('id') in id_set
                 ][:8]

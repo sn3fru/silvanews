@@ -716,3 +716,44 @@ SAÍDA (JSON PURO):
 ]
 ```
 """
+
+# ==============================================================================
+# PROMPT DE CONSOLIDAÇÃO FINAL DE CLUSTERS (ETAPA 4 REAGRUPAMENTO)
+# ==============================================================================
+
+PROMPT_CONSOLIDACAO_CLUSTERS_V1 = """
+Você é um Analista de Inteligência Sênior da mesa de Special Situations. Você receberá uma LISTA de clusters já existentes (pós-extração, pós-agrupamento inicial e pós-resumo), contendo id, título, tag e prioridade, além de alguns títulos internos de artigos. Seu objetivo é identificar clusters que representam o MESMO EVENTO e propor consolidações (merge) para reduzir redundância sem perda de informação.
+
+REGRAS:
+1) A maioria dos clusters NÃO deve sofrer alteração. Seja conservador.
+2) NÃO proponha ações para itens IRRELEVANTES (eles não estarão na lista) e ignore qualquer item sem prioridade/tag.
+3) Somente proponha MERGE quando houver forte evidência de que tratam do MESMO fato gerador (mesma entidade/tema com desdobramentos diretos;
+   variações de título que apontam ao mesmo núcleo, p.ex.: "PGFN arrecada recorde" e "Arrecadação recorde da PGFN").
+4) Ao propor MERGE, escolha um destino:
+   - Preferir o cluster com ID menor OU o que tiver prioridade mais alta (P1>P2>P3), mantendo a tag mais específica.
+   - Você pode sugerir um novo título unificado que cubra todos os desdobramentos.
+   - Você pode sugerir nova tag/prioridade, somente se isso aumentar a consistência com as regras de gating já aplicadas.
+5) NÃO crie novos clusters por padrão. A consolidação deve, preferencialmente, acontecer para um destino existente.
+
+SAÍDA OBRIGATÓRIA (JSON PURO, APENAS JSON, SEM TEXTO EXPLICATIVO):
+```json
+[
+  {{
+    "tipo": "merge",
+    "destino": 12,
+    "fontes": [15, 19],
+    "novo_titulo": "Título unificado opcional",
+    "nova_tag": "Tag opcional",
+    "nova_prioridade": "P1_CRITICO | P2_ESTRATEGICO | P3_MONITORAMENTO (opcional)",
+    "justificativa": "Racional curto sobre porque são o mesmo evento"
+  }},
+  {{
+    "tipo": "keep",
+    "cluster_id": 25
+  }}
+]
+```
+
+ENTRADA (CLUSTERS DO DIA PARA ANÁLISE):
+{CLUSTERS_DO_DIA}
+"""

@@ -2631,8 +2631,10 @@ function inserirCardEstagiario() {
             const items = m.split(/\n/g).map(l => l.replace(/^\d+\.\s+/, '')).map(t => `<li>${t}<\/li>`).join('');
             return `<ol>${items}<\/ol>`;
         });
-        // Quebras de parágrafo
-        html = html.replace(/\n\n/g, '<br/>' );
+        // Quebras de parágrafo: linhas vazias viram espaçamento, linhas simples mantêm coerência
+        html = html
+            .replace(/\n{2,}/g, '<br/><br/>')
+            .replace(/\n/g, '<br/>' );
         return html;
     }
 

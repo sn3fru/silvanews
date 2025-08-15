@@ -10,9 +10,10 @@ O Estagiário é um agente que responde perguntas sobre TODAS as notícias de um
   - `get_metricas_by_date` para fallback informativo.
 - **Casos suportados no agente** (`EstagiarioAgent.answer`):
   - Contagem de itens irrelevantes do dia (consulta precisa por ORM).
-  - Promoções de carros até 200 mil (heurística por palavras-chave + síntese opcional por LLM).
-  - Impactos P1/P2/P3 na relação EUA × Rússia (filtragem por prioridade e palavras-chave + síntese por LLM).
-  - Busca genérica por palavras-chave em título/resumo (acentos tolerados, stopwords simples) com amostragem e síntese por LLM.
+  - Promoções de carros (com/sem preço explícito, sem default oculto de valor), com triagem e síntese.
+  - Impactos P1/P2/P3 na relação EUA × Rússia com fluxo resiliente (multi-estratégia, ver abaixo).
+  - Busca genérica (intent → filtros → ranking → aprofundar → síntese em Markdown) com KB.
+  - Edições seguras no banco (unitárias): atualizar prioridade, trocar tag, merge 1→1 de clusters (guardrails abaixo).
 - **KB carregado** automaticamente para orientar o LLM (se a variável `GEMINI_API_KEY` estiver configurada).
 - **Logs detalhados** de execução: abertura de sessão, paginação, contagens, início/fim de síntese.
 - **Endpoints FastAPI** (em `backend/main.py`):
@@ -20,12 +21,16 @@ O Estagiário é um agente que responde perguntas sobre TODAS as notícias de um
   - `POST /api/estagiario/send` — envia pergunta e retorna resposta do agente (persistindo conversa).
   - `GET /api/estagiario/messages/{session_id}` — histórico de mensagens.
 
-### Fluxo de resposta atual (alto nível)
-1) Normaliza pergunta e detecta o caso (irrelevantes, carros, EUA×Rússia, genérico).
-2) Carrega clusters do dia com paginação (prioridade-alvo ou ALL).
-3) Filtra por palavras-chave (e/ou prioridade) e monta uma amostra de itens relevantes.
-4) Opcional: chama o LLM (Gemini) com a KB + amostra curta para sintetizar uma resposta estruturada.
-5) Fallbacks: lista curta em texto ou métricas do dia quando insuficiente.
+### Arquitetura do agente (alto nível)
+1) Interpretação da intenção: normaliza pergunta; extrai prioridades explícitas (P1/P2/P3), termos e pistas de tags; data padrão: hoje.
+2) Coleta inicial: pagina clusters do dia por prioridades inferidas (ou ALL).
+3) Pré-filtragem leve: heurística lexical temática (evita perder recall) e, quando necessário, leve filtro por keywords apenas em conjuntos muito grandes.
+4) Triagem semântica (LLM): recebe amostra priorizada e retorna 10–15 IDs mais promissores para a tarefa.
+5) Aprofundar top-K: carrega detalhes e fontes; se a tarefa exigir síntese, tenta:
+   - 5.1) Síntese com resumos/títulos; se insuficiente,
+   - 5.2) Síntese a partir de textos brutos (artigos raw) com amostra limitada.
+6) Resposta final: em Markdown, direta e executiva, com seção “Notícias pesquisadas” numerada (ID, Título, URL, Jornal).
+7) Guardrails: nunca descreve etapas/tools no output; não pede dados adicionais por padrão; busca sempre “chegar no objetivo”.
 
 ### Uso programático
 ```python
@@ -67,7 +72,7 @@ print(ans.text)
   6) Devolver também um `data.itens` com os principais clusters usados.
 
 ### B. UI/UX do card Estagiário
-- **Modo foco**: ao clicar no card, expandir para ocupar ~70% da tela (como modal) e voltar ao estado encaixado ao fechar.
+- **Modo foco**: ao clicar no card, expande para ocupar ~90% da tela (modal) e volta ao estado encaixado ao fechar.
 - **Renderização Markdown**: permitir títulos, negritos, listas, tabelas e URLs ao exibir `answer.text` do Estagiário.
 - **Modal de progresso**: etapas visuais “Entendendo → Planejando → Consultando DB → Sintetizando”, com gif.
 
@@ -85,6 +90,15 @@ print(ans.text)
 - **Análise multi-dia**: permitir perguntas que cruzem janelas de datas.
 - **Consultas por tags personalizadas**: suporte a nomes de tags frequentes do pipeline.
 - **Ferramentas explícitas**: formalizar “tools” internas (e.g., `db_query`, `fetch_clusters`, `expand_cluster`) com contratos claros.
+
+## Edições seguras no banco (capacidade do Estagiário)
+- Sempre unitárias; nunca em lote; nunca dropar tabelas; nunca deletar mais de um item por comando.
+- Prioridades permitidas: `P1_CRITICO`, `P2_ESTRATEGICO`, `P3_MONITORAMENTO`, `IRRELEVANTE`.
+- Tags permitidas: catálogo em `backend/prompts.py::TAGS_SPECIAL_SITUATIONS` (ou fallback conhecido).
+- Exemplos de comandos aceitos:
+  - Atualizar prioridade: “atualize prioridade do cluster 123 para p2”
+  - Atualizar tag: “troque a tag do cluster 456 para Internacional”
+  - Merge unitário: “merge o cluster 111 no 222” (move artigos 111→222 e arquiva 111)
 
 ## Observações
 - O agente prioriza respostas concisas. Para investigações mais profundas, ele segue o plano A (ranquear → aprofundar → sintetizar) antes de redigir.
