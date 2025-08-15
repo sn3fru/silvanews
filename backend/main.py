@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 import google.generativeai as genai
 import json
 import os
+from pydantic import BaseModel
 
 # Carrega variáveis de ambiente do arquivo .env
 env_file = Path(__file__).parent / ".env"
@@ -46,7 +47,8 @@ try:
         agg_noticias_por_dia, agg_noticias_por_fonte, agg_noticias_por_autor,
         create_feedback, list_feedback, mark_feedback_processed,
         create_deep_research_job, update_deep_research_job, get_deep_research_job, list_deep_research_jobs_by_cluster,
-        create_social_research_job, update_social_research_job, get_social_research_job, list_social_research_jobs_by_cluster
+        create_social_research_job, update_social_research_job, get_social_research_job, list_social_research_jobs_by_cluster,
+        create_estagiario_session, add_estagiario_message, list_estagiario_messages
     )
     from .processing import processar_artigo_pipeline, gerar_resumo_cluster, inicializar_processamento
     from .utils import gerar_hash_unico, formatar_timestamp_relativo, get_date_brasil, parse_date_brasil
@@ -65,7 +67,8 @@ except ImportError:
         get_artigos_processados_hoje, get_clusters_existentes_hoje, get_cluster_com_artigos,
         associate_artigo_to_existing_cluster, create_cluster_for_artigo,
         create_deep_research_job, update_deep_research_job, get_deep_research_job, list_deep_research_jobs_by_cluster,
-        create_social_research_job, update_social_research_job, get_social_research_job, list_social_research_jobs_by_cluster
+        create_social_research_job, update_social_research_job, get_social_research_job, list_social_research_jobs_by_cluster,
+        create_estagiario_session, add_estagiario_message, list_estagiario_messages
     )
     from backend.processing import processar_artigo_pipeline, gerar_resumo_cluster, inicializar_processamento
     from backend.utils import gerar_hash_unico, formatar_timestamp_relativo, get_date_brasil, parse_date_brasil
@@ -2863,3 +2866,49 @@ async def update_prompts_settings(
     except Exception as e:
         print(f"❌ Erro ao atualizar configurações de prompts: {e}")
         raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
+
+
+class EstagiarioStartRequest(BaseModel):
+    data: str | None = None  # YYYY-MM-DD
+
+class EstagiarioSendRequest(BaseModel):
+    session_id: int
+    message: str
+
+@app.post("/api/estagiario/start")
+async def estagiario_start(req: EstagiarioStartRequest, db: Session = Depends(get_db)):
+    try:
+        if req.data:
+            try:
+                target_date = datetime.strptime(req.data, "%Y-%m-%d").date()
+            except ValueError:
+                target_date = get_date_brasil()
+        else:
+            target_date = get_date_brasil()
+        session_id = create_estagiario_session(db, target_date)
+        return {"session_id": session_id, "data": target_date.isoformat()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/estagiario/send")
+async def estagiario_send(req: EstagiarioSendRequest, db: Session = Depends(get_db)):
+    try:
+        # salva mensagem do usuário
+        add_estagiario_message(db, req.session_id, 'user', req.message)
+        # chama agente
+        from agents.estagiario.agent import EstagiarioAgent
+        agent = EstagiarioAgent()
+        answer = agent.answer(req.message)
+        add_estagiario_message(db, req.session_id, 'assistant', answer.text)
+        return {"ok": True, "response": answer.text}
+    except Exception as e:
+        add_estagiario_message(db, req.session_id, 'assistant', f"Erro: {e}")
+        return {"ok": False, "response": f"Erro: {e}"}
+
+@app.get("/api/estagiario/messages/{session_id}")
+async def estagiario_messages(session_id: int, db: Session = Depends(get_db)):
+    try:
+        msgs = list_estagiario_messages(db, session_id, limit=200)
+        return {"messages": msgs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

@@ -294,5 +294,47 @@
     </div>
     
     <script src="/frontend/script.js?v=1.0.31"></script>
+    <div id="modal-estagiario" class="modal-overlay oculto">
+        <div class="modal-container" style="max-width:560px;height:auto;">
+            <button class="modal-close-btn" onclick="document.getElementById('modal-estagiario').classList.add('oculto')">&times;</button>
+            <header class="modal-header">
+                <h2>🤖 Estagiário — Processando</h2>
+            </header>
+            <div class="modal-body">
+                <div style="display:flex;gap:1rem;align-items:center;">
+                    <div class="spinner" style="width:32px;height:32px;border-width:3px"></div>
+                    <p id="estagiario-status-text">Entendendo pergunta...</p>
+                </div>
+                <div id="estagiario-steps" style="margin-top:.75rem;color:#6C757D;font-size:.9rem;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-estagiario-chat" class="modal-overlay oculto">
+        <div class="modal-container" style="width:90vw;height:88vh;max-width:none;">
+            <button class="modal-close-btn" onclick="document.getElementById('modal-estagiario-chat').classList.add('oculto')">&times;</button>
+            <header class="modal-header">
+                <h2>🤖 Estagiário — Chat</h2>
+                <div style="margin-left:auto;display:flex;gap:.5rem;align-items:center;">
+                    <button id="btn-estagiario-copiar" class="btn btn-secundario" title="Copiar resposta">📋 Copiar</button>
+                    <button id="btn-estagiario-historico" class="btn btn-terciario" title="Ver conversas de hoje">🕘 Histórico</button>
+                </div>
+            </header>
+            <div class="modal-body">
+                <div class="chat-container" style="display:flex;flex-direction:column;">
+                    <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem;">
+                        <select id="estagiario-history-select" class="btn-terciario" style="padding:.5rem;border-radius:6px;border:1px solid var(--cor-borda);background:#fff;">
+                            <option value="">Histórico de conversas de hoje</option>
+                        </select>
+                    </div>
+                    <div id="estagiario-thread-modal" class="chat-messages" style="min-height:50vh;"></div>
+                    <div class="chat-input-area">
+                        <input type="text" id="estagiario-input-modal" placeholder="Pergunte algo...">
+                        <button class="btn" id="estagiario-send-modal">Enviar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

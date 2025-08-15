@@ -10,12 +10,12 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc, func, text
 
 try:
-    from .database import ArtigoBruto, ClusterEvento, SinteseExecutiva, LogProcessamento, ConfiguracaoColeta
+    from .database import ArtigoBruto, ClusterEvento, SinteseExecutiva, LogProcessamento, ConfiguracaoColeta, EstagiarioChatSession, EstagiarioChatMessage
     from .models import ArtigoBrutoCreate, ClusterEventoCreate
     from .utils import get_date_brasil
 except ImportError:
     # Fallback para import absoluto quando executado fora do pacote
-    from backend.database import ArtigoBruto, ClusterEvento, SinteseExecutiva, LogProcessamento, ConfiguracaoColeta
+    from backend.database import ArtigoBruto, ClusterEvento, SinteseExecutiva, LogProcessamento, ConfiguracaoColeta, EstagiarioChatSession, EstagiarioChatMessage
     from backend.models import ArtigoBrutoCreate, ClusterEventoCreate
     from backend.utils import get_date_brasil
 
@@ -655,6 +655,31 @@ def get_clusters_for_feed_by_date(db: Session, target_date: datetime.date, page:
             "tem_anterior": page > 1
         }
     }
+
+
+# ===================== CRUD Estagiário =====================
+def create_estagiario_session(db: Session, data_referencia: datetime.date) -> int:
+    s = EstagiarioChatSession(data_referencia=datetime.combine(data_referencia, datetime.min.time()))
+    db.add(s)
+    db.commit()
+    db.refresh(s)
+    return s.id
+
+
+def add_estagiario_message(db: Session, session_id: int, role: str, content: str) -> int:
+    m = EstagiarioChatMessage(session_id=session_id, role=role, content=content)
+    db.add(m)
+    db.commit()
+    db.refresh(m)
+    return m.id
+
+
+def list_estagiario_messages(db: Session, session_id: int, limit: int = 100) -> List[Dict[str, Any]]:
+    q = db.query(EstagiarioChatMessage).filter(EstagiarioChatMessage.session_id == session_id).order_by(EstagiarioChatMessage.timestamp.asc())
+    return [
+        {"id": msg.id, "role": msg.role, "content": msg.content, "timestamp": msg.timestamp.isoformat()}
+        for msg in q.limit(limit).all()
+    ]
 
 
 def get_cluster_details_by_id(db: Session, cluster_id: int) -> Optional[Dict[str, Any]]:

@@ -298,6 +298,36 @@ class FeedbackNoticia(Base):
     )
 
 
+# ===================== Estagiário (chat por dia) =====================
+class EstagiarioChatSession(Base):
+    __tablename__ = "estagiario_chat_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    data_referencia = Column(DateTime, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        Index('idx_estag_sess_date', 'data_referencia'),
+        Index('idx_estag_sess_created', 'created_at'),
+    )
+
+
+class EstagiarioChatMessage(Base):
+    __tablename__ = "estagiario_chat_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey('estagiario_chat_sessions.id'), nullable=False, index=True)
+    role = Column(String(20), nullable=False)  # user | assistant | system
+    content = Column(Text, nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        Index('idx_estag_msg_session', 'session_id'),
+        Index('idx_estag_msg_timestamp', 'timestamp'),
+    )
+
+
 class ClusterAlteracao(Base):
     """
     Tabela para registrar alterações em clusters.

@@ -2571,3 +2571,222 @@ loadingStyle.textContent = `
     }
 `;
 document.head.appendChild(loadingStyle);
+
+function inserirCardEstagiario() {
+    if (!feedContainer) return;
+    const card = document.createElement('article');
+    card.className = 'card-cluster estagiario-card';
+    card.innerHTML = `
+        <div class="card-header">
+            <div class="card-title-area">
+                <h3 class="card-titulo">🤖 Estagiário — Em construção 🚧</h3>
+            </div>
+            <div class="card-contador-fontes" title="Agente de apoio">
+                <span>🗨️</span>
+                <span class="contador">chat</span>
+            </div>
+        </div>
+        <p class="card-resumo">Faça uma pergunta sobre as notícias do dia. O Estagiário consultará as prioridades/tags e responderá com base nos dados.</p>
+        <div class="estagiario-chat">
+            <div class="estagiario-chat-thread" id="estagiario-thread"></div>
+            <div class="estagiario-chat-input">
+                <input type="text" id="estagiario-input" placeholder="Pergunte algo..." />
+                <button class="btn" id="estagiario-send">Enviar</button>
+            </div>
+        </div>
+    `;
+    feedContainer.prepend(card);
+
+    // sessão por dia
+    let estagiarioSessionId = null;
+    async function ensureSession() {
+        if (estagiarioSessionId) return estagiarioSessionId;
+        const resp = await fetch('/api/estagiario/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: currentDate }) });
+        const data = await resp.json();
+        estagiarioSessionId = data.session_id;
+        return estagiarioSessionId;
+    }
+    // Renderização simples de Markdown (títulos, negrito, itálico, listas, links)
+    function renderMarkdown(mdRaw) {
+        let html = (mdRaw || '').toString();
+        // Escapes básicos não implementados (texto vem do nosso backend)
+        // Títulos
+        html = html
+            .replace(/^###\s+(.*)$/gim, '<h3>$1</h3>')
+            .replace(/^##\s+(.*)$/gim, '<h2>$1</h2>')
+            .replace(/^#\s+(.*)$/gim, '<h1>$1</h1>');
+        // Negrito e itálico
+        html = html
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>');
+        // Links [texto](url)
+        html = html.replace(/\[(.*?)\]\((https?:\/\/[^\s)]+)\)/gim, '<a href="$2" target="_blank" rel="noopener noreferrer">$1<\/a>');
+        // Listas com "- "
+        html = html.replace(/^(\-\s+.*(?:\n\-\s+.*)*)/gim, (m) => {
+            const items = m.split(/\n/g).map(l => l.replace(/^\-\s+/, '')).map(t => `<li>${t}<\/li>`).join('');
+            return `<ul>${items}<\/ul>`;
+        });
+        // Listas numeradas 1. 2. 3.
+        html = html.replace(/^(\d+\.\s+.*(?:\n\d+\.\s+.*)*)/gim, (m) => {
+            const items = m.split(/\n/g).map(l => l.replace(/^\d+\.\s+/, '')).map(t => `<li>${t}<\/li>`).join('');
+            return `<ol>${items}<\/ol>`;
+        });
+        // Quebras de parágrafo
+        html = html.replace(/\n\n/g, '<br/>' );
+        return html;
+    }
+
+    async function sendMessage(msg, fromModal=false) {
+        const sid = await ensureSession();
+        const thread = fromModal ? document.getElementById('estagiario-thread-modal') : document.getElementById('estagiario-thread');
+        const userDiv = document.createElement('div');
+        userDiv.className = 'estagiario-msg user';
+        userDiv.textContent = msg;
+        thread.appendChild(userDiv);
+        // abre modal de status
+        const modal = document.getElementById('modal-estagiario');
+        const statusText = document.getElementById('estagiario-status-text');
+        const steps = document.getElementById('estagiario-steps');
+        if (modal && statusText && steps) {
+            modal.classList.remove('oculto');
+            statusText.textContent = 'Entendendo pergunta...';
+            steps.innerHTML = '';
+        }
+        try {
+            // Etapa 1: Entendendo
+            if (steps) steps.innerHTML = '<div>✓ Entendendo</div>';
+            await new Promise(r => setTimeout(r, 200));
+            // Etapa 2: Planejamento
+            if (statusText) statusText.textContent = 'Planejando passos...';
+            if (steps) steps.innerHTML += '<div>✓ Planejamento</div>';
+            await new Promise(r => setTimeout(r, 200));
+            // Etapa 3: Consulta ao DB (antes do await para mostrar progresso)
+            if (statusText) statusText.textContent = 'Consultando banco de dados...';
+            const resp = await fetch('/api/estagiario/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sid, message: msg }) });
+            if (steps) steps.innerHTML += '<div>✓ Consulta ao DB</div>';
+            await new Promise(r => setTimeout(r, 150));
+            // Etapa 4: Síntese
+            if (statusText) statusText.textContent = 'Sintetizando resposta...';
+            const data = await resp.json();
+            const asDiv = document.createElement('div');
+            asDiv.className = 'estagiario-msg assistant';
+            asDiv.innerHTML = renderMarkdown(data.response || '');
+            thread.appendChild(asDiv);
+            thread.scrollTop = thread.scrollHeight;
+            // Atualiza select de histórico com a pergunta enviada
+            const hist = document.getElementById('estagiario-history-select');
+            if (hist) {
+                const opt = document.createElement('option');
+                opt.value = Date.now().toString();
+                opt.textContent = msg.slice(0, 120);
+                hist.appendChild(opt);
+                hist.value = opt.value;
+            }
+        } catch (e) {
+            const errDiv = document.createElement('div');
+            errDiv.className = 'estagiario-msg assistant';
+            errDiv.textContent = 'Erro ao processar';
+            thread.appendChild(errDiv);
+        } finally {
+            if (modal) modal.classList.add('oculto');
+            const modalChat = document.getElementById('modal-estagiario-chat');
+            if (modalChat) {
+                modalChat.classList.remove('oculto');
+                if (!fromModal) {
+                    const modalThread = document.getElementById('estagiario-thread-modal');
+                    const cardThread = document.getElementById('estagiario-thread');
+                    if (modalThread && cardThread) modalThread.innerHTML = cardThread.innerHTML;
+                }
+                // bind copiar resposta
+                const copyBtn = document.getElementById('btn-estagiario-copiar');
+                if (copyBtn && !copyBtn.dataset.bound) {
+                    copyBtn.dataset.bound = '1';
+                    copyBtn.addEventListener('click', async () => {
+                        const al = document.getElementById('estagiario-answer-latest');
+                        if (!al) return;
+                        const tmp = document.createElement('textarea');
+                        tmp.value = al.textContent || '';
+                        document.body.appendChild(tmp);
+                        tmp.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(tmp);
+                        copyBtn.textContent = '✅ Copiado';
+                        setTimeout(() => copyBtn.textContent = '📋 Copiar', 1200);
+                    });
+                }
+                // bind histórico (placeholder)
+                const histBtn = document.getElementById('btn-estagiario-historico');
+                if (histBtn && !histBtn.dataset.bound) {
+                    histBtn.dataset.bound = '1';
+                    histBtn.addEventListener('click', async () => {
+                        alert('Histórico de conversas do dia — em construção');
+                    });
+                }
+            }
+        }
+    }
+    const input = card.querySelector('#estagiario-input');
+    const btn = card.querySelector('#estagiario-send');
+    btn.addEventListener('click', async () => {
+        const v = (input.value || '').trim();
+        if (!v) return;
+        input.value = '';
+        await sendMessage(v);
+    });
+    input.addEventListener('keypress', async (e) => {
+        if (e.key === 'Enter') {
+            const v = (input.value || '').trim();
+            if (!v) return;
+            input.value = '';
+            await sendMessage(v);
+        }
+    });
+
+    // clique no card: abre modal de chat ampliado (70%)
+    card.addEventListener('click', (e) => {
+        // evita propagar clique do botão enviar
+        if (e.target && (e.target.id === 'estagiario-send' || e.target.id === 'estagiario-input')) return;
+        const modalChat = document.getElementById('modal-estagiario-chat');
+        if (modalChat) {
+            modalChat.classList.remove('oculto');
+            const modalThread = document.getElementById('estagiario-thread-modal');
+            const cardThread = document.getElementById('estagiario-thread');
+            if (modalThread && cardThread) modalThread.innerHTML = cardThread.innerHTML;
+            const inputModal = document.getElementById('estagiario-input-modal');
+            const sendModal = document.getElementById('estagiario-send-modal');
+            if (sendModal && inputModal && !sendModal.dataset.bound) {
+                sendModal.dataset.bound = '1';
+                sendModal.addEventListener('click', async () => {
+                    const v = (inputModal.value || '').trim();
+                    if (!v) return;
+                    inputModal.value = '';
+                    await sendMessage(v, true);
+                });
+                inputModal.addEventListener('keypress', async (ev) => {
+                    if (ev.key === 'Enter') {
+                        const v = (inputModal.value || '').trim();
+                        if (!v) return;
+                        inputModal.value = '';
+                        await sendMessage(v, true);
+                    }
+                });
+            }
+            // Bind histórico change: apenas rola o thread por enquanto
+            const hist = document.getElementById('estagiario-history-select');
+            if (hist && !hist.dataset.bound) {
+                hist.dataset.bound = '1';
+                hist.addEventListener('change', () => {
+                    const t = document.getElementById('estagiario-thread-modal');
+                    if (t) t.scrollTop = t.scrollHeight;
+                });
+            }
+        }
+    });
+}
+
+// Hook no fluxo de renderização
+const _origRenderizarClusters = renderizarClusters;
+renderizarClusters = function() {
+    _origRenderizarClusters();
+    inserirCardEstagiario();
+};

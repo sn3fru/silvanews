@@ -722,8 +722,7 @@ hr { border: none; border-top: 1px solid var(--cor-borda); margin: 1.5rem 0; }
     gap: 0.5rem;
     padding: 1rem;
     background-color: var(--cor-container);
-    border-bottom: 1px solid var(--cor-borda);
-    order: -1; /* Move input area to the top */
+    border-top: 1px solid var(--cor-borda);
 }
 
 .chat-input-area input {
@@ -1355,3 +1354,12 @@ hr { border: none; border-top: 1px solid var(--cor-borda); margin: 1.5rem 0; }
         justify-content: flex-end;
     }
 }
+
+.estagiario-card { border-left: 6px solid #0d6efd; }
+.estagiario-chat { margin-top: .75rem; border: 1px solid var(--cor-borda); border-radius: 8px; overflow: hidden; }
+.estagiario-chat-thread { max-height: 220px; overflow: auto; padding: .75rem; background: #f8f9fb; }
+.estagiario-msg { padding: .4rem .6rem; margin-bottom: .4rem; border-radius: 6px; font-size: .95rem; }
+.estagiario-msg.user { background: #e7f1ff; color: #0b4aa1; align-self: flex-end; }
+.estagiario-msg.assistant { background: #eef7ee; color: #155724; }
+.estagiario-chat-input { display: flex; gap: .5rem; padding: .5rem; border-top: 1px solid var(--cor-borda); background: white; }
+.estagiario-chat-input input { flex: 1; padding: .5rem .6rem; border: 1px solid var(--cor-borda); border-radius: 6px; }
