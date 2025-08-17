@@ -46,6 +46,9 @@ try:
         ChatSession,
         ChatMessage,
         ClusterAlteracao,
+        PromptTag,
+        PromptPrioridadeItem,
+        PromptTemplate,
     )
 except Exception:
     # Execução direta
@@ -60,6 +63,9 @@ except Exception:
         ChatSession,
         ChatMessage,
         ClusterAlteracao,
+        PromptTag,
+        PromptPrioridadeItem,
+        PromptTemplate,
     )
 
 
@@ -442,6 +448,101 @@ def migrate_logs(db_src: Session, db_dst: Session, since: datetime, cluster_id_m
     return total
 
 
+def migrate_prompts(db_src: Session, db_dst: Session, since: datetime, no_update: bool) -> Dict[str, int]:
+    """Migra tabelas de prompts configuráveis (tags, prioridades, templates)"""
+    print("➡️ Migrando prompts configuráveis...")
+    
+    # Migra tags
+    tags_count = 0
+    q_tags = db_src.query(PromptTag).filter(PromptTag.updated_at > since).order_by(PromptTag.updated_at.asc())
+    for tag in q_tags.yield_per(100):
+        existing = db_dst.query(PromptTag).filter_by(nome=tag.nome).first()
+        if existing and no_update:
+            continue
+            
+        if existing:
+            # Atualiza tag existente
+            existing.descricao = tag.descricao
+            existing.exemplos = tag.exemplos
+            existing.ordem = tag.ordem
+            existing.updated_at = datetime.now(timezone.utc)
+        else:
+            # Cria nova tag
+            clone = PromptTag(
+                nome=tag.nome,
+                descricao=tag.descricao,
+                exemplos=tag.exemplos,
+                ordem=tag.ordem,
+                created_at=tag.created_at,
+                updated_at=tag.updated_at
+            )
+            db_dst.add(clone)
+            tags_count += 1
+    
+    # Migra itens de prioridade
+    prioridades_count = 0
+    q_prioridades = db_src.query(PromptPrioridadeItem).filter(PromptPrioridadeItem.updated_at > since).order_by(PromptPrioridadeItem.updated_at.asc())
+    for prioridade in q_prioridades.yield_per(100):
+        existing = db_dst.query(PromptPrioridadeItem).filter_by(
+            nivel=prioridade.nivel, 
+            item=prioridade.item
+        ).first()
+        
+        if existing and no_update:
+            continue
+            
+        if existing:
+            # Atualiza item existente
+            existing.descricao = prioridade.descricao
+            existing.ordem = prioridade.ordem
+            existing.updated_at = datetime.now(timezone.utc)
+        else:
+            # Cria novo item
+            clone = PromptPrioridadeItem(
+                nivel=prioridade.nivel,
+                item=prioridade.item,
+                descricao=prioridade.descricao,
+                ordem=prioridade.ordem,
+                created_at=prioridade.created_at,
+                updated_at=prioridade.updated_at
+            )
+            db_dst.add(clone)
+            prioridades_count += 1
+    
+    # Migra templates
+    templates_count = 0
+    q_templates = db_src.query(PromptTemplate).filter(PromptTemplate.updated_at > since).order_by(PromptTemplate.updated_at.asc())
+    for template in q_templates.yield_per(100):
+        existing = db_dst.query(PromptTemplate).filter_by(chave=template.chave).first()
+        if existing and no_update:
+            continue
+            
+        if existing:
+            # Atualiza template existente
+            existing.conteudo = template.conteudo
+            existing.updated_at = datetime.now(timezone.utc)
+        else:
+            # Cria novo template
+            clone = PromptTemplate(
+                chave=template.chave,
+                descricao=template.descricao,
+                conteudo=template.conteudo,
+                created_at=template.created_at,
+                updated_at=template.updated_at
+            )
+            db_dst.add(clone)
+            templates_count += 1
+    
+    db_dst.commit()
+    
+    print(f"✅ Tags: {tags_count} | Prioridades: {prioridades_count} | Templates: {templates_count}")
+    return {
+        'tags': tags_count,
+        'prioridades': prioridades_count,
+        'templates': templates_count
+    }
+
+
 # ==============================================================================
 # CLI
 # ==============================================================================
@@ -458,7 +559,8 @@ def main() -> None:
     parser.add_argument("--no-update-existing", action="store_true", help="Não atualiza registros já existentes")
     parser.add_argument("--include-logs", action="store_true", help="Migrar logs")
     parser.add_argument("--include-chat", action="store_true", help="Migrar chat")
-    parser.add_argument("--only", default="", help="Lista de entidades a migrar (ex: clusters,artigos,sinteses,configs,alteracoes,chat,logs)")
+    parser.add_argument("--include-prompts", action="store_true", help="Migrar prompts configuráveis")
+    parser.add_argument("--only", default="", help="Lista de entidades a migrar (ex: clusters,artigos,sinteses,configs,alteracoes,chat,logs,prompts)")
 
     args = parser.parse_args()
     if not args.dest:
@@ -506,6 +608,9 @@ def main() -> None:
 
         if args.include_logs and want("logs"):
             migrate_logs(db_src, db_dst, since, cluster_id_map, artigo_hash_to_id={})
+
+        if args.include_prompts and want("prompts"):
+            migrate_prompts(db_src, db_dst, since, args.no_update_existing)
 
         # Atualiza timestamp somente se nenhuma exceção ocorreu
         write_last_run(args.meta_file, datetime.now(timezone.utc))

@@ -561,6 +561,173 @@
         .processing-status span.error {
             color: #dc3545;
         }
+        
+        /* Prompts Tab Styles */
+        .prompts-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .prompts-tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .prompt-tab-btn {
+            padding: 15px 25px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            color: #6c757d;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s ease;
+        }
+        
+        .prompt-tab-btn:hover {
+            background: #e9ecef;
+            color: #495057;
+        }
+        
+        .prompt-tab-btn.ativo {
+            color: #007bff;
+            border-bottom-color: #007bff;
+            background: white;
+        }
+        
+        .prompt-tab-content {
+            display: none;
+            padding: 30px;
+            min-height: 600px;
+        }
+        
+        .prompt-tab-content.ativo {
+            display: block;
+        }
+        
+        .prompt-header {
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .prompt-header h3 {
+            margin: 0 0 10px 0;
+            color: #495057;
+        }
+        
+        .prompt-header p {
+            margin: 0 0 20px 0;
+            color: #6c757d;
+        }
+        
+        .prompt-content {
+            max-width: 100%;
+        }
+        
+        .prompt-items-list {
+            display: grid;
+            gap: 20px;
+        }
+        
+        .prompt-item-card {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            position: relative;
+        }
+        
+        .prompt-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+        }
+        
+        .prompt-item-title {
+            font-weight: 600;
+            color: #495057;
+            font-size: 16px;
+            margin: 0;
+        }
+        
+        .prompt-item-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .prompt-item-content {
+            margin-bottom: 15px;
+        }
+        
+        .prompt-item-descricao {
+            color: #6c757d;
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+        
+        .prompt-item-exemplos {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            font-size: 14px;
+            color: #495057;
+        }
+        
+        .prompt-item-exemplos ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        
+        .prompt-item-exemplos li {
+            margin-bottom: 5px;
+        }
+        
+        .prompt-item-meta {
+            display: flex;
+            gap: 15px;
+            font-size: 12px;
+            color: #6c757d;
+        }
+        
+        .prompt-item-meta span {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .btn-edit-small,
+        .btn-delete-small {
+            padding: 4px 8px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-edit-small {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-edit-small:hover {
+            background: #218838;
+        }
+        
+        .btn-delete-small {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-delete-small:hover {
+            background: #c82333;
+        }
     </style>
 </head>
 <body>
@@ -587,6 +754,7 @@
             <button class="nav-tab active" onclick="showTab('artigos')">📰 Artigos Brutos</button>
             <button class="nav-tab" onclick="showTab('clusters')">🔗 Clusters/Eventos</button>
             <button class="nav-tab" onclick="showTab('upload')">📁 Upload de Arquivos</button>
+            <button class="nav-tab" onclick="showTab('prompts')">⚙️ Prompts</button>
             <button class="nav-tab" onclick="showTab('bi')">📈 BI</button>
             <button class="nav-tab" onclick="showTab('feedback')">👍 Feedback</button>
         </div>
@@ -643,6 +811,96 @@
             </table>
             
             <div id="artigos-pagination" class="pagination" style="display: none;"></div>
+        </div>
+        
+        <!-- Tab Prompts -->
+        <div id="prompts" class="tab-content">
+            <div class="prompts-container">
+                <div class="prompts-tabs">
+                    <button class="prompt-tab-btn ativo" data-tab="tab-tags">Tags</button>
+                    <button class="prompt-tab-btn" data-tab="tab-prioridades">Prioridades</button>
+                    <button class="prompt-tab-btn" data-tab="tab-prompt">Resumo/Clusterizador</button>
+                    <button class="prompt-tab-btn" data-tab="tab-outros">Outros Prompts</button>
+                </div>
+                
+                <!-- Tab Tags -->
+                <div id="tab-tags" class="prompt-tab-content ativo">
+                    <div class="prompt-header">
+                        <h3>🏷️ Tags Temáticas - Special Situations</h3>
+                        <p>Configure as tags temáticas para classificação de notícias. Cada tag deve refletir o núcleo da tese de investimento.</p>
+                        <button class="btn btn-primary" onclick="showAddTagModal()">➕ Adicionar Nova Tag</button>
+                    </div>
+                    
+                    <div class="prompt-content">
+                        <div id="tags-loading" class="loading">Carregando tags...</div>
+                        <div id="tags-error" class="error" style="display: none;"></div>
+                        <div id="tags-success" class="success" style="display: none;"></div>
+                        
+                        <div id="tags-list" class="prompt-items-list" style="display: none;">
+                            <!-- Tags serão carregadas aqui dinamicamente -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tab Prioridades -->
+                <div id="tab-prioridades" class="prompt-tab-content">
+                    <div class="prompt-header">
+                        <h3>🎯 Itens de Prioridade</h3>
+                        <p>Configure os itens de prioridade para cada nível (P1, P2, P3). Estes itens são usados para classificar a urgência das notícias.</p>
+                        <button class="btn btn-primary" onclick="showAddPrioridadeModal()">➕ Adicionar Novo Item</button>
+                    </div>
+                    
+                    <div class="prompt-content">
+                        <div id="prioridades-loading" class="loading">Carregando prioridades...</div>
+                        <div id="prioridades-error" class="error" style="display: none;"></div>
+                        <div id="prioridades-success" class="success" style="display: none;"></div>
+                        
+                        <div id="prioridades-list" class="prompt-items-list" style="display: none;">
+                            <!-- Prioridades serão carregadas aqui dinamicamente -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tab Resumo/Clusterizador -->
+                <div id="tab-prompt" class="prompt-tab-content">
+                    <div class="prompt-header">
+                        <h3>📝 Prompt de Resumo/Clusterização</h3>
+                        <p>Configure o prompt principal usado para gerar resumos e clusterizar notícias.</p>
+                    </div>
+                    
+                    <div class="prompt-content">
+                        <div class="form-group">
+                            <label>Prompt de Resumo/Clusterização:</label>
+                            <textarea id="prompt-resumo" rows="20" placeholder="Digite o prompt aqui..."></textarea>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn btn-primary" onclick="salvarPromptResumo()">💾 Salvar Prompt</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tab Outros Prompts -->
+                <div id="tab-outros" class="prompt-tab-content">
+                    <div class="prompt-header">
+                        <h3>🔧 Outros Prompts</h3>
+                        <p>Configure prompts adicionais para funcionalidades específicas do sistema.</p>
+                    </div>
+                    
+                    <div class="prompt-content">
+                        <div class="form-group">
+                            <label>Prompt de Análise de Relevância:</label>
+                            <textarea id="prompt-relevancia" rows="15" placeholder="Digite o prompt aqui..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Prompt de Extração de Dados:</label>
+                            <textarea id="prompt-extracao" rows="15" placeholder="Digite o prompt aqui..."></textarea>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn btn-primary" onclick="salvarOutrosPrompts()">💾 Salvar Prompts</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Tab BI -->
@@ -835,6 +1093,70 @@
                     <div class="progress-text">Processando artigos...</div>
                 </div>
             </div>
+        </div>
+    </div>
+    
+    <!-- Modal para edição de Tags -->
+    <div id="tagModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="tag-modal-title">Editar Tag</h2>
+                <span class="close" onclick="closeTagModal()">&times;</span>
+            </div>
+            <form id="tagForm">
+                <div class="form-group">
+                    <label>Nome da Tag:</label>
+                    <input type="text" id="tag-nome" required placeholder="Ex: Ativismo Acionário">
+                </div>
+                <div class="form-group">
+                    <label>Descrição:</label>
+                    <textarea id="tag-descricao" required rows="4" placeholder="Descreva o que esta tag representa..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Exemplos (um por linha):</label>
+                    <textarea id="tag-exemplos" rows="6" placeholder="Digite um exemplo por linha..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Ordem:</label>
+                    <input type="number" id="tag-ordem" min="0" value="0">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn-cancel" onclick="closeTagModal()">Cancelar</button>
+                    <button type="submit" class="btn-save">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modal para edição de Prioridades -->
+    <div id="prioridadeModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="prioridade-modal-title">Editar Item de Prioridade</h2>
+                <span class="close" onclick="closePrioridadeModal()">&times;</span>
+            </div>
+            <form id="prioridadeForm">
+                <div class="form-group">
+                    <label>Nível de Prioridade:</label>
+                    <select id="prioridade-nivel" required>
+                        <option value="P1_CRITICO">P1 - CRÍTICO</option>
+                        <option value="P2_ESTRATEGICO">P2 - ESTRATÉGICO</option>
+                        <option value="P3_MONITORAMENTO">P3 - MONITORAMENTO</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Item:</label>
+                    <input type="text" id="prioridade-item" required placeholder="Ex: Ativismo Acionário relevante">
+                </div>
+                <div class="form-group">
+                    <label>Ordem:</label>
+                    <input type="number" id="prioridade-ordem" min="0" value="0">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn-cancel" onclick="closePrioridadeModal()">Cancelar</button>
+                    <button type="submit" class="btn-save">Salvar</button>
+                </div>
+            </form>
         </div>
     </div>
     

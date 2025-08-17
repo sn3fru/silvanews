@@ -31,12 +31,259 @@ function showTab(tabName) {
         case 'clusters':
             loadClusters();
             break;
+        case 'prompts':
+            loadPrompts();
+            break;
         case 'bi':
             carregarBI();
             break;
         case 'feedback':
             carregarFeedback();
             break;
+    }
+}
+
+// =======================================
+// PROMPTS TAB FUNCTIONALITY
+// =======================================
+
+// Navegação entre sub-tabs de prompts
+document.addEventListener('DOMContentLoaded', function() {
+    // Setup dos botões de sub-tab de prompts
+    document.querySelectorAll('.prompt-tab-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const tabName = this.dataset.tab;
+            showPromptSubTab(tabName);
+        });
+    });
+});
+
+function showPromptSubTab(tabName) {
+    // Remove classe ativo de todos os botões e conteúdos
+    document.querySelectorAll('.prompt-tab-btn').forEach(btn => btn.classList.remove('ativo'));
+    document.querySelectorAll('.prompt-tab-content').forEach(content => content.classList.remove('ativo'));
+    
+    // Adiciona classe ativo ao botão e conteúdo selecionados
+    document.querySelector(`[data-tab="${tabName}"]`).classList.add('ativo');
+    document.getElementById(tabName).classList.add('ativo');
+    
+    // Carrega dados específicos da sub-tab
+    switch(tabName) {
+        case 'tab-tags':
+            loadPromptTags();
+            break;
+        case 'tab-prioridades':
+            loadPromptPrioridades();
+            break;
+        case 'tab-prompt':
+            loadPromptResumo();
+            break;
+        case 'tab-outros':
+            loadOutrosPrompts();
+            break;
+    }
+}
+
+function loadPrompts() {
+    // Carrega a primeira sub-tab por padrão
+    showPromptSubTab('tab-tags');
+}
+
+// Carregamento de Tags
+async function loadPromptTags() {
+    const loadingEl = document.getElementById('tags-loading');
+    const errorEl = document.getElementById('tags-error');
+    const successEl = document.getElementById('tags-success');
+    const listEl = document.getElementById('tags-list');
+    
+    try {
+        loadingEl.style.display = 'block';
+        errorEl.style.display = 'none';
+        successEl.style.display = 'none';
+        listEl.style.display = 'none';
+        
+        const response = await fetch('/api/prompts/tags');
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const tags = await response.json();
+        renderPromptTags(tags);
+        
+        loadingEl.style.display = 'none';
+        listEl.style.display = 'block';
+        
+    } catch (error) {
+        console.error('Erro ao carregar tags:', error);
+        loadingEl.style.display = 'none';
+        errorEl.textContent = `Erro ao carregar tags: ${error.message}`;
+        errorEl.style.display = 'block';
+    }
+}
+
+function renderPromptTags(tags) {
+    const listEl = document.getElementById('tags-list');
+    
+    if (!tags || tags.length === 0) {
+        listEl.innerHTML = '<p class="text-center text-muted">Nenhuma tag configurada. Adicione a primeira tag!</p>';
+        return;
+    }
+    
+    const tagsHtml = tags.map(tag => `
+        <div class="prompt-item-card">
+            <div class="prompt-item-header">
+                <h4 class="prompt-item-title">${tag.nome}</h4>
+                <div class="prompt-item-actions">
+                    <button class="btn-edit-small" onclick="editPromptTag(${tag.id})">✏️ Editar</button>
+                    <button class="btn-delete-small" onclick="deletePromptTag(${tag.id})">🗑️ Excluir</button>
+                </div>
+            </div>
+            <div class="prompt-item-content">
+                <div class="prompt-item-descricao">${tag.descricao}</div>
+                ${tag.exemplos && tag.exemplos.length > 0 ? `
+                    <div class="prompt-item-exemplos">
+                        <strong>Exemplos:</strong>
+                        <ul>
+                            ${tag.exemplos.map(exemplo => `<li>${exemplo}</li>`).join('')}
+                        </ul>
+                    </div>
+                ` : ''}
+            </div>
+            <div class="prompt-item-meta">
+                <span>📊 Ordem: ${tag.ordem}</span>
+                <span>🕒 Atualizado: ${new Date(tag.updated_at).toLocaleString('pt-BR')}</span>
+            </div>
+        </div>
+    `).join('');
+    
+    listEl.innerHTML = tagsHtml;
+}
+
+// Carregamento de Prioridades
+async function loadPromptPrioridades() {
+    const loadingEl = document.getElementById('prioridades-loading');
+    const errorEl = document.getElementById('prioridades-error');
+    const successEl = document.getElementById('prioridades-success');
+    const listEl = document.getElementById('prioridades-list');
+    
+    try {
+        loadingEl.style.display = 'block';
+        errorEl.style.display = 'none';
+        successEl.style.display = 'none';
+        listEl.style.display = 'none';
+        
+        const response = await fetch('/api/prompts/prioridades');
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const prioridades = await response.json();
+        renderPromptPrioridades(prioridades);
+        
+        loadingEl.style.display = 'none';
+        listEl.style.display = 'block';
+        
+    } catch (error) {
+        console.error('Erro ao carregar prioridades:', error);
+        loadingEl.style.display = 'none';
+        errorEl.textContent = `Erro ao carregar prioridades: ${error.message}`;
+        errorEl.style.display = 'block';
+    }
+}
+
+function renderPromptPrioridades(prioridades) {
+    const listEl = document.getElementById('prioridades-list');
+    
+    if (!prioridades || prioridades.length === 0) {
+        listEl.innerHTML = '<p class="text-center text-muted">Nenhum item de prioridade configurado. Adicione o primeiro item!</p>';
+        return;
+    }
+    
+    // Agrupa por nível de prioridade
+    const grupos = {
+        'P1_CRITICO': { titulo: 'P1 - CRÍTICO', items: [], cor: '#dc3545' },
+        'P2_ESTRATEGICO': { titulo: 'P2 - ESTRATÉGICO', items: [], cor: '#ffc107' },
+        'P3_MONITORAMENTO': { titulo: 'P3 - MONITORAMENTO', items: [], cor: '#17a2b8' }
+    };
+    
+    prioridades.forEach(item => {
+        if (grupos[item.nivel]) {
+            grupos[item.nivel].items.push(item);
+        }
+    });
+    
+    let prioridadesHtml = '';
+    
+    Object.entries(grupos).forEach(([nivel, grupo]) => {
+        if (grupo.items.length > 0) {
+            prioridadesHtml += `
+                <div class="prompt-item-card" style="border-left: 4px solid ${grupo.cor}">
+                    <div class="prompt-item-header">
+                        <h4 class="prompt-item-title" style="color: ${grupo.cor}">${grupo.titulo}</h4>
+                    </div>
+                    ${grupo.items.map(item => `
+                                                     <div class="prompt-item-content" style="margin-bottom: 15px; padding: 15px; background: white; border-radius: 4px; border: 1px solid #dee2e6;">
+                                 <div class="prompt-item-header">
+                                     <h5 style="margin: 0 0 10px 0; color: #495057;">${item.texto}</h5>
+                                     <div class="prompt-item-actions">
+                                         <button class="btn-edit-small" onclick="editPromptPrioridade(${item.id})">✏️ Editar</button>
+                                         <button class="btn-delete-small" onclick="deletePromptPrioridade(${item.id})">🗑️ Excluir</button>
+                                     </div>
+                                 </div>
+                                 <div class="prompt-item-meta">
+                                     <span>📊 Ordem: ${item.ordem}</span>
+                                     <span>🕒 Atualizado: ${new Date(item.updated_at).toLocaleString('pt-BR')}</span>
+                                 </div>
+                             </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+    });
+    
+    if (prioridadesHtml === '') {
+        prioridadesHtml = '<p class="text-center text-muted">Nenhum item de prioridade configurado. Adicione o primeiro item!</p>';
+    }
+    
+    listEl.innerHTML = prioridadesHtml;
+}
+
+// Carregamento de outros prompts
+async function loadPromptResumo() {
+    try {
+        const response = await fetch('/api/prompts/templates/resumo');
+        if (response.ok) {
+            const template = await response.json();
+            if (template && template.conteudo) {
+                document.getElementById('prompt-resumo').value = template.conteudo;
+            }
+        }
+    } catch (error) {
+        console.error('Erro ao carregar prompt de resumo:', error);
+    }
+}
+
+async function loadOutrosPrompts() {
+    try {
+        // Carrega prompt de relevância
+        const responseRelevancia = await fetch('/api/prompts/templates/relevancia');
+        if (responseRelevancia.ok) {
+            const template = await responseRelevancia.json();
+            if (template && template.conteudo) {
+                document.getElementById('prompt-relevancia').value = template.conteudo;
+            }
+        }
+        
+        // Carrega prompt de extração
+        const responseExtracao = await fetch('/api/prompts/templates/extracao');
+        if (responseExtracao.ok) {
+            const template = await responseExtracao.json();
+            if (template && template.conteudo) {
+                document.getElementById('prompt-extracao').value = template.conteudo;
+            }
+        }
+    } catch (error) {
+        console.error('Erro ao carregar outros prompts:', error);
     }
 }
 
@@ -1402,4 +1649,262 @@ async function pollProcessingStatus() {
     }
     
     processingStatus.innerHTML = `<div class="info">⚠️ Timeout - Verifique o status manualmente</div>`;
+} 
+
+// =======================================
+// PROMPTS CRUD FUNCTIONS
+// =======================================
+
+// Funções para Tags
+let editingTagId = null;
+
+function showAddTagModal() {
+    editingTagId = null;
+    document.getElementById('tag-modal-title').textContent = 'Adicionar Nova Tag';
+    document.getElementById('tagForm').reset();
+    document.getElementById('tagModal').style.display = 'block';
+}
+
+function editPromptTag(tagId) {
+    editingTagId = tagId;
+    document.getElementById('tag-modal-title').textContent = 'Editar Tag';
+    
+    // Busca os dados da tag para preencher o formulário
+    fetch(`/api/prompts/tags/${tagId}`)
+        .then(response => response.json())
+        .then(tag => {
+            document.getElementById('tag-nome').value = tag.nome;
+            document.getElementById('tag-descricao').value = tag.descricao;
+            document.getElementById('tag-exemplos').value = tag.exemplos ? tag.exemplos.join('\n') : '';
+            document.getElementById('tag-ordem').value = tag.ordem || 0;
+            document.getElementById('tagModal').style.display = 'block';
+        })
+        .catch(error => {
+            console.error('Erro ao carregar tag:', error);
+            alert('Erro ao carregar dados da tag');
+        });
+}
+
+function closeTagModal() {
+    document.getElementById('tagModal').style.display = 'none';
+    editingTagId = null;
+}
+
+async function deletePromptTag(tagId) {
+    if (!confirm('Tem certeza que deseja excluir esta tag? Esta ação não pode ser desfeita.')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/prompts/tags/${tagId}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            showSuccessMessage('tags', 'Tag excluída com sucesso!');
+            loadPromptTags(); // Recarrega a lista
+        } else {
+            throw new Error('Falha ao excluir tag');
+        }
+    } catch (error) {
+        console.error('Erro ao excluir tag:', error);
+        showErrorMessage('tags', 'Erro ao excluir tag: ' + error.message);
+    }
+}
+
+// Funções para Prioridades
+let editingPrioridadeId = null;
+
+function showAddPrioridadeModal() {
+    editingPrioridadeId = null;
+    document.getElementById('prioridade-modal-title').textContent = 'Adicionar Novo Item de Prioridade';
+    document.getElementById('prioridadeForm').reset();
+    document.getElementById('prioridadeModal').style.display = 'block';
+}
+
+function editPromptPrioridade(prioridadeId) {
+    editingPrioridadeId = prioridadeId;
+    document.getElementById('prioridade-modal-title').textContent = 'Editar Item de Prioridade';
+    
+            // Busca os dados da prioridade para preencher o formulário
+        fetch(`/api/prompts/prioridades/${prioridadeId}`)
+            .then(response => response.json())
+            .then(prioridade => {
+                document.getElementById('prioridade-nivel').value = prioridade.nivel;
+                document.getElementById('prioridade-item').value = prioridade.texto;
+                document.getElementById('prioridade-ordem').value = prioridade.ordem || 0;
+                document.getElementById('prioridadeModal').style.display = 'block';
+            })
+        .catch(error => {
+            console.error('Erro ao carregar prioridade:', error);
+            alert('Erro ao carregar dados da prioridade');
+        });
+}
+
+function closePrioridadeModal() {
+    document.getElementById('prioridadeModal').style.display = 'none';
+    editingPrioridadeId = null;
+}
+
+async function deletePromptPrioridade(prioridadeId) {
+    if (!confirm('Tem certeza que deseja excluir este item de prioridade? Esta ação não pode ser desfeita.')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/prompts/prioridades/${prioridadeId}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            showSuccessMessage('prioridades', 'Item de prioridade excluído com sucesso!');
+            loadPromptPrioridades(); // Recarrega a lista
+        } else {
+            throw new Error('Falha ao excluir item de prioridade');
+        }
+    } catch (error) {
+        console.error('Erro ao excluir prioridade:', error);
+        showErrorMessage('prioridades', 'Erro ao excluir item de prioridade: ' + error.message);
+    }
+}
+
+// Funções para salvar prompts
+async function salvarPromptResumo() {
+    const conteudo = document.getElementById('prompt-resumo').value;
+    
+    try {
+        const response = await fetch('/api/prompts/templates/resumo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ conteudo })
+        });
+        
+        if (response.ok) {
+            alert('Prompt de resumo salvo com sucesso!');
+        } else {
+            throw new Error('Falha ao salvar prompt');
+        }
+    } catch (error) {
+        console.error('Erro ao salvar prompt de resumo:', error);
+        alert('Erro ao salvar prompt: ' + error.message);
+    }
+}
+
+async function salvarOutrosPrompts() {
+    const relevancia = document.getElementById('prompt-relevancia').value;
+    const extracao = document.getElementById('prompt-extracao').value;
+    
+    try {
+        // Salva prompt de relevância
+        const responseRelevancia = await fetch('/api/prompts/templates/relevancia', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ conteudo: relevancia })
+        });
+        
+        // Salva prompt de extração
+        const responseExtracao = await fetch('/api/prompts/templates/extracao', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ conteudo: extracao })
+        });
+        
+        if (responseRelevancia.ok && responseExtracao.ok) {
+            alert('Prompts salvos com sucesso!');
+        } else {
+            throw new Error('Falha ao salvar alguns prompts');
+        }
+    } catch (error) {
+        console.error('Erro ao salvar prompts:', error);
+        alert('Erro ao salvar prompts: ' + error.message);
+    }
+}
+
+// Event listeners para formulários
+document.addEventListener('DOMContentLoaded', function() {
+    // Form de tag
+    document.getElementById('tagForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = {
+            nome: document.getElementById('tag-nome').value,
+            descricao: document.getElementById('tag-descricao').value,
+            exemplos: document.getElementById('tag-exemplos').value.split('\n').filter(line => line.trim()),
+            ordem: parseInt(document.getElementById('tag-ordem').value) || 0
+        };
+        
+        try {
+            const url = editingTagId ? `/api/prompts/tags/${editingTagId}` : '/api/prompts/tags';
+            const method = editingTagId ? 'PUT' : 'POST';
+            
+            const response = await fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData)
+            });
+            
+            if (response.ok) {
+                closeTagModal();
+                showSuccessMessage('tags', editingTagId ? 'Tag atualizada com sucesso!' : 'Tag criada com sucesso!');
+                loadPromptTags();
+            } else {
+                throw new Error('Falha ao salvar tag');
+            }
+        } catch (error) {
+            console.error('Erro ao salvar tag:', error);
+            showErrorMessage('tags', 'Erro ao salvar tag: ' + error.message);
+        }
+    });
+    
+    // Form de prioridade
+    document.getElementById('prioridadeForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = {
+            nivel: document.getElementById('prioridade-nivel').value,
+            texto: document.getElementById('prioridade-item').value,
+            ordem: parseInt(document.getElementById('prioridade-ordem').value) || 0
+        };
+        
+        try {
+            const url = editingPrioridadeId ? `/api/prompts/prioridades/${editingPrioridadeId}` : '/api/prompts/prioridades';
+            const method = editingPrioridadeId ? 'PUT' : 'POST';
+            
+            const response = await fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData)
+            });
+            
+            if (response.ok) {
+                closePrioridadeModal();
+                showSuccessMessage('prioridades', editingPrioridadeId ? 'Item de prioridade atualizado com sucesso!' : 'Item de prioridade criado com sucesso!');
+                loadPromptPrioridades();
+            } else {
+                throw new Error('Falha ao salvar item de prioridade');
+            }
+        } catch (error) {
+            console.error('Erro ao salvar prioridade:', error);
+            showErrorMessage('prioridades', 'Erro ao salvar item de prioridade: ' + error.message);
+        }
+    });
+});
+
+// Funções auxiliares para mensagens
+function showSuccessMessage(tab, message) {
+    const successEl = document.getElementById(`${tab}-success`);
+    if (successEl) {
+        successEl.textContent = message;
+        successEl.style.display = 'block';
+        setTimeout(() => successEl.style.display = 'none', 5000);
+    }
+}
+
+function showErrorMessage(tab, message) {
+    const errorEl = document.getElementById(`${tab}-error`);
+    if (errorEl) {
+        errorEl.textContent = message;
+        errorEl.style.display = 'block';
+        setTimeout(() => errorEl.style.display = 'none', 5000);
+    }
 } 

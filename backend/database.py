@@ -360,6 +360,59 @@ class ClusterAlteracao(Base):
 
 
 # ========================
+# Prompts configuráveis (Tags/Prioridades/Templates)
+# ========================
+
+class PromptTag(Base):
+    __tablename__ = "prompt_tags"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String(120), unique=True, nullable=False, index=True)
+    descricao = Column(Text, nullable=False)
+    exemplos = Column(JSON, default=list)  # lista de strings
+    ordem = Column(Integer, default=0, nullable=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        Index('idx_prompt_tags_ordem', 'ordem'),
+    )
+
+
+class PromptPrioridadeItem(Base):
+    __tablename__ = "prompt_prioridade_itens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nivel = Column(String(20), nullable=False, index=True)  # P1_CRITICO, P2_ESTRATEGICO, P3_MONITORAMENTO
+    texto = Column(Text, nullable=False)
+    ordem = Column(Integer, default=0, nullable=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        Index('idx_prompt_prioridade_nivel_ordem', 'nivel', 'ordem'),
+    )
+
+
+class PromptTemplate(Base):
+    __tablename__ = "prompt_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    chave = Column(String(120), unique=True, nullable=False, index=True)  # ex: PROMPT_EXTRACAO_GATEKEEPER_V13
+    descricao = Column(String(300), nullable=True)
+    conteudo = Column(Text, nullable=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        Index('idx_prompt_templates_chave', 'chave'),
+    )
+
+
+# ========================
 # Pesquisas Assíncronas
 # ========================
 

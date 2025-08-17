@@ -59,6 +59,8 @@ print(ans.text)
 ### Dependências e configuração
 - Opcional LLM (Gemini): exporte `GEMINI_API_KEY` para habilitar a síntese.
 - Reuso de modelos/CRUDs do backend existentes; sem migrações adicionais para o core do pipeline.
+- **Base de Conhecimento Atualizada**: O agente agora consulta automaticamente as tags e prioridades configuradas no banco de dados via `backend/prompts.py`, que carrega dinamicamente do PostgreSQL.
+- **Configuração Transparente**: As estruturas `TAGS_SPECIAL_SITUATIONS`, `P1_ITENS`, `P2_ITENS` e `P3_ITENS` são mantidas para compatibilidade, mas agora são populadas do banco de dados.
 
 ## Plano de evolução (próximos passos)
 
@@ -94,11 +96,10 @@ print(ans.text)
 ## Edições seguras no banco (capacidade do Estagiário)
 - Sempre unitárias; nunca em lote; nunca dropar tabelas; nunca deletar mais de um item por comando.
 - Prioridades permitidas: `P1_CRITICO`, `P2_ESTRATEGICO`, `P3_MONITORAMENTO`, `IRRELEVANTE`.
-- Tags permitidas: catálogo em `backend/prompts.py::TAGS_SPECIAL_SITUATIONS` (ou fallback conhecido).
+- Tags permitidas: catálogo configurável via frontend em `/frontend/settings.html` → aba "Prompts" → "Tags" (persistidas no PostgreSQL).
 - Exemplos de comandos aceitos:
-  - Atualizar prioridade: “atualize prioridade do cluster 123 para p2”
-  - Atualizar tag: “troque a tag do cluster 456 para Internacional”
-  - Merge unitário: “merge o cluster 111 no 222” (move artigos 111→222 e arquiva 111)
+  - Atualizar prioridade: "atualize prioridade do cluster 123 para p2"
+  - Atualizar tag: "troque a tag do cluster 456 para Internacional"
 
 ## Observações
 - O agente prioriza respostas concisas. Para investigações mais profundas, ele segue o plano A (ranquear → aprofundar → sintetizar) antes de redigir.

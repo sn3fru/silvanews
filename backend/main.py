@@ -48,7 +48,10 @@ try:
         create_feedback, list_feedback, mark_feedback_processed,
         create_deep_research_job, update_deep_research_job, get_deep_research_job, list_deep_research_jobs_by_cluster,
         create_social_research_job, update_social_research_job, get_social_research_job, list_social_research_jobs_by_cluster,
-        create_estagiario_session, add_estagiario_message, list_estagiario_messages
+        create_estagiario_session, add_estagiario_message, list_estagiario_messages,
+        list_prompt_tags, create_prompt_tag, update_prompt_tag, delete_prompt_tag,
+        list_prompt_prioridade_itens_grouped, create_prompt_prioridade_item, update_prompt_prioridade_item, delete_prompt_prioridade_item,
+        list_prompt_templates, upsert_prompt_template, delete_prompt_template
     )
     from .processing import processar_artigo_pipeline, gerar_resumo_cluster, inicializar_processamento
     from .utils import gerar_hash_unico, formatar_timestamp_relativo, get_date_brasil, parse_date_brasil
@@ -68,7 +71,10 @@ except ImportError:
         associate_artigo_to_existing_cluster, create_cluster_for_artigo,
         create_deep_research_job, update_deep_research_job, get_deep_research_job, list_deep_research_jobs_by_cluster,
         create_social_research_job, update_social_research_job, get_social_research_job, list_social_research_jobs_by_cluster,
-        create_estagiario_session, add_estagiario_message, list_estagiario_messages
+        create_estagiario_session, add_estagiario_message, list_estagiario_messages,
+        list_prompt_tags, create_prompt_tag, update_prompt_tag, delete_prompt_tag,
+        list_prompt_prioridade_itens_grouped, create_prompt_prioridade_item, update_prompt_prioridade_item, delete_prompt_prioridade_item,
+        list_prompt_templates, upsert_prompt_template, delete_prompt_template
     )
     from backend.processing import processar_artigo_pipeline, gerar_resumo_cluster, inicializar_processamento
     from backend.utils import gerar_hash_unico, formatar_timestamp_relativo, get_date_brasil, parse_date_brasil
@@ -145,6 +151,155 @@ async def serve_root_index():
 
 
 
+
+# ==============================================================================
+# ENDPOINTS: PROMPTS CONFIG (Tags, Prioridades, Templates)
+# ==============================================================================
+
+class PromptTagPayload(BaseModel):
+    nome: str
+    descricao: str
+    exemplos: Optional[List[str]] = None
+    ordem: Optional[int] = 0
+
+
+@app.get("/api/prompts/tags")
+async def api_list_prompt_tags(db: Session = Depends(get_db)) -> Dict[str, Any]:
+    try:
+        return {"tags": list_prompt_tags(db)}
+    except Exception as e:
+        create_log(db, "ERROR", "api", f"Erro em /api/prompts/tags: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+@app.post("/api/prompts/tags")
+async def api_create_prompt_tag(payload: PromptTagPayload, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    try:
+        tag_id = create_prompt_tag(db, payload.nome, payload.descricao, payload.exemplos or [], payload.ordem or 0)
+        return {"ok": True, "id": tag_id}
+    except Exception as e:
+        create_log(db, "ERROR", "api", f"Erro em POST /api/prompts/tags: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+@app.put("/api/prompts/tags/{tag_id}")
+async def api_update_prompt_tag(tag_id: int, payload: PromptTagPayload, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    try:
+        ok = update_prompt_tag(db, tag_id, nome=payload.nome, descricao=payload.descricao, exemplos=payload.exemplos or [], ordem=payload.ordem or 0)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Tag não encontrada")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        create_log(db, "ERROR", "api", f"Erro em PUT /api/prompts/tags/{tag_id}: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+@app.delete("/api/prompts/tags/{tag_id}")
+async def api_delete_prompt_tag(tag_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    try:
+        ok = delete_prompt_tag(db, tag_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Tag não encontrada")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        create_log(db, "ERROR", "api", f"Erro em DELETE /api/prompts/tags/{tag_id}: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+class PriorItemPayload(BaseModel):
+    nivel: str  # P1|P2|P3
+    texto: str
+    ordem: Optional[int] = 0
+
+
+@app.get("/api/prompts/prioridades")
+async def api_list_prompt_prioridades(db: Session = Depends(get_db)) -> Dict[str, Any]:
+    try:
+        return {"prioridades": list_prompt_prioridade_itens_grouped(db)}
+    except Exception as e:
+        create_log(db, "ERROR", "api", f"Erro em /api/prompts/prioridades: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+@app.post("/api/prompts/prioridades")
+async def api_create_prompt_prioridade_item(payload: PriorItemPayload, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    try:
+        item_id = create_prompt_prioridade_item(db, payload.nivel, payload.texto, payload.ordem or 0)
+        return {"ok": True, "id": item_id}
+    except Exception as e:
+        create_log(db, "ERROR", "api", f"Erro em POST /api/prompts/prioridades: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+@app.put("/api/prompts/prioridades/{item_id}")
+async def api_update_prompt_prioridade_item(item_id: int, payload: PriorItemPayload, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    try:
+        ok = update_prompt_prioridade_item(db, item_id, nivel=payload.nivel, texto=payload.texto, ordem=payload.ordem or 0)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Item não encontrado")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        create_log(db, "ERROR", "api", f"Erro em PUT /api/prompts/prioridades/{item_id}: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+@app.delete("/api/prompts/prioridades/{item_id}")
+async def api_delete_prompt_prioridade_item(item_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    try:
+        ok = delete_prompt_prioridade_item(db, item_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Item não encontrado")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        create_log(db, "ERROR", "api", f"Erro em DELETE /api/prompts/prioridades/{item_id}: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+class TemplatePayload(BaseModel):
+    chave: str
+    conteudo: str
+    descricao: Optional[str] = None
+
+
+@app.get("/api/prompts/templates")
+async def api_list_prompt_templates(db: Session = Depends(get_db)) -> Dict[str, Any]:
+    try:
+        return {"templates": list_prompt_templates(db)}
+    except Exception as e:
+        create_log(db, "ERROR", "api", f"Erro em /api/prompts/templates: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+@app.post("/api/prompts/templates")
+async def api_upsert_prompt_template(payload: TemplatePayload, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    try:
+        template_id = upsert_prompt_template(db, payload.chave, payload.conteudo, payload.descricao)
+        return {"ok": True, "id": template_id}
+    except Exception as e:
+        create_log(db, "ERROR", "api", f"Erro em POST /api/prompts/templates: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+@app.delete("/api/prompts/templates/{template_id}")
+async def api_delete_prompt_template(template_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    try:
+        ok = delete_prompt_template(db, template_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Template não encontrado")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        create_log(db, "ERROR", "api", f"Erro em DELETE /api/prompts/templates/{template_id}: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 @app.get("/api/feed")
 async def get_feed(

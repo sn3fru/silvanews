@@ -25,8 +25,12 @@ Plataforma de inteligência de mercado que transforma alto volume de notícias e
 - Deep-dive: modal por evento com resumo, fontes e abas (chat com cluster e gerenciamento).
 
 ### Tags e Prioridades (como configurar)
-- Tags oficiais: editar `backend/prompts.py` em `TAGS_SPECIAL_SITUATIONS` (fonte da verdade única).
-- Gating de prioridade: ajustar listas `P1_ITENS`, `P2_ITENS`, `P3_ITENS` no mesmo arquivo (definem gatilhos/checagens por prioridade).
+- **Configuração via Frontend**: Acesse `/frontend/settings.html` → aba "Prompts" para editar tags e prioridades de forma visual e intuitiva.
+- **Persistência no Banco**: Tags e prioridades são agora armazenadas no PostgreSQL, permitindo edições em produção sem perda de dados.
+- **Estrutura das Tags**: Cada tag tem nome, descrição, exemplos e ordem de exibição.
+- **Estrutura das Prioridades**: Itens organizados por nível (P1_CRITICO, P2_ESTRATEGICO, P3_MONITORAMENTO) com descrições personalizáveis.
+- **Fallback Automático**: O sistema carrega do banco de dados, mas mantém compatibilidade com as estruturas originais do `backend/prompts.py`.
+- **Migração**: Use `python seed_prompts.py` para popular o banco com dados iniciais após criar as tabelas.
 
 ### Pipeline (passo a passo)
 1) Ingestão: `load_news.py` lê PDFs/JSONs e grava artigos brutos (status `pendente`).

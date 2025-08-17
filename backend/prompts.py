@@ -126,140 +126,6 @@ EMPRESAS_PRIORITARIAS = [
     'Banco Master', 'Banco Pan', 'Caixa Econômica Federal', 'PREVIC'
 ]
 
-# # Dicionário central para a hierarquia de prioridades.
-# LISTA_RELEVANCIA_HIERARQUICA = {
-#     'P1_CRITICO': {
-#         'descricao': 'OPORTUNIDADES ACIONÁVEIS AGORA: Situações de estresse financeiro, M&A e arbitragem legal que demandam ação imediata.',
-#         'assuntos': [
-#             'Recuperação Judicial (RJ)',
-#             'Falência',
-#             'Pedido de Falência',
-#             'Assembleia de Credores',
-#             'Créditos Inadimplentes (NPLs)',
-#             'Créditos Podres (Distressed Debt)',
-#             'Venda de Carteira de NPL',
-#             'Crédito Tributário (teses, oportunidades de monetização)',
-#             'Disputas societárias RELEVANTES entre sócios, acionistas ou conselho de uma EMPRESA, com impacto em controle ou governança (NÃO inclui litígios pessoais; NÃO se aplica a disputas entre partidos políticos ou investigações de agentes públicos por crimes comuns)',
-#             'FCVS (apenas liquidação ou venda)',
-#             'Dívida Ativa (apenas venda de blocos ou securitização)',
-#             'Leilões Judiciais de Ativos (>R$10 milhões)',
-#             'Fusões e Aquisições (M&A) - Anunciadas',
-#             'Crise de Liquidez Aguda',
-#             'Quebra de Covenants',
-#             'Default de Dívida'
-#         ]
-#     },
-#     'P2_ESTRATEGICO': {
-#         'descricao': 'MONITORAMENTO ESTRATÉGICO (COM MATERIALIDADE): Tendências, decisões regulatórias e sinais de mercado com potencial claro de virar P1 e IMPACTO FINANCEIRO MENSURÁVEL (players, valores, cronograma). Não inclui temas sociais, esportivos, crimes, opinião ou programas sem tese de investimento.',
-#         'assuntos': [
-#             'Mudanças em Legislação (Tributária, Societária, Falimentar, Precatórios)',
-#             'Inteligência Artificial (IA - apenas grandes movimentos de mercado, M&A no setor ou regulação pesada)',
-#             'Semicondutores (geopolítica da cadeia de suprimentos, grandes investimentos/fábricas)',
-#             'Energia Nuclear (grandes projetos, concessões, marco regulatório)',
-#             'Aeroespacial e Defesa (grandes contratos governamentais, privatizações)',
-#             'Política Econômica (Decisões de juros e política fiscal que afetem o crédito e a saúde financeira das empresas)',
-#             'Decisões do CADE (bloqueio de fusões, imposição de remédios)',
-#             'Ativismo Acionário (grandes investidores tentando influenciar a gestão)',
-#             'Alphabet',
-#             'AMD',
-#             'Apple',
-#             'Google',
-#             'Intel',
-#             'Intuitive Machines',
-#             'Meta',
-#             'Micron Technology',
-#             'Microsoft',
-#             'Netflix',
-#             'Tesla',
-#             'Nvidia',
-#             'Constellation Energy Group',
-#             'Siemens Energy AG',
-#             'Banco Master',
-#             'Banco Pan',
-#             'Caixa Econômica Federal',
-#             'PREVIC'
-#         ]
-#     },
-#     'P3_MONITORAMENTO': {
-#         'descricao': 'CONTEXTO DE MERCADO: Informações gerais para entendimento do cenário macro, sem ação direta.',
-#         'assuntos': [
-#             'Criptomoedas (apenas visão macro de mercado, adoção institucional ou regulação. Sem análise técnica de moedas específicas).',
-#             'Geoeconomia',
-#             'Acordos Comerciais (Mercosul-UE, etc.)',
-#             'Decisões do FED e BCE',
-#             'Games (apenas notícias sobre grandes fusões e aquisições, ex: Microsoft comprando Activision)',
-#             'Divulgação de Resultados',
-#             'Classificados e leilões (99% irrelevantes, exceto leilões judiciais de alto valor >R$10M)'
-#         ]
-#     }
-# }
-
-
-# ==============================================================================
-# 1.1 MAPEAMENTO DETERMINÍSTICO: ASSUNTO ➜ PRIORIDADE
-# ==============================================================================
-
-# Removido mapeamento assunto ➜ tag. A tag deve ser escolhida EXCLUSIVAMENTE
-# a partir de TAGS_SPECIAL_SITUATIONS. Mantemos apenas o mapeamento de prioridade
-# no guia de texto para orientar a seleção.
-
-
-# def gerar_guia_classificacao_rapida():
-#     """
-#     Constrói um guia determinístico assunto ➜ prioridade derivado das fontes da verdade.
-#     """
-#     linhas = []
-#     linhas.append("--- GUIA DE CLASSIFICAÇÃO RÁPIDA (ASSUNTO ➜ PRIORIDADE) ---\n")
-#     linhas.append("Siga 3 passos: (1) identifique o assunto-chave; (2) derive a PRIORIDADE pelo mapeamento abaixo; (3) selecione UMA tag de 'TAGS_SPECIAL_SITUATIONS'.\n")
-#     for prioridade, dados in LISTA_RELEVANCIA_HIERARQUICA.items():
-#         for assunto in dados.get('assuntos', []):
-#             linhas.append(f"- {assunto} ➜ prioridade: {prioridade}")
-#     linhas.append("\nObservações:")
-#     linhas.append("- Se o assunto for 'Recuperação Judicial', 'Falência' ou 'Pedido de Falência', a prioridade é SEMPRE P1_CRITICO.")
-#     linhas.append("- 'Disputas societárias relevantes' referem-se EXCLUSIVAMENTE a litígios corporativos (sócios/acionistas/conselho) envolvendo pessoas jurídicas, com impacto em governança/controle. Casos pessoais ou indenizações individuais NÃO se enquadram e devem ser REJEITADOS.")
-#     linhas.append("- Indenizações cíveis/trabalhistas INDIVIDUAIS, de qualquer valor, sem vínculo direto com empresas/mercado de capitais, devem ser REJEITADAS.")
-#     linhas.append("- Após definir a prioridade, selecione UMA tag válida em 'TAGS_SPECIAL_SITUATIONS' que melhor reflita a natureza do evento.")
-#     linhas.append("- Em caso de dúvida entre anexar a 'Jurídico' ou 'Mercado de Capitais', prefira a natureza do evento (jurídico-regulatório vs. financeiro-capital).")
-#     linhas.append("- EMPRESAS_PRIORITARIAS (para Divulgação de Resultados em P1): " + ", ".join(EMPRESAS_PRIORITARIAS))
-#     return "\n".join(linhas) + "\n"
-
-
-# GUIA_CLASSIFICACAO_RAPIDA = gerar_guia_classificacao_rapida()
-
-
-# =========================================PROMPT_EXTRACAO_PERMISSIVO_V8=====================================
-# 2. FUNÇÃO GERADORA DE GUIA PARA PROMPTS (REATORADA)
-# ==============================================================================
-
-# def gerar_lista_relevancia_para_prompt():
-#     """
-#     Gera um guia de classificação unificado e detalhado para ser injetado nos prompts.
-#     Esta função agora constrói o guia dinamicamente a partir das "fontes da verdade",
-#     combinando as regras de Prioridade e as novas Tags Temáticas.
-#     """
-#     # Parte 1: Guia de Prioridade
-#     guia_prioridade = "--- GUIA DE PRIORIDADE (O QUÃO URGENTE É?) ---\n"
-#     guia_prioridade += "Avalie a notícia e atribua UMA das seguintes prioridades no campo `prioridade`:\n\n"
-#     for prioridade, data in LISTA_RELEVANCIA_HIERARQUICA.items():
-#         guia_prioridade += f"**{prioridade} ({data['descricao']})**\n"
-#         guia_prioridade += f"- Assuntos-chave: {', '.join(data['assuntos'])}\n\n"
-
-#     # Parte 2: Guia de Tags Temáticas
-#     guia_tags = "--- GUIA DE TAGS TEMÁTICAS (QUAL A NATUREZA DA OPORTUNIDADE?) ---\n"
-#     guia_tags += "Após definir a prioridade, classifique a notícia em UMA das 9 tags temáticas abaixo. A `tag` deve refletir o núcleo da tese de investimento.\n\n"
-#     for i, (tag, data) in enumerate(TAGS_SPECIAL_SITUATIONS.items(), 1):
-#         guia_tags += f"**{i}. TAG: '{tag}'**\n"
-#         guia_tags += f"- **Definição:** {data['descricao']}\n"
-#         guia_tags += f"- **O que classificar aqui (Exemplos):** {'; '.join(data['exemplos'])}\n\n"
-
-#     # Combina os dois guias em um único texto para o prompt
-#     return f"{guia_prioridade}{guia_tags}"
-
-
-# # A variável mantém o nome original, mas agora carrega o guia completo e unificado.
-# LISTA_RELEVANCIA_FORMATADA = gerar_lista_relevancia_para_prompt()
-
-
 # Guia apenas de tags para injeção em prompts que não precisam repetir a parte de prioridade
 def gerar_guia_tags_formatado():
     guia_tags = "--- GUIA DE TAGS TEMÁTICAS (QUAL A NATUREZA DA OPORTUNIDADE?) ---\n"
@@ -271,6 +137,26 @@ def gerar_guia_tags_formatado():
     return guia_tags
 
 
+# Tenta sobrescrever TAGS a partir do banco (se disponível) ANTES de gerar o guia
+try:
+    try:
+        from .database import SessionLocal  # type: ignore
+    except Exception:
+        from backend.database import SessionLocal  # type: ignore
+    try:
+        from .crud import get_prompts_compilados  # type: ignore
+    except Exception:
+        from backend.crud import get_prompts_compilados  # type: ignore
+    _db = SessionLocal()
+    try:
+        _compiled = get_prompts_compilados(_db)
+        if isinstance(_compiled, dict) and _compiled.get('tags'):
+            TAGS_SPECIAL_SITUATIONS = _compiled['tags']  # type: ignore
+    finally:
+        _db.close()
+except Exception:
+    pass
+
 GUIA_TAGS_FORMATADO = gerar_guia_tags_formatado()
 
 # ==============================================================================
@@ -280,38 +166,71 @@ GUIA_TAGS_FORMATADO = gerar_guia_tags_formatado()
 # Somente estas três listas precisam estar expostas para edição no front.
 # O texto do Gatekeeper é gerado dinamicamente a partir delas.
 P1_ITENS = [
-    "Anúncio de Falência ou Recuperação Judicial (RJ) de empresa relevante.",
+    "Anúncio de Falência ou Recuperação Judicial (RJ) de empresas Médias e Grandes",
     "Default de Dívida ou Quebra de Covenants anunciado oficialmente.",
     "Crise de Liquidez Aguda em empresa relevante ou crise soberana em país vizinho.",
-    "M&A ou Venda de Ativo RELEVANTE (> R$ 500 milhões) — ANUNCIADO OFICIALMENTE. Intenções genéricas como ‘buscar aquisições’ NÃO são P1.",
-    "Leilões de Ativos/Concessões de ALTO VALOR (> R$ 1 bilhão) com data marcada.",
-    "Operação de Corrupção de GRANDE ESCALA com impacto direto em empresas listadas/relevantes (ex.: Operação Ícaro).",
-    "Notícia Crítica sobre Empresas-Foco (BTG Pactual, Banco Pan, Caixa Econômica Federal, Banco Master, PREVIC, IRB Brasil RE) que se enquadre como P1."
+    "M&A ou Venda de Ativo RELEVANTE (> R$ 100 milhões) — ANUNCIADO OFICIALMENTE. Intenções genéricas como ‘buscar aquisições’ NÃO são P1.",
+    "Leilões de Ativos/Concessões inclusive NPL (> R$ 50 Milhões) com data marcada.",
+    "Venda de carteiras de NPLs / Créditos Podres incluindo a venda e ou securitização de blocos de dívida ativa de estados e municípios.",
+    "Notícia Crítica sobre Empresas-Foco (BTG Pactual, Banco Pan, Caixa Econômica Federal, Banco Master, PREVIC, IRB Brasil RE) que se enquadre como P1.",
+    "Mudanças em Legislação com votação marcada no plenário e impacto setorial bilionário.",
+    'Política Econômica (Decisões de juros, política fiscal e outras variáveis que afetem diretamente e de forma intensa o crédito e a saúde financeira das empresas)',
+    'Decisões Grandes/Relevantes do CADE (bloqueio de fusões, imposição de remédios)',
+    "Decisão de Tribunal Superior (STF/STJ) com precedente VINCULANTE que altera significativamente regras de Recuperação de Crédito, Direito Falimentar, Tributário ou Societário.",
+    "Mudança em legislação ou regulamentação com APLICAÇÃO IMEDIATA e impacto setorial bilionário."
 ]
 
 P2_ITENS = [
-    "Venda de carteiras de NPLs / Créditos Podres.",
-    "Venda ou securitização de Dívida Ativa / Precatórios / FCVS.",
-    "Mudanças em Legislação com votação marcada no plenário e impacto setorial bilionário.",
-    "Decisões judiciais com precedente setorial vinculante (decisão final do STJ/STF).",
+    "Venda e/ou securitização de Dívida Ativa / Precatórios / FCVS.",
+    "Discussões sobre mudança na legilasção que afetem diretamente a cobrança das dividas das empresas"
+    "Decisões judiciais de outras instâncias (ex: TRFs, TJs) com precedente setorial relevante."
     "Denúncia de gestão temerária em instituição financeira junto ao Banco Central.",
     "Suspensão judicial de um M&A ou da execução de dívidas de uma empresa relevante.",
     "Notícias importantes sobre o Mercado Imobiliário com impacto setorial amplo.",
     "Resultados com sinais graves de estresse (impairment >10% PL, alavancagem >4x, risco de quebra de covenants).",
     "Investimento/CAPEX de grande porte anunciado (> R$ 1 bilhão).",
     "Grandes disputas societárias em empresas relevantes.",
-    "M&A ou Investimento de grande porte (> R$ 1 bilhão) nos setores de Tecnologia, IA, Energia ou Defesa."
+    "M&A ou Investimento de grande porte (> R$ 1 bilhão) nos setores de Tecnologia, IA, Energia ou Defesa.",
+    "Operação de Corrupção de GRANDE ESCALA com impacto direto em empresas listadas/relevantes (ex.: Operação Ícaro).",
+    'Ativismo Acionário (grandes investidores tentando influenciar a gestão)',
+    "Mudança de jurisprudência consolidada em tribunais (TRF, TST) com impacto setorial amplo (ex: Direito do Trabalho para um setor específico, teses tributárias).",
+    "Publicação de acórdão ou tese de repercussão geral com impacto direto em passivos/ativos de empresas."
 ]
 
 P3_ITENS = [
     "Tecnologia e mercados adjacentes: avanços gerais em IA, exploração espacial, setor de defesa, gaming e criptomoedas.",
-    "Acompanhamento de Empresas (Radar): notícias gerais ou divulgação de resultados de Meta, Google, Alphabet, Apple, Constellation Energy, Tesla, AMD, Intel, Microsoft, Intuitive Machines, Netflix, Micron, Siemens Energy AG.",
+    "Acompanhamento de Empresas (Radar, essa é 1:1 com uma TAG): notícias gerais ou divulgação de resultados de Meta, Google, Alphabet, Apple, Constellation Energy, Tesla, AMD, Intel, Microsoft, Intuitive Machines, Netflix, Micron, Siemens Energy AG, e outras grandes empresas listadas.",
     "Contexto macro e político: inflação/juros/câmbio, política econômica, discussões sobre projetos de lei (sem votação marcada), eventos geopolíticos.",
-    "Atos institucionais de rotina: decisões judiciais de menor impacto, aprovações de licenças, indicações para agências, atas de assembleias."
+    "Atos institucionais de rotina: decisões judiciais de menor impacto, aprovações de licenças, indicações para agências, atas de assembleias."         
 ]
 
 def _render_bullets(itens):
     return "\n".join([f"- {t}" for t in itens])
+
+# Tenta sobrescrever listas P1/P2/P3 a partir do banco (se disponível) ANTES de gerar bullets
+try:
+    try:
+        from .database import SessionLocal  # type: ignore
+    except Exception:
+        from backend.database import SessionLocal  # type: ignore
+    try:
+        from .crud import get_prompts_compilados  # type: ignore
+    except Exception:
+        from backend.crud import get_prompts_compilados  # type: ignore
+    _db2 = SessionLocal()
+    try:
+        _compiled2 = get_prompts_compilados(_db2)
+        if isinstance(_compiled2, dict):
+            if _compiled2.get('p1'):
+                P1_ITENS = _compiled2['p1']  # type: ignore
+            if _compiled2.get('p2'):
+                P2_ITENS = _compiled2['p2']  # type: ignore
+            if _compiled2.get('p3'):
+                P3_ITENS = _compiled2['p3']  # type: ignore
+    finally:
+        _db2.close()
+except Exception:
+    pass
 
 _P1_BULLETS = _render_bullets(P1_ITENS)
 _P2_BULLETS = _render_bullets(P2_ITENS)
@@ -341,6 +260,10 @@ LISTA DE REJEIÇÃO IMEDIATA (se a notícia for sobre isso, retorne []):
 < GUIA DE PRIORIZAÇÃO E GATING >
 --------------------------------------------------------------------------------
 
+**PRINCÍPIO DA RELEVÂNCIA ESTRUTURAL (PROMOÇÃO DE PRIORIDADE):**
+Antes de classificar, pergunte-se: "Esta notícia descreve uma MUDANÇA ESTRUTURAL no ambiente de negócios, de crédito ou jurídico?". Mesmo que não se encaixe perfeitamente em um gatilho abaixo, um evento que 'muda as regras do jogo' para um setor DEVE ser promovido para P1 ou P2 com base no seu impacto potencial.
+
+
 **PRIORIDADE P1_CRITICO (ACIONÁVEL AGORA — CHECKLIST EXCLUSIVO):**
 Eventos que exigem atenção imediata. A notícia DEVE ser sobre UM DESTES gatilhos:
 {P1_BULLETS}
@@ -349,9 +272,8 @@ Eventos que exigem atenção imediata. A notícia DEVE ser sobre UM DESTES gatil
 Eventos com potencial de se tornarem P1 ou que indicam movimentos estratégicos relevantes. A notícia DEVE ser sobre UM DESTES gatilhos:
 {P2_BULLETS}
 
-
 **PRIORIDADE P3 (MONITORAMENTO / CONTEXTO — PADRÃO):**
-**Se uma notícia relevante passar pelo filtro de rejeição mas NÃO atender aos critérios rígidos de P1 ou P2, ela é, por definição, P3.** Isso inclui:
+**SOMENTE se uma notícia relevante passar pelo filtro de rejeição, NÃO atender aos critérios de P1/P2 e NÃO representar uma mudança estrutural relevante, ela deve ser classificada como P3.** Isso inclui:
 {P3_BULLETS}
 
 <<< REGRAS CRÍTICAS PARA A SAÍDA JSON >>>

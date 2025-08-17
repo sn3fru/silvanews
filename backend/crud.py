@@ -10,12 +10,12 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc, func, text
 
 try:
-    from .database import ArtigoBruto, ClusterEvento, SinteseExecutiva, LogProcessamento, ConfiguracaoColeta, EstagiarioChatSession, EstagiarioChatMessage
+    from .database import ArtigoBruto, ClusterEvento, SinteseExecutiva, LogProcessamento, ConfiguracaoColeta, EstagiarioChatSession, EstagiarioChatMessage, PromptTag, PromptPrioridadeItem, PromptTemplate
     from .models import ArtigoBrutoCreate, ClusterEventoCreate
     from .utils import get_date_brasil
 except ImportError:
     # Fallback para import absoluto quando executado fora do pacote
-    from backend.database import ArtigoBruto, ClusterEvento, SinteseExecutiva, LogProcessamento, ConfiguracaoColeta, EstagiarioChatSession, EstagiarioChatMessage
+    from backend.database import ArtigoBruto, ClusterEvento, SinteseExecutiva, LogProcessamento, ConfiguracaoColeta, EstagiarioChatSession, EstagiarioChatMessage, PromptTag, PromptPrioridadeItem, PromptTemplate
     from backend.models import ArtigoBrutoCreate, ClusterEventoCreate
     from backend.utils import get_date_brasil
 
@@ -832,7 +832,10 @@ def get_database_stats(db: Session) -> Dict[str, Any]:
             'clusters_hoje': clusters_hoje,
             'total_artigos': db.query(ArtigoBruto).count(),
             'total_clusters': db.query(ClusterEvento).count(),
-            'total_sinteses': db.query(SinteseExecutiva).count()
+            'total_sinteses': db.query(SinteseExecutiva).count(),
+            'total_prompt_tags': db.query(PromptTag).count(),
+            'total_prompt_prioridade_itens': db.query(PromptPrioridadeItem).count(),
+            'total_prompt_templates': db.query(PromptTemplate).count(),
         }
     except Exception as e:
         print(f"Erro ao obter estatísticas: {e}")
@@ -1102,6 +1105,192 @@ def get_all_cluster_alteracoes(db: Session, limit: int = 100) -> List['ClusterAl
     return db.query(ClusterAlteracao).order_by(
         ClusterAlteracao.timestamp.desc()
     ).limit(limit).all()
+
+
+# ==============================================================================
+# PROMPTS CONFIGURÁVEIS: TAGS, PRIORIDADES, TEMPLATES
+# ==============================================================================
+
+def list_prompt_tags(db: Session) -> List[Dict[str, Any]]:
+    rows = db.query(PromptTag).order_by(PromptTag.ordem.asc(), PromptTag.nome.asc()).all()
+    return [
+        {
+            "id": r.id,
+            "nome": r.nome,
+            "descricao": r.descricao,
+            "exemplos": r.exemplos or [],
+            "ordem": r.ordem,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+        }
+        for r in rows
+    ]
+
+
+def get_prompt_tag_by_id(db: Session, tag_id: int) -> Optional[PromptTag]:
+    return db.query(PromptTag).filter(PromptTag.id == tag_id).first()
+
+
+def get_prompt_tag_by_name(db: Session, nome: str) -> Optional[PromptTag]:
+    return db.query(PromptTag).filter(PromptTag.nome == nome).first()
+
+
+def create_prompt_tag(db: Session, nome: str, descricao: str, exemplos: Optional[List[str]] = None, ordem: int = 0) -> int:
+    existing = get_prompt_tag_by_name(db, nome)
+    if existing:
+        return existing.id
+    row = PromptTag(nome=nome, descricao=descricao, exemplos=exemplos or [], ordem=ordem)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row.id
+
+
+def update_prompt_tag(db: Session, tag_id: int, **kwargs) -> bool:
+    row = get_prompt_tag_by_id(db, tag_id)
+    if not row:
+        return False
+    for k, v in kwargs.items():
+        if hasattr(row, k) and v is not None:
+            setattr(row, k, v)
+    db.commit()
+    return True
+
+
+def delete_prompt_tag(db: Session, tag_id: int) -> bool:
+    row = get_prompt_tag_by_id(db, tag_id)
+    if not row:
+        return False
+    db.delete(row)
+    db.commit()
+    return True
+
+
+def list_prompt_prioridade_itens_grouped(db: Session) -> Dict[str, List[Dict[str, Any]]]:
+    rows = db.query(PromptPrioridadeItem).order_by(PromptPrioridadeItem.nivel.asc(), PromptPrioridadeItem.ordem.asc(), PromptPrioridadeItem.id.asc()).all()
+    grouped: Dict[str, List[Dict[str, Any]]] = {"P1": [], "P2": [], "P3": []}
+    for r in rows:
+        key = (r.nivel or '').upper()
+        if key not in grouped:
+            grouped[key] = []
+        grouped[key].append({
+            "id": r.id,
+            "nivel": key,
+            "texto": r.texto,
+            "ordem": r.ordem,
+        })
+    return grouped
+
+
+def create_prompt_prioridade_item(db: Session, nivel: str, texto: str, ordem: int = 0) -> int:
+    nivel_up = (nivel or '').upper()
+    if nivel_up not in ("P1", "P2", "P3"):
+        nivel_up = "P3"
+    row = PromptPrioridadeItem(nivel=nivel_up, texto=texto, ordem=ordem)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row.id
+
+
+def update_prompt_prioridade_item(db: Session, item_id: int, **kwargs) -> bool:
+    row = db.query(PromptPrioridadeItem).filter(PromptPrioridadeItem.id == item_id).first()
+    if not row:
+        return False
+    for k, v in kwargs.items():
+        if hasattr(row, k) and v is not None:
+            setattr(row, k, v)
+    # normaliza nivel
+    row.nivel = (row.nivel or '').upper()
+    if row.nivel not in ("P1", "P2", "P3"):
+        row.nivel = "P3"
+    db.commit()
+    return True
+
+
+def delete_prompt_prioridade_item(db: Session, item_id: int) -> bool:
+    row = db.query(PromptPrioridadeItem).filter(PromptPrioridadeItem.id == item_id).first()
+    if not row:
+        return False
+    db.delete(row)
+    db.commit()
+    return True
+
+
+def list_prompt_templates(db: Session) -> List[Dict[str, Any]]:
+    rows = db.query(PromptTemplate).order_by(PromptTemplate.chave.asc()).all()
+    return [
+        {
+            "id": r.id,
+            "chave": r.chave,
+            "descricao": r.descricao,
+            "conteudo": r.conteudo,
+        }
+        for r in rows
+    ]
+
+
+def get_prompt_template_by_key(db: Session, chave: str) -> Optional[PromptTemplate]:
+    return db.query(PromptTemplate).filter(PromptTemplate.chave == chave).first()
+
+
+def upsert_prompt_template(db: Session, chave: str, conteudo: str, descricao: Optional[str] = None) -> int:
+    row = get_prompt_template_by_key(db, chave)
+    if row:
+        row.conteudo = conteudo
+        if descricao is not None:
+            row.descricao = descricao
+        db.commit()
+        return row.id
+    row = PromptTemplate(chave=chave, conteudo=conteudo, descricao=descricao)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row.id
+
+
+def delete_prompt_template(db: Session, template_id: int) -> bool:
+    row = db.query(PromptTemplate).filter(PromptTemplate.id == template_id).first()
+    if not row:
+        return False
+    db.delete(row)
+    db.commit()
+    return True
+
+
+def get_prompts_compilados(db: Session) -> Dict[str, Any]:
+    """
+    Retorna as estruturas exatamente no formato esperado por backend/prompts.py:
+    - TAGS_SPECIAL_SITUATIONS: dict { tag: { descricao: str, exemplos: [str,...] } }
+    - P1_ITENS, P2_ITENS, P3_ITENS: listas de strings (ordenadas)
+    """
+    tags_rows = db.query(PromptTag).order_by(PromptTag.ordem.asc(), PromptTag.nome.asc()).all()
+    tags_dict: Dict[str, Dict[str, Any]] = {}
+    for r in tags_rows:
+        tags_dict[r.nome] = {
+            'descricao': r.descricao,
+            'exemplos': r.exemplos or []
+        }
+
+    pr_rows = db.query(PromptPrioridadeItem).order_by(PromptPrioridadeItem.nivel.asc(), PromptPrioridadeItem.ordem.asc(), PromptPrioridadeItem.id.asc()).all()
+    p1: List[str] = []
+    p2: List[str] = []
+    p3: List[str] = []
+    for r in pr_rows:
+        n = (r.nivel or '').upper()
+        if n == 'P1_CRITICO':
+            p1.append(r.texto)
+        elif n == 'P2_ESTRATEGICO':
+            p2.append(r.texto)
+        elif n == 'P3_MONITORAMENTO':
+            p3.append(r.texto)
+
+    return {
+        'tags': tags_dict,
+        'p1': p1,
+        'p2': p2,
+        'p3': p3,
+    }
 
 
 # ==============================================================================
