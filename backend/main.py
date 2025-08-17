@@ -45,6 +45,7 @@ try:
         get_artigos_processados_hoje, get_clusters_existentes_hoje, get_cluster_com_artigos,
         associate_artigo_to_existing_cluster, create_cluster_for_artigo,
         agg_noticias_por_dia, agg_noticias_por_fonte, agg_noticias_por_autor,
+        agg_estatisticas_gerais, agg_noticias_por_tag, agg_noticias_por_prioridade,
         create_feedback, list_feedback, mark_feedback_processed,
         create_deep_research_job, update_deep_research_job, get_deep_research_job, list_deep_research_jobs_by_cluster,
         create_social_research_job, update_social_research_job, get_social_research_job, list_social_research_jobs_by_cluster,
@@ -413,6 +414,59 @@ async def get_cluster_details(
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
+@app.get("/api/cluster/{cluster_id}/artigos")
+async def get_cluster_artigos(
+    cluster_id: int,
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Endpoint para buscar artigos brutos de um cluster específico.
+    Usado para mostrar o texto completo dos artigos no modal.
+    
+    Args:
+        cluster_id: ID do cluster
+        db: Sessão do banco de dados
+    """
+    try:
+        artigos = get_artigos_by_cluster(db, cluster_id)
+        
+        if not artigos:
+            raise HTTPException(status_code=404, detail="Nenhum artigo encontrado para este cluster")
+        
+        # Formata artigos com texto completo
+        artigos_data = []
+        for artigo in artigos:
+            # Prioriza texto processado, mas fallback para texto bruto se necessário
+            texto_completo = artigo.texto_processado or artigo.texto_bruto
+            if not texto_completo:
+                texto_completo = "Texto não disponível"
+            
+            artigos_data.append({
+                "id": artigo.id,
+                "titulo": artigo.titulo_extraido,
+                "texto_completo": texto_completo,
+                "jornal": artigo.jornal,
+                "autor": artigo.autor,
+                "pagina": artigo.pagina,
+                "data_publicacao": artigo.data_publicacao.isoformat() if artigo.data_publicacao else None,
+                "url_original": artigo.url_original,
+                "fonte_coleta": artigo.fonte_coleta,
+                "created_at": artigo.created_at.isoformat()
+            })
+        
+        return {
+            "cluster_id": cluster_id,
+            "total_artigos": len(artigos_data),
+            "artigos": artigos_data
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        create_log(db, "ERROR", "api", f"Erro no endpoint /api/cluster/{cluster_id}/artigos: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
 # ==============================================================================
 # ENDPOINTS INTERNOS (PARA COLETORES)
 # ==============================================================================
@@ -547,6 +601,36 @@ async def bi_noticias_por_autor(limit: int = 20, db: Session = Depends(get_db)) 
         return {"itens": data}
     except Exception as e:
         create_log(db, "ERROR", "api", f"Erro em /api/bi/noticias-por-autor: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+@app.get("/api/bi/estatisticas-gerais")
+async def bi_estatisticas_gerais(db: Session = Depends(get_db)) -> Dict[str, Any]:
+    try:
+        data = agg_estatisticas_gerais(db)
+        return data
+    except Exception as e:
+        create_log(db, "ERROR", "api", f"Erro em /api/bi/estatisticas-gerais: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+@app.get("/api/bi/noticias-por-tag")
+async def bi_noticias_por_tag(limit: int = 10, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    try:
+        data = agg_noticias_por_tag(db, limit=limit)
+        return {"itens": data}
+    except Exception as e:
+        create_log(db, "ERROR", "api", f"Erro em /api/bi/noticias-por-tag: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+@app.get("/api/bi/noticias-por-prioridade")
+async def bi_noticias_por_prioridade(db: Session = Depends(get_db)) -> Dict[str, Any]:
+    try:
+        data = agg_noticias_por_prioridade(db)
+        return {"itens": data}
+    except Exception as e:
+        create_log(db, "ERROR", "api", f"Erro em /api/bi/noticias-por-prioridade: {e}")
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
@@ -3050,10 +3134,28 @@ async def estagiario_send(req: EstagiarioSendRequest, db: Session = Depends(get_
     try:
         # salva mensagem do usuário
         add_estagiario_message(db, req.session_id, 'user', req.message)
-        # chama agente
-        from agents.estagiario.agent import EstagiarioAgent
-        agent = EstagiarioAgent()
-        answer = agent.answer(req.message)
+        
+        # busca histórico da conversa para manter contexto
+        chat_history = list_estagiario_messages(db, req.session_id, limit=50)
+        print(f"[DEBUG] Histórico carregado: {len(chat_history)} mensagens")
+        for i, msg in enumerate(chat_history):
+            print(f"[DEBUG] Msg {i}: role={msg.get('role')}, content={msg.get('content', '')[:100]}...")
+        
+        # chama agente com histórico
+        try:
+            from agents.estagiario.agent import EstagiarioAgent
+            agent = EstagiarioAgent()
+            print(f"[DEBUG] Agente criado, chamando answer_with_context...")
+            answer = agent.answer_with_context(req.message, chat_history)
+            print(f"[DEBUG] Resposta obtida: {len(answer.text)} caracteres")
+        except ImportError as e:
+            print(f"Erro ao importar EstagiarioAgent: {e}")
+            # Fallback para import absoluto
+            import sys
+            sys.path.append(str(PROJECT_ROOT))
+            from agents.estagiario.agent import EstagiarioAgent
+            agent = EstagiarioAgent()
+            answer = agent.answer_with_context(req.message, chat_history)
         add_estagiario_message(db, req.session_id, 'assistant', answer.text)
         return {"ok": True, "response": answer.text}
     except Exception as e:

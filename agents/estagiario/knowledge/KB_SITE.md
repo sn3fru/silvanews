@@ -3,21 +3,23 @@
 Este documento descreve como o sistema funciona (dados, prioridades/tags, consultas ao banco) para orientar o agente na tomada de ações sem precisar enviar todo o contexto ao LLM a cada pergunta.
 
 ## 1) Visão Geral do Fluxo
-- Ingestão → `artigos_brutos` (status: `pendente`)
-- Processamento inicial (extrai campos, valida, embedding) → `pronto_agrupar`
+- Ingestão → `artigos_brutos` (status: `pendente`) com **`texto_bruto` preservado** (conteúdo original completo dos PDFs)
+- Processamento inicial (extrai campos, valida, embedding) → `pronto_agrupar` - **`texto_bruto` permanece inalterado**
 - Agrupamento (eventos) → `clusters_eventos` (associa artigos aos clusters)
-- Classificação + Resumo por prioridade/tag (P1, P2, P3) → `clusters_eventos.resumo_cluster`
+- Classificação + Resumo por prioridade/tag (P1, P2, P3) → **`clusters_eventos.resumo_cluster`** (resumos dos clusters, não das notícias individuais)
 - Priorização Executiva Final (reclassificação rígida)
 - API/Frontend consomem os clusters do dia
 
 ## 2) Modelo de Dados (tabelas principais)
 ### 2.1 `artigos_brutos`
-- Campos-chave: `id`, `texto_bruto`, `titulo_extraido`, `texto_processado`, `jornal`, `data_publicacao`, `status` (pendente|processado|irrelevante|erro), `tag`, `prioridade`, `embedding`, `cluster_id`, `created_at`, `processed_at`.
+- Campos-chave: `id`, **`texto_bruto`** (conteúdo original completo dos PDFs, **NUNCA alterado**), `titulo_extraido`, **`texto_processado`** (resumos dos clusters, não das notícias individuais), `jornal`, `data_publicacao`, `status` (pendente|processado|irrelevante|erro), `tag`, `prioridade`, `embedding`, `cluster_id`, `created_at`, `processed_at`.
 - Significado: artigo "raw" e/ou processado. Quando associados a um cluster, apontam para `clusters_eventos.id`.
+- **IMPORTANTE**: `texto_bruto` contém o conteúdo original completo dos PDFs e é preservado durante todo o processamento.
 
 ### 2.2 `clusters_eventos`
-- Campos-chave: `id`, `titulo_cluster`, `resumo_cluster`, `tag`, `prioridade`, `embedding_medio`, `status` (ativo), `total_artigos`, `created_at`, `updated_at`.
+- Campos-chave: `id`, `titulo_cluster`, **`resumo_cluster`** (resumo do cluster de eventos, não de notícias individuais), `tag`, `prioridade`, `embedding_medio`, `status` (ativo), `total_artigos`, `created_at`, `updated_at`.
 - Significado: evento/agregado de notícias (fato gerador). É o que aparece no feed.
+- **IMPORTANTE**: Um cluster com apenas uma notícia pode ser considerado como "notícia resumida", mas tecnicamente é um cluster de evento.
 
 ### 2.3 `sinteses_executivas`
 - Síntese do dia com métricas agregadas.
@@ -131,13 +133,16 @@ Para economizar tokens, o LLM deve chamar tools com entradas/saídas específica
 1. Interpretar a pergunta → extrair data (padrão: hoje), prioridade (se houver), palavras-chave.
 2. Se a pergunta for contagem/estatística objetiva → usar tools de contagem/agrupamento (ex.: `count_irrelevantes`).
 3. Se a pergunta exigir listagem/filtragem por prioridade → usar `fetch_clusters` por prioridade e/ou `db_query` para filtros de texto.
-4. Montar resposta concisa e útil em Markdown; incluir amostra (títulos + resumos) quando listar itens e uma seção de Fontes com `[ID] Título — URL (Jornal)`.
-5. Registrar pergunta/resposta no chat do Estagiário (sessão do dia).
+4. **Aprofundamento opcional**: Se a pergunta exigir análise detalhada, o agente pode acessar o **`texto_bruto`** (conteúdo original completo dos PDFs) dos artigos do cluster para análises mais profundas.
+5. Montar resposta concisa e útil em Markdown; incluir amostra (títulos + resumos) quando listar itens e uma seção de Fontes com `[ID] Título — URL (Jornal)`.
+6. Registrar pergunta/resposta no chat do Estagiário (sessão do dia).
 
 ## 7) Exemplos de Uso (para o Agente)
-- “Quantas notícias irrelevantes hoje?”
+- "Quantas notícias irrelevantes hoje?"
   - Chamar `count_irrelevantes` com `date=today` → retornar o número.
-- “Promoções de carros até 200 mil?”
+- "Promoções de carros até 200 mil?"
   - Buscar clusters do dia (`fetch_clusters` sem prioridade), filtrar por palavras-chave indicativas e preços (regex simples) no app.
-- “Impactos P1 EUA–Rússia?”
+- "Impactos P1 EUA–Rússia?"
   - `fetch_clusters` com `priority=P1_CRITICO`, filtrar por palavras (EUA, Rússia, Putin, Kremlin) no título/resumo, sintetizar bullets.
+- "Análise detalhada do cluster 123 sobre inflação?"
+  - Acessar detalhes do cluster, e se necessário, carregar o **`texto_bruto`** (conteúdo original completo dos PDFs) dos artigos para análise mais profunda.

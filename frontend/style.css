@@ -400,6 +400,20 @@ body {
     background-color: rgba(33, 37, 41, 0.6);
     display: flex; justify-content: center; align-items: center; z-index: 1000;
 }
+
+/* Modal específico do estagiário */
+#modal-estagiario-chat {
+    z-index: 1001;
+}
+
+#modal-estagiario-chat .modal-container {
+    z-index: 1002;
+}
+
+#modal-estagiario-chat .chat-input-area {
+    z-index: 1003;
+    position: relative;
+}
 .modal-container {
     background-color: var(--cor-container); width: 90%; max-width: 900px;
     height: 90vh; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1);
@@ -428,6 +442,12 @@ hr { border: none; border-top: 1px solid var(--cor-borda); margin: 1.5rem 0; }
 .message.system { color: var(--cor-texto-secundario); font-style: italic; }
 .chat-input-area { display: flex; gap: 1rem; }
 .chat-input-area input { flex-grow: 1; background-color: var(--cor-fundo); border: 1px solid var(--cor-borda); color: var(--cor-texto-principal); padding: 0.75rem; border-radius: 6px; }
+.chat-input-area button { 
+    flex-shrink: 0; 
+    z-index: 1001; 
+    position: relative; 
+    pointer-events: auto !important; 
+}
 
 #prompt-display { width: 100%; min-height: 150px; background-color: var(--cor-fundo); border: 1px solid var(--cor-borda); color: var(--cor-texto-secundario); padding: 1rem; border-radius: 6px; resize: vertical; margin-bottom: 1rem; }
 #prompt-display:not([readonly]) { color: var(--cor-texto-principal); }
@@ -1373,3 +1393,82 @@ hr { border: none; border-top: 1px solid var(--cor-borda); margin: 1.5rem 0; }
 .estagiario-msg.assistant { background: #eef7ee; color: #155724; }
 .estagiario-chat-input { display: flex; gap: .5rem; padding: .5rem; border-top: 1px solid var(--cor-borda); background: white; }
 .estagiario-chat-input input { flex: 1; padding: .5rem .6rem; border: 1px solid var(--cor-borda); border-radius: 6px; }
+
+/* Charts Section Styles */
+.charts-section {
+    margin: 2rem 0;
+}
+
+.chart-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin-top: 1rem;
+}
+
+.chart-card {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 8px;
+    border: 1px solid var(--cor-borda);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.chart-card h3 {
+    margin: 0 0 1rem 0;
+    color: var(--cor-texto-principal);
+    font-size: 1.1rem;
+    text-align: center;
+}
+
+.chart-card canvas {
+    max-width: 100%;
+    height: 300px !important;
+    margin: 0 auto;
+    display: block;
+}
+
+/* Stats Grid Styles */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 8px;
+    border: 1px solid var(--cor-borda);
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.stat-number {
+    font-size: 2rem;
+    font-weight: bold;
+    color: var(--cor-destaque-btg);
+    margin-bottom: 0.5rem;
+}
+
+.stat-label {
+    color: var(--cor-texto-secundario);
+    font-size: 0.9rem;
+}
+
+/* Responsive adjustments for charts */
+@media (max-width: 768px) {
+    .chart-container {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .chart-card canvas {
+        height: 250px !important;
+    }
+}

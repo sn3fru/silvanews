@@ -659,7 +659,7 @@ function displayArtigos(data) {
             <td>${artigo.titulo_extraido || (artigo.texto_bruto ? artigo.texto_bruto.substring(0, 50) + '...' : '')}</td>
             <td>${artigo.jornal || '-'}</td>
             <td><span class="status-badge status-${artigo.status}">${artigo.status}</span></td>
-            <td>${artigo.tag ? `<span class="tag ${tagClass}">${artigo.tag}</span>` : '-'}</td>
+            <td>${artigo.tag ? `<span class="tag-badge">${artigo.tag}</span>` : '-'}</td>
             <td>${artigo.prioridade ? `<span class="priority-badge ${artigo.prioridade}">${artigo.prioridade}</span>` : '-'}</td>
             <td>${formatDate(artigo.created_at)}</td>
             <td>
@@ -932,6 +932,14 @@ function generateFormFields(type, item) {
                     <input type="text" name="titulo_extraido" value="${item.titulo_extraido || ''}" />
                 </div>
                 <div class="form-group">
+                    <label>Texto Original da Notícia (PDF/URL)</label>
+                    <textarea name="texto_original" rows="12" style="width: 100%; font-family: monospace; font-size: 11px; resize: vertical; background-color: #f8f9fa;" readonly>${item.texto_bruto || 'Texto original não disponível'}</textarea>
+                </div>
+                <div class="form-group">
+                    <label>Texto Processado/Resumido</label>
+                    <textarea name="texto_processado" rows="8" style="width: 100%; font-family: monospace; font-size: 11px; resize: vertical; background-color: #e9ecef;">${item.texto_processado || 'Texto processado não disponível'}</textarea>
+                </div>
+                <div class="form-group">
                     <label>Jornal</label>
                     <input type="text" name="jornal" value="${item.jornal || ''}" />
                 </div>
@@ -940,10 +948,25 @@ function generateFormFields(type, item) {
                     <input type="text" name="autor" value="${item.autor || ''}" />
                 </div>
                 <div class="form-group">
+                    <label>Página (se PDF)</label>
+                    <input type="text" name="pagina" value="${item.pagina || ''}" />
+                </div>
+                <div class="form-group">
+                    <label>Data de Publicação</label>
+                    <input type="date" name="data_publicacao" value="${item.data_publicacao ? item.data_publicacao.split('T')[0] : ''}" />
+                </div>
+                <div class="form-group">
+                    <label>Fonte de Coleta</label>
+                    <input type="text" name="fonte_coleta" value="${item.fonte_coleta || ''}" readonly />
+                </div>
+                <div class="form-group">
                     <label>Tag</label>
                     <select name="tag">
                         <option value="">Selecione...</option>
-                        ${generateTagOptions(item.tag)}
+                        <option value="Governo e Politica" ${item.tag === 'Governo e Politica' ? 'selected' : ''}>Governo e Politica</option>
+                        <option value="Economia e Tecnologia" ${item.tag === 'Economia e Tecnologia' ? 'selected' : ''}>Economia e Tecnologia</option>
+                        <option value="Judicionario" ${item.tag === 'Judicionario' ? 'selected' : ''}>Judicionario</option>
+                        <option value="Empresas Privadas" ${item.tag === 'Empresas Privadas' ? 'selected' : ''}>Empresas Privadas</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -961,7 +984,7 @@ function generateFormFields(type, item) {
                 </div>
                 <div class="form-group">
                     <label>Relevance Reason</label>
-                    <textarea name="relevance_reason">${item.relevance_reason || ''}</textarea>
+                    <textarea name="relevance_reason" rows="3">${item.relevance_reason || ''}</textarea>
                 </div>
             `;
             
@@ -1040,40 +1063,285 @@ function showTable(tab) {
 // ======================= BI =======================
 async function carregarBI() {
     try {
-        // séries por dia
-        const s = await fetch(`${API_BASE}/bi/series-por-dia?dias=30`);
-        const sd = await s.json();
-        const stbody = document.querySelector('#bi-series-table tbody');
-        stbody.innerHTML = '';
-        (sd.series || []).forEach(item => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td>${item.dia}</td><td>${item.num_artigos}</td><td>${item.num_clusters}</td>`;
-            stbody.appendChild(tr);
+        // Mostra loading
+        const biContent = document.getElementById('bi');
+        biContent.innerHTML = '<div class="loading">Carregando dados do BI...</div>';
+        
+        // Timeout para evitar travamento
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Timeout: BI demorou muito para carregar')), 30000);
         });
-
-        // por fonte
-        const f = await fetch(`${API_BASE}/bi/noticias-por-fonte?limit=20`);
-        const fd = await f.json();
-        const ftbody = document.querySelector('#bi-fonte-table tbody');
-        ftbody.innerHTML = '';
-        (fd.itens || []).forEach(i => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td>${i.jornal}</td><td>${i.qtd}</td>`;
-            ftbody.appendChild(tr);
-        });
-
-        // por autor
-        const a = await fetch(`${API_BASE}/bi/noticias-por-autor?limit=20`);
-        const ad = await a.json();
-        const atbody = document.querySelector('#bi-autor-table tbody');
-        atbody.innerHTML = '';
-        (ad.itens || []).forEach(i => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td>${i.autor}</td><td>${i.qtd}</td>`;
-            atbody.appendChild(tr);
-        });
+        
+        // Função principal com timeout
+        const biPromise = carregarBIDados();
+        const result = await Promise.race([biPromise, timeoutPromise]);
+        
+        // Se chegou aqui, carregou com sucesso
+        biContent.innerHTML = result.html;
+        
+        // Renderiza os gráficos após o HTML estar carregado
+        setTimeout(() => {
+            renderizarGraficos(result.tagsData, result.prioridadesData);
+        }, 100);
+        
     } catch (e) {
         console.error('Erro ao carregar BI', e);
+        const biContent = document.getElementById('bi');
+        biContent.innerHTML = `
+            <div class="error">
+                Erro ao carregar dados do BI: ${e.message}
+                <br><br>
+                <button class="btn btn-primary" onclick="carregarBI()">Tentar Novamente</button>
+            </div>
+        `;
+    }
+}
+
+async function carregarBIDados() {
+    // Estatísticas gerais
+    const stats = await fetch(`${API_BASE}/bi/estatisticas-gerais`);
+    const statsData = await stats.json();
+    
+    // séries por dia (invertendo a ordem)
+    const s = await fetch(`${API_BASE}/bi/series-por-dia?dias=30`);
+    const sd = await s.json();
+    
+    // por fonte
+    const f = await fetch(`${API_BASE}/bi/noticias-por-fonte?limit=20`);
+    const fd = await f.json();
+    
+    // Gráfico por tag
+    const tags = await fetch(`${API_BASE}/bi/noticias-por-tag?limit=10`);
+    const tagsData = await tags.json();
+    
+    // Gráfico por prioridade
+    const prioridades = await fetch(`${API_BASE}/bi/noticias-por-prioridade`);
+    const prioridadesData = await prioridades.json();
+    
+    // Retorna HTML completo
+    return {
+        html: `
+            <div class="upload-section">
+                <h3>📊 Estatísticas Gerais</h3>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number" id="total-dias">${statsData.dias_diferentes || 0}</div>
+                        <div class="stat-label">Dias com Notícias</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="total-artigos">${statsData.total_artigos || 0}</div>
+                        <div class="stat-label">Total de Artigos</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="total-clusters">${statsData.total_clusters || 0}</div>
+                        <div class="stat-label">Total de Clusters</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="upload-section">
+                <h3>📈 Séries por Dia (Últimos 30 dias)</h3>
+                <table class="data-table" id="bi-series-table">
+                    <thead><tr><th>Dia</th><th>Artigos</th><th>Clusters</th></tr></thead>
+                    <tbody>
+                        ${(sd.series || []).reverse().map(item => 
+                            `<tr><td>${item.dia}</td><td>${item.num_artigos}</td><td>${item.num_clusters}</td></tr>`
+                        ).join('')}
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="upload-section">
+                <h3>📰 Notícias por Fonte (Top 20)</h3>
+                <table class="data-table" id="bi-fonte-table">
+                    <thead><tr><th>Fonte</th><th>Qtd</th></tr></thead>
+                    <tbody>
+                        ${(fd.itens || []).map(i => 
+                            `<tr><td>${i.jornal}</td><td>${i.qtd}</td></tr>`
+                        ).join('')}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Gráficos de Pizza -->
+            <div class="charts-section">
+                <div class="chart-container">
+                    <div class="chart-card">
+                        <h3>🏷️ Notícias por Tag (Top 10)</h3>
+                        <canvas id="chart-tags" width="400" height="400"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>🎯 Notícias por Prioridade</h3>
+                        <canvas id="chart-prioridade" width="400" height="400"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="upload-section">
+                <h3>�� Estimativa de Custos</h3>
+                <button class="btn btn-secondary" onclick="carregarEstimativaCustos()">Calcular Estimativa</button>
+                <div id="custos-output" class="upload-results" style="display:none;"></div>
+            </div>
+        `,
+        tagsData: tagsData,
+        prioridadesData: prioridadesData
+    };
+}
+
+// Função para renderizar os gráficos após o HTML estar carregado
+function renderizarGraficos(tagsData, prioridadesData) {
+    try {
+        // Renderiza gráfico de tags
+        if (tagsData && tagsData.itens && tagsData.itens.length > 0) {
+            criarGraficoTags(tagsData.itens);
+        }
+        
+        // Renderiza gráfico de prioridades
+        if (prioridadesData && prioridadesData.itens && prioridadesData.itens.length > 0) {
+            criarGraficoPrioridade(prioridadesData.itens);
+        }
+    } catch (e) {
+        console.error('Erro ao renderizar gráficos:', e);
+    }
+}
+
+// Função para criar gráfico de pizza das tags
+function criarGraficoTags(dados) {
+    try {
+        const ctx = document.getElementById('chart-tags');
+        if (!ctx) {
+            console.warn('Canvas chart-tags não encontrado');
+            return;
+        }
+        
+        // Destroi gráfico anterior se existir
+        if (window.chartTags) {
+            window.chartTags.destroy();
+        }
+        
+        // Valida dados
+        if (!Array.isArray(dados) || dados.length === 0) {
+            console.warn('Dados de tags inválidos ou vazios');
+            return;
+        }
+        
+        const labels = dados.map(item => item.tag || 'Sem Tag');
+        const data = dados.map(item => item.qtd || 0);
+        
+        // Cores para as tags
+        const cores = [
+            '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
+            '#FF9F40', '#FF6384', '#C9CBCF', '#4BC0C0', '#FF6384'
+        ];
+        
+        window.chartTags = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: data,
+                    backgroundColor: cores.slice(0, labels.length),
+                    borderWidth: 2,
+                    borderColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            padding: 20,
+                            usePointStyle: true
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                return `${context.label}: ${context.parsed} (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    } catch (e) {
+        console.error('Erro ao criar gráfico de tags:', e);
+    }
+}
+
+// Função para criar gráfico de pizza das prioridades
+function criarGraficoPrioridade(dados) {
+    try {
+        const ctx = document.getElementById('chart-prioridade');
+        if (!ctx) {
+            console.warn('Canvas chart-prioridade não encontrado');
+            return;
+        }
+        
+        // Destroi gráfico anterior se existir
+        if (window.chartPrioridade) {
+            window.chartPrioridade.destroy();
+        }
+        
+        // Valida dados
+        if (!Array.isArray(dados) || dados.length === 0) {
+            console.warn('Dados de prioridades inválidos ou vazios');
+            return;
+        }
+        
+        const labels = dados.map(item => item.prioridade || 'Sem Prioridade');
+        const data = dados.map(item => item.qtd || 0);
+        
+        // Cores específicas para prioridades
+        const cores = {
+            'P1_CRITICO': '#dc3545',
+            'P2_ESTRATEGICO': '#ffc107',
+            'P3_MONITORAMENTO': '#17a2b8',
+            'Sem Prioridade': '#6c757d'
+        };
+        
+        const backgroundColor = labels.map(label => cores[label] || '#6c757d');
+        
+        window.chartPrioridade = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: data,
+                    backgroundColor: backgroundColor,
+                    borderWidth: 2,
+                    borderColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            padding: 20,
+                            usePointStyle: true
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                return `${context.label}: ${context.parsed} (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    } catch (e) {
+        console.error('Erro ao criar gráfico de prioridades:', e);
     }
 }
 

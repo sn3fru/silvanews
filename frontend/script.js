@@ -1034,10 +1034,28 @@ function renderizarFontes(fontes) {
         fontes.forEach(fonte => {
             const li = document.createElement('li');
             const icon = fonte.tipo === 'pdf' ? '📄' : '🔗';
-            li.innerHTML = `
-                <span>${icon} ${fonte.nome}</span>
-                <a href="${fonte.url}" target="_blank" class="btn btn-terciario">Acessar Original</a>
-            `;
+            
+            // Para PDFs, mostra informações da fonte em vez de tentar abrir URL
+            if (fonte.tipo === 'pdf' || !fonte.url) {
+                const fonteInfo = [];
+                if (fonte.autor && fonte.autor !== 'N/A') fonteInfo.push(`✍️ ${fonte.autor}`);
+                if (fonte.pagina && fonte.pagina !== 'N/A') fonteInfo.push(`📄 Página ${fonte.pagina}`);
+                
+                li.innerHTML = `
+                    <span>${icon} ${fonte.nome}</span>
+                    ${fonteInfo.length > 0 ? `<div class="fonte-info">${fonteInfo.join(' | ')}</div>` : ''}
+                    <button class="btn btn-terciario" onclick="verArtigoBruto(${currentClusterId}, '${fonte.nome}')">
+                        📰 Ver Artigo Completo
+                    </button>
+                `;
+            } else {
+                // Para URLs, mantém o comportamento original
+                li.innerHTML = `
+                    <span>${icon} ${fonte.nome}</span>
+                    <a href="${fonte.url}" target="_blank" class="btn btn-terciario">Acessar Original</a>
+                `;
+            }
+            
             listaFontesContainer.appendChild(li);
         });
     } else {
@@ -2600,11 +2618,19 @@ function inserirCardEstagiario() {
     // sessão por dia
     let estagiarioSessionId = null;
     async function ensureSession() {
+        console.log('ensureSession chamada, sessionId atual:', estagiarioSessionId);
         if (estagiarioSessionId) return estagiarioSessionId;
-        const resp = await fetch('/api/estagiario/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: currentDate }) });
-        const data = await resp.json();
-        estagiarioSessionId = data.session_id;
-        return estagiarioSessionId;
+        console.log('Criando nova sessão para data:', currentDate);
+        try {
+            const resp = await fetch('/api/estagiario/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: currentDate }) });
+            const data = await resp.json();
+            console.log('Resposta da API start:', data);
+            estagiarioSessionId = data.session_id;
+            return estagiarioSessionId;
+        } catch (error) {
+            console.error('Erro ao criar sessão:', error);
+            throw error;
+        }
     }
     // Renderização simples de Markdown (títulos, negrito, itálico, listas, links)
     function renderMarkdown(mdRaw) {
@@ -2639,12 +2665,8 @@ function inserirCardEstagiario() {
     }
 
     async function sendMessage(msg, fromModal=false) {
-        const sid = await ensureSession();
-        const thread = fromModal ? document.getElementById('estagiario-thread-modal') : document.getElementById('estagiario-thread');
-        const userDiv = document.createElement('div');
-        userDiv.className = 'estagiario-msg user';
-        userDiv.textContent = msg;
-        thread.appendChild(userDiv);
+        console.log('sendMessage chamada:', { msg, fromModal });
+        
         // abre modal de status
         const modal = document.getElementById('modal-estagiario');
         const statusText = document.getElementById('estagiario-status-text');
@@ -2654,19 +2676,32 @@ function inserirCardEstagiario() {
             statusText.textContent = 'Entendendo pergunta...';
             steps.innerHTML = '';
         }
+        
         try {
+            const sid = await ensureSession();
+            console.log('Session ID obtido:', sid);
+            const thread = fromModal ? document.getElementById('estagiario-thread-modal') : document.getElementById('estagiario-thread');
+            console.log('Thread encontrado:', !!thread);
+            const userDiv = document.createElement('div');
+            userDiv.className = 'estagiario-msg user';
+            userDiv.textContent = msg;
+            thread.appendChild(userDiv);
+            
             // Etapa 1: Entendendo
             if (steps) steps.innerHTML = '<div>✓ Entendendo</div>';
             await new Promise(r => setTimeout(r, 200));
+            
             // Etapa 2: Planejamento
             if (statusText) statusText.textContent = 'Planejando passos...';
             if (steps) steps.innerHTML += '<div>✓ Planejamento</div>';
             await new Promise(r => setTimeout(r, 200));
+            
             // Etapa 3: Consulta ao DB (antes do await para mostrar progresso)
             if (statusText) statusText.textContent = 'Consultando banco de dados...';
             const resp = await fetch('/api/estagiario/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sid, message: msg }) });
             if (steps) steps.innerHTML += '<div>✓ Consulta ao DB</div>';
             await new Promise(r => setTimeout(r, 150));
+            
             // Etapa 4: Síntese
             if (statusText) statusText.textContent = 'Sintetizando resposta...';
             const data = await resp.json();
@@ -2675,6 +2710,7 @@ function inserirCardEstagiario() {
             asDiv.innerHTML = renderMarkdown(data.response || '');
             thread.appendChild(asDiv);
             thread.scrollTop = thread.scrollHeight;
+            
             // Atualiza select de histórico com a pergunta enviada
             const hist = document.getElementById('estagiario-history-select');
             if (hist) {
@@ -2685,9 +2721,10 @@ function inserirCardEstagiario() {
                 hist.value = opt.value;
             }
         } catch (e) {
+            console.error('Erro em sendMessage:', e);
             const errDiv = document.createElement('div');
             errDiv.className = 'estagiario-msg assistant';
-            errDiv.textContent = 'Erro ao processar';
+            errDiv.textContent = `Erro ao processar: ${e.message}`;
             thread.appendChild(errDiv);
         } finally {
             if (modal) modal.classList.add('oculto');
@@ -2726,7 +2763,7 @@ function inserirCardEstagiario() {
                 }
             }
         }
-    }
+    } // Fechamento da função sendMessage
     const input = card.querySelector('#estagiario-input');
     const btn = card.querySelector('#estagiario-send');
     btn.addEventListener('click', async () => {
@@ -2756,19 +2793,25 @@ function inserirCardEstagiario() {
             if (modalThread && cardThread) modalThread.innerHTML = cardThread.innerHTML;
             const inputModal = document.getElementById('estagiario-input-modal');
             const sendModal = document.getElementById('estagiario-send-modal');
-            if (sendModal && inputModal && !sendModal.dataset.bound) {
-                sendModal.dataset.bound = '1';
-                sendModal.addEventListener('click', async () => {
-                    const v = (inputModal.value || '').trim();
+            if (sendModal && inputModal) {
+                // Remove eventos anteriores para evitar duplicação
+                const newSendModal = sendModal.cloneNode(true);
+                sendModal.parentNode.replaceChild(newSendModal, sendModal);
+                const newInputModal = inputModal.cloneNode(true);
+                inputModal.parentNode.replaceChild(newInputModal, inputModal);
+                
+                // Reconfigura os eventos
+                newSendModal.addEventListener('click', async () => {
+                    const v = (newInputModal.value || '').trim();
                     if (!v) return;
-                    inputModal.value = '';
+                    newInputModal.value = '';
                     await sendMessage(v, true);
                 });
-                inputModal.addEventListener('keypress', async (ev) => {
+                newInputModal.addEventListener('keypress', async (ev) => {
                     if (ev.key === 'Enter') {
-                        const v = (inputModal.value || '').trim();
+                        const v = (newInputModal.value || '').trim();
                         if (!v) return;
-                        inputModal.value = '';
+                        newInputModal.value = '';
                         await sendMessage(v, true);
                     }
                 });
@@ -2792,3 +2835,117 @@ renderizarClusters = function() {
     _origRenderizarClusters();
     inserirCardEstagiario();
 };
+
+// Configuração global dos eventos do estagiário modal
+function configurarEventosEstagiarioModal() {
+    const inputModal = document.getElementById('estagiario-input-modal');
+    const sendModal = document.getElementById('estagiario-send-modal');
+    
+    if (sendModal && inputModal) {
+        console.log('Configurando eventos do estagiário modal...');
+        
+        // Remove eventos anteriores
+        const newSendModal = sendModal.cloneNode(true);
+        sendModal.parentNode.replaceChild(newSendModal, sendModal);
+        const newInputModal = inputModal.cloneNode(true);
+        inputModal.parentNode.replaceChild(newInputModal, inputModal);
+        
+        // Configura eventos
+        newSendModal.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Botão estagiário modal clicado!');
+            
+            const v = (newInputModal.value || '').trim();
+            if (!v) {
+                console.log('Input vazio, ignorando...');
+                return;
+            }
+            
+            console.log('Enviando mensagem via modal:', v);
+            newInputModal.value = '';
+            await sendMessage(v, true);
+        });
+        
+        newInputModal.addEventListener('keypress', async (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Enter pressionado no input modal!');
+                
+                const v = (newInputModal.value || '').trim();
+                if (!v) {
+                    console.log('Input vazio, ignorando...');
+                    return;
+                }
+                
+                console.log('Enviando mensagem via Enter no modal:', v);
+                newInputModal.value = '';
+                await sendMessage(v, true);
+            }
+        });
+        
+        console.log('Eventos do estagiário modal configurados com sucesso!');
+    }
+}
+
+// Configura eventos quando o DOM estiver pronto
+document.addEventListener('DOMContentLoaded', configurarEventosEstagiarioModal);
+
+// Também configura quando o modal for aberto
+document.addEventListener('click', (e) => {
+    if (e.target && e.target.id === 'estagiario-send-modal') {
+        console.log('Botão estagiário clicado via evento global!');
+        configurarEventosEstagiarioModal();
+    }
+});
+
+// =======================================
+// FUNÇÃO PARA VER ARTIGOS BRUTOS
+// =======================================
+async function verArtigoBruto(clusterId, fonteNome) {
+    try {
+        const response = await fetch(`/api/cluster/${clusterId}/artigos`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // Cria modal para mostrar artigos brutos
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal-content modal-large">
+                <div class="modal-header">
+                    <h3>📰 Artigos Brutos - ${fonteNome}</h3>
+                    <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="artigos-brutos-container">
+                        ${data.artigos.map(artigo => `
+                            <div class="artigo-bruto-item">
+                                <h4>${artigo.titulo || 'Sem título'}</h4>
+                                <div class="artigo-meta">
+                                    <span class="jornal">📰 ${artigo.jornal || 'Fonte desconhecida'}</span>
+                                    ${artigo.autor && artigo.autor !== 'N/A' ? `<span class="autor">✍️ ${artigo.autor}</span>` : ''}
+                                    ${artigo.pagina && artigo.pagina !== 'N/A' ? `<span class="pagina">📄 ${artigo.pagina}</span>` : ''}
+                                    ${artigo.data_publicacao ? `<span class="data">📅 ${new Date(artigo.data_publicacao).toLocaleDateString('pt-BR')}</span>` : ''}
+                                </div>
+                                <div class="artigo-texto">
+                                    <p>${artigo.texto_completo || 'Texto não disponível'}</p>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+    } catch (error) {
+        console.error('Erro ao carregar artigos brutos:', error);
+        alert('Erro ao carregar artigos brutos: ' + error.message);
+    }
+}

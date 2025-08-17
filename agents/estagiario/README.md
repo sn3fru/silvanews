@@ -8,6 +8,7 @@ O Estagiário é um agente que responde perguntas sobre TODAS as notícias de um
   - `get_clusters_for_feed_by_date` para paginação de clusters do dia.
   - `get_cluster_details_by_id` para abrir detalhes de um cluster (para respostas mais ricas; usado conforme evoluirmos o plano).
   - `get_metricas_by_date` para fallback informativo.
+- **Acesso a dados originais**: O agente pode acessar tanto o **`texto_bruto`** (conteúdo original completo dos PDFs) quanto o **`texto_processado`** (resumos dos clusters) para análises mais profundas.
 - **Casos suportados no agente** (`EstagiarioAgent.answer`):
   - Contagem de itens irrelevantes do dia (consulta precisa por ORM).
   - Promoções de carros (com/sem preço explícito, sem default oculto de valor), com triagem e síntese.
@@ -64,12 +65,12 @@ print(ans.text)
 
 ## Plano de evolução (próximos passos)
 
-### A. Pipeline de “pensar antes de responder” (operacional)
+### A. Pipeline de "pensar antes de responder" (operacional)
 - **Planejamento explícito por etapas** para toda pergunta genérica:
   1) Entender intenção → extrair keywords, prioridades e tags candidatas.
   2) Buscar clusters do dia por prioridade/tag.
   3) **Ranquear** por (prioridade, match semântico/lexical no título e no resumo).
-  4) **Aprofundar top-K**: abrir detalhes do cluster (ids, fontes). Se promissor, carregar resumos; se ainda promissor, opcionalmente abrir texto completo dos artigos desse cluster.
+  4) **Aprofundar top-K**: abrir detalhes do cluster (ids, fontes). Se promissor, carregar resumos; se ainda promissor, opcionalmente abrir **texto completo original dos PDFs** (`texto_bruto`) dos artigos desse cluster.
   5) **Síntese do zero**: redigir resposta estruturada (títulos, bullets, tabela), citando fontes e IDs.
   6) Devolver também um `data.itens` com os principais clusters usados.
 

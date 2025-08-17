@@ -9,11 +9,13 @@ Plataforma de inteligência de mercado que transforma alto volume de notícias e
 - Oferece visualização por data, filtros e drill-down para as fontes originais.
 
 ### Como funciona na prática
-- Carregue PDFs/JSONs de crawlers (upload manual ou via API) → são salvos como artigos brutos.
-- O processamento orquestrado agrupa por fato gerador, classifica e gera resumos.
+- Carregue PDFs/JSONs de crawlers (upload manual ou via API) → são salvos como artigos brutos com **texto original completo** preservado.
+- O processamento orquestrado agrupa por fato gerador, classifica e gera resumos dos **clusters** (não das notícias individuais).
 - O frontend exibe o feed por data, com filtros de prioridade e tags dinâmicas vindas dos dados reais.
 
 ### Novidades recentes (pipeline mais rigoroso)
+- **Preservação do texto original**: O `texto_bruto` dos PDFs é **NUNCA alterado** durante o processamento, garantindo acesso ao conteúdo original completo.
+- **Resumos de clusters**: O `texto_processado` contém resumos dos **clusters de eventos**, não de notícias individuais.
 - Endurecimento do `PROMPT_EXTRACAO_PERMISSIVO_V8`: lista de rejeição ampliada (crimes comuns, casos pessoais, fofoca/entretenimento, esportes, política partidária, efemérides e programas sociais sem tese) e gating P1/P2/P3 mais duro.
 - Priorização Executiva Final integrada: etapa adicional pós-resumo/pós-agrupamento que reclassifica como P1/P2/P3/IRRELEVANTE com justificativa e ação recomendada (`PROMPT_PRIORIZACAO_EXECUTIVA_V1`).
 - Nova Etapa 4 – Consolidação Final de Clusters: reagrupamento conservador de clusters do dia usando `PROMPT_CONSOLIDACAO_CLUSTERS_V1` com base em títulos, tags e prioridades já atribuídos. A maioria dos clusters permanece inalterada; quando há duplicidade (p.ex. variações de “PGFN arrecadação recorde”), a etapa sugere merges, move artigos para um destino, ajusta título/tag/prioridade quando necessário e arquiva (soft delete) os duplicados.
@@ -33,10 +35,10 @@ Plataforma de inteligência de mercado que transforma alto volume de notícias e
 - **Migração**: Use `python seed_prompts.py` para popular o banco com dados iniciais após criar as tabelas.
 
 ### Pipeline (passo a passo)
-1) Ingestão: `load_news.py` lê PDFs/JSONs e grava artigos brutos (status `pendente`).
-2) Processamento inicial: extrai dados, gera embeddings e marca `pronto_agrupar`.
+1) Ingestão: `load_news.py` lê PDFs/JSONs e grava artigos brutos (status `pendente`) com **`texto_bruto` preservado** (conteúdo original completo).
+2) Processamento inicial: extrai dados, gera embeddings e marca `pronto_agrupar` - **`texto_bruto` permanece inalterado**.
 3) Agrupamento: cria/atualiza clusters por fato gerador (modo em lote ou incremental automático).
-4) Classificação e Resumos: define prioridade/tag e gera resumo no tamanho certo.
+4) Classificação e Resumos: define prioridade/tag e gera **resumo do cluster** (não da notícia individual) no tamanho certo - salva em `texto_processado`.
 5) Priorização Executiva Final e Consolidação Final (Etapa 4): reclassifica rigidamente P1/P2/P3/IRRELEVANTE e, em seguida, consolida clusters redundantes do dia via `PROMPT_CONSOLIDACAO_CLUSTERS_V1` (merges conservadores, soft delete dos duplicados, preservando resumos existentes).
 6) Exposição: API `FastAPI` alimenta o frontend; CRUD e endpoints admin.
 
@@ -73,6 +75,8 @@ Prompts opcionais/POC (não usados no pipeline padrão):
 
 ### Arquitetura em 1 minuto
 - Backend FastAPI + SQLAlchemy (PostgreSQL 5433)
+- **Estrutura de dados**: `artigos_brutos` (texto original dos PDFs) → `clusters_eventos` (resumos dos clusters)
+- **Preservação de dados**: `texto_bruto` nunca é alterado; `texto_processado` contém resumos dos clusters
 - Frontend estático em `frontend/`
 - Orquestração por scripts CLI para ingestão e processamento
 

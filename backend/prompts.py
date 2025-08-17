@@ -284,16 +284,31 @@ Eventos com potencial de se tornarem P1 ou que indicam movimentos estratégicos 
 --- GUIA DE TAGS E CATEGORIAS ---
 {GUIA_TAGS_FORMATADO}
 
+<<< EXTRACAÇÃO DE FONTE PARA PDFs >>>
+Para artigos extraídos de PDFs (sem URL), extraia as seguintes informações:
+- **jornal**: Nome do jornal/revista/fonte impressa (ex: "Valor Econômico", "Folha de S.Paulo", "Revista Exame")
+- **autor**: Nome do autor/repórter quando disponível, ou "N/A" se não encontrado
+- **pagina**: Número da página ou seção (ex: "Página 15", "Seção Economia", "Caderno 2")
+- **data**: Data de publicação quando disponível, ou "N/A" se não encontrada
+
+Para artigos com URL, mantenha o comportamento padrão.
+
+**IMPORTANTE PARA PDFs:**
+- Se o artigo veio de um PDF, o campo 'jornal' deve ser o nome real do jornal/revista, não o nome do arquivo
+- O campo 'autor' deve ser extraído do texto quando disponível (geralmente no cabeçalho ou rodapé)
+- O campo 'pagina' deve indicar a página específica onde o artigo aparece
+- O campo 'data' deve ser a data de publicação da edição, não a data de processamento
+
 FORMATO DE SAÍDA (JSON PURO):
 ```json
 [
   {{
     "titulo": "Título da notícia",
     "texto_completo": "A ideia central da notícia em UMA ÚNICA FRASE. Extraia apenas a informação mais crucial que justifica a classificação de prioridade.",
-    "jornal": "Nome do Jornal",
-    "autor": "N/A",
-    "pagina": "N/A",
-    "data": "Data da publicação",
+    "jornal": "Nome do Jornal/Revista/Fonte",
+    "autor": "Nome do Autor ou N/A",
+    "pagina": "Página/Seção ou N/A",
+    "data": "Data da publicação ou N/A",
     "categoria": "O setor de interesse mais específico (ex: 'Recuperação Judicial', 'Créditos Inadimplentes (NPLs)', 'Inteligência Artificial (IA)')",
     "prioridade": "A prioridade correta (P1_CRITICO, P2_ESTRATEGICO ou P3_MONITORAMENTO)",
     "tag": "A tag temática geral (ex: 'Jurídico, Falências e Regulatório')",
@@ -678,4 +693,27 @@ SAÍDA OBRIGATÓRIA (JSON PURO, APENAS JSON, SEM TEXTO EXPLICATIVO):
 
 ENTRADA (CLUSTERS DO DIA PARA ANÁLISE):
 {CLUSTERS_DO_DIA}
+"""
+
+PROMPT_EXTRACAO_FONTE = """
+Analise o texto fornecido e extraia as informações de fonte da notícia.
+
+IMPORTANTE: 
+- Se o artigo veio de um PDF (sem URL), extraia apenas: jornal, autor, página e data
+- Se o artigo tem URL, extraia: jornal, autor, URL e data
+- NUNCA invente informações que não estão no texto
+
+Para artigos de PDF:
+- Jornal: nome do jornal/revista (ex: "Valor Econômico", "Folha de S.Paulo")
+- Autor: nome do autor/repórter (ex: "João Silva", "Maria Santos")
+- Página: número da página onde o artigo aparece (ex: "Página 5", "P. 12")
+- Data: data de publicação (ex: "15/03/2024", "2024-03-15")
+
+Para artigos com URL:
+- Jornal: nome do jornal/revista
+- Autor: nome do autor/repórter
+- URL: link completo da notícia
+- Data: data de publicação
+
+Retorne apenas o JSON com as informações encontradas, sem explicações adicionais.
 """

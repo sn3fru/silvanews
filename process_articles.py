@@ -1999,7 +1999,7 @@ def processar_artigo_sem_cluster(db: Session, id_artigo: int, client) -> bool:
         # ETAPA 5: Atualizar artigo com dados processados (SEM clusterização)
         dados_processados = {
             'titulo': noticia_validada['titulo'],
-            'texto_completo': noticia_validada['texto_completo'],
+            'texto_completo': noticia_validada['texto_completo'],  # Este será salvo em texto_processado
             'jornal': noticia_validada['jornal'],
             'autor': noticia_validada['autor'],
             'pagina': noticia_validada['pagina'],
@@ -2010,6 +2010,62 @@ def processar_artigo_sem_cluster(db: Session, id_artigo: int, client) -> bool:
             'relevance_score': noticia_validada.get('relevance_score'),
             'relevance_reason': noticia_validada.get('relevance_reason')
         }
+        
+        # IMPORTANTE: Preserva o texto_bruto original e salva o processado separadamente
+        # O texto_bruto NÃO deve ser alterado - é o conteúdo original do PDF/URL
+        # O texto_processado deve ser um resumo real, não uma cópia do original
+        
+        # Gera um resumo real usando o LLM para o texto_processado
+        try:
+            from backend.prompts import PROMPT_RESUMO_FINAL_V3
+            
+            # Prepara dados para o prompt de resumo
+            dados_para_resumo = {
+                "tema_principal": noticia_validada['titulo'],
+                "categoria": noticia_validada['categoria'],
+                "prioridade": noticia_validada['prioridade'],
+                "noticias": [
+                    {
+                        "titulo": noticia_validada['titulo'],
+                        "texto": noticia_validada['texto_completo'],
+                        "jornal": noticia_validada['jornal']
+                    }
+                ]
+            }
+            
+            # Usa o prompt de resumo para gerar um resumo real
+            prompt_resumo = PROMPT_RESUMO_FINAL_V3.format(
+                NIVEL_DE_DETALHE="Conciso (P3_MONITORAMENTO)",
+                DADOS_DO_GRUPO=json.dumps(dados_para_resumo, indent=2, ensure_ascii=False)
+            )
+            
+            # Chama o LLM para gerar resumo
+            response = client.generate_content(
+                prompt_resumo,
+                generation_config={
+                    'temperature': 0.3,
+                    'top_p': 0.9,
+                    'max_output_tokens': 512
+                }
+            )
+            
+            if response.text:
+                # Extrai o resumo da resposta
+                resultado_json = extrair_json_da_resposta(response.text)
+                if resultado_json and 'resumo_final' in resultado_json:
+                    resumo_limpo = resultado_json['resumo_final']
+                    if ': ' in resumo_limpo:
+                        resumo_limpo = resumo_limpo.split(': ', 1)[1]
+                    dados_processados['texto_completo'] = resumo_limpo
+                    print(f"    📝 Resumo gerado: {len(resumo_limpo)} caracteres")
+                else:
+                    print(f"    ⚠️ Falha ao extrair resumo, mantendo texto original")
+            else:
+                print(f"    ⚠️ Falha ao gerar resumo, mantendo texto original")
+                
+        except Exception as e:
+            print(f"    ⚠️ Erro ao gerar resumo: {e}, mantendo texto original")
+            # Em caso de erro, mantém o texto original como processado
         
         # Atualiza dados processados e marca como "pronto_agrupar"
         update_artigo_dados_sem_status(db, id_artigo, dados_processados, embedding_artigo)

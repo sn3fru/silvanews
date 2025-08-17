@@ -506,6 +506,68 @@ def agg_noticias_por_autor(db: Session, limit: int = 20):
     return [{"autor": a or "N/A", "qtd": qtd} for a, qtd in q.all()]
 
 
+def agg_estatisticas_gerais(db: Session):
+    """
+    Retorna estatísticas gerais do sistema
+    """
+    # Total de artigos
+    total_artigos = db.query(func.count(ArtigoBruto.id)).scalar() or 0
+    
+    # Total de clusters
+    from .database import ClusterEvento as _Cluster
+    total_clusters = db.query(func.count(_Cluster.id)).scalar() or 0
+    
+    # Dias diferentes com notícias
+    dias_diferentes = db.query(func.count(func.distinct(func.date(ArtigoBruto.created_at)))).scalar() or 0
+    
+    return {
+        "total_artigos": total_artigos,
+        "total_clusters": total_clusters,
+        "dias_diferentes": dias_diferentes
+    }
+
+
+def agg_noticias_por_tag(db: Session, limit: int = 10):
+    """
+    Retorna contagem de notícias por tag, agrupando as menores como "Outros"
+    """
+    # Busca todas as tags com contagem
+    q = db.query(ArtigoBruto.tag, func.count(ArtigoBruto.id).label('qtd')).filter(
+        ArtigoBruto.tag.isnot(None),
+        ArtigoBruto.tag != ''
+    ).group_by(ArtigoBruto.tag).order_by(func.count(ArtigoBruto.id).desc()).all()
+    
+    if not q:
+        return []
+    
+    # Separa as top tags e agrupa o resto
+    top_tags = q[:limit]
+    outras_tags = q[limit:]
+    
+    # Calcula total das outras tags
+    total_outras = sum(item.qtd for item in outras_tags) if outras_tags else 0
+    
+    resultado = [{"tag": item.tag, "qtd": item.qtd} for item in top_tags]
+    
+    # Adiciona "Outros" se houver outras tags
+    if total_outras > 0:
+        resultado.append({"tag": "Outros", "qtd": total_outras})
+    
+    return resultado
+
+
+def agg_noticias_por_prioridade(db: Session):
+    """
+    Retorna contagem de notícias por prioridade
+    """
+    q = db.query(ArtigoBruto.prioridade, func.count(ArtigoBruto.id).label('qtd')).filter(
+        ArtigoBruto.prioridade.isnot(None),
+        ArtigoBruto.prioridade != ''
+    ).group_by(ArtigoBruto.prioridade).order_by(func.count(ArtigoBruto.id).desc()).all()
+    
+    return [{"prioridade": item.prioridade or "Sem Prioridade", "qtd": item.qtd} for item in q]
+
+
 def get_sintese_by_date(db: Session, target_date: datetime.date) -> Optional[SinteseExecutiva]:
     """
     Busca síntese executiva de uma data específica.

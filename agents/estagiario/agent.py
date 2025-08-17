@@ -116,7 +116,7 @@ class EstagiarioAgent:
             page += 1
         return itens
 
-    def _llm_answer(self, question: str, retrieved: List[Dict[str, Any]]) -> Optional[str]:
+    def _llm_answer(self, question: str, retrieved: List[Dict[str, Any]], context_prompt: str = "") -> Optional[str]:
         if not self.model:
             return None
         try:
@@ -132,6 +132,20 @@ class EstagiarioAgent:
                     "fontes": it.get("fontes", []),
                     "artigos": it.get("artigos", []),
                 })
+            
+            # Adiciona contexto da conversa se disponível
+            context_instruction = ""
+            if context_prompt:
+                context_instruction = (
+                    "\n\nIMPORTANTE: Mantenha o contexto da conversa anterior. "
+                    "Se a pergunta se referir a algo mencionado antes, use essa informação. "
+                    "Se for uma continuação ou esclarecimento, responda de forma coerente com o que já foi discutido.\n"
+                    f"{context_prompt}"
+                )
+                print(f"[Estagiario] Contexto incluído no prompt: {len(context_instruction)} caracteres")
+            else:
+                print("[Estagiario] Sem contexto para incluir no prompt")
+            
             prompt = (
                 "Você é um analista do BTG na mesa de Special Situations. Produza um RELATÓRIO em Markdown, direto ao ponto,"
                 " usando as notícias como insumos. Vá além de listar notícias; sintetize insights e impactos.\n\n"
@@ -143,8 +157,10 @@ class EstagiarioAgent:
                 "- Traga nomes de autores e jornais quando disponíveis; cite prioridades/tags quando agregarem contexto.\n"
                 "- Evite frases como 'Com base nos dados fornecidos'.\n"
                 "- Finalize com 'Notícias pesquisadas:' numerada no formato [ID] Título — URL (Jornal).\n\n"
+                f"{context_instruction}"
                 "Pergunta do usuário: " + question + "\n"
             )
+            print(f"[Estagiario] Prompt final: {len(prompt)} caracteres")
             print("[Estagiario] Síntese LLM iniciada...")
             resp = self.model.generate_content(prompt, generation_config={
                 'temperature': 0.3,
@@ -351,7 +367,32 @@ class EstagiarioAgent:
             print(f"[Estagiario] Falha ao contar irrelevantes precisos: {e}")
             return 0
 
-    def answer(self, question: str, date_str: Optional[str] = None) -> AgentAnswer:
+    def answer_with_context(self, question: str, chat_history: List[Dict[str, Any]], date_str: Optional[str] = None) -> AgentAnswer:
+        """
+        Responde perguntas mantendo o contexto da conversa anterior.
+        """
+        print("[Estagiario] ================= INÍCIO COM CONTEXTO =================")
+        print(f"[Estagiario] Pergunta: {question}")
+        print(f"[Estagiario] Histórico: {len(chat_history)} mensagens")
+        
+        # Formata o histórico para o LLM
+        context_prompt = ""
+        if chat_history and len(chat_history) > 1:  # Mais de 1 porque a última é a pergunta atual
+            context_prompt = "\n\n### Histórico da Conversa:\n"
+            for i, msg in enumerate(chat_history[:-1]):  # Exclui a última mensagem (pergunta atual)
+                role = "Usuário" if msg.get('role') == 'user' else "Assistente"
+                content = msg.get('content', '')
+                context_prompt += f"{role}: {content}\n"
+                print(f"[Estagiario] Contexto: {role}: {content[:100]}...")
+            context_prompt += "\n### Pergunta Atual:\n"
+            print(f"[Estagiario] Contexto final: {len(context_prompt)} caracteres")
+        else:
+            print("[Estagiario] Sem histórico para incluir no contexto")
+        
+        # Chama a função original com contexto adicional
+        return self.answer(question, date_str, context_prompt)
+    
+    def answer(self, question: str, date_str: Optional[str] = None, context_prompt: str = "") -> AgentAnswer:
         """
         Responde perguntas com base nas notícias do dia, usando prioridades/tags.
         Exemplos suportados:
@@ -487,7 +528,7 @@ class EstagiarioAgent:
                 print(f"[Estagiario] Achados: {len(achados)}")
                 if not achados:
                     return AgentAnswer(True, "Nenhuma promoção de carros encontrada hoje.")
-                llm_txt = self._llm_answer(question, achados)
+                llm_txt = self._llm_answer(question, achados, context_prompt)
                 if llm_txt:
                     return AgentAnswer(True, llm_txt, {"itens": achados[:10]})
                 return AgentAnswer(True, f"{len(achados)} ofertas encontradas.", {"itens": achados[:10]})
@@ -539,7 +580,7 @@ class EstagiarioAgent:
                         "prioridade": d.get("prioridade"),
                         "fontes": d.get("fontes", []),
                     })
-                llm_txt = self._llm_answer(question, retrieved if retrieved else selecionados)
+                llm_txt = self._llm_answer(question, retrieved if retrieved else selecionados, context_prompt)
                 if llm_txt and len(llm_txt) > 80:
                     return AgentAnswer(True, llm_txt, {"itens": selecionados[:12]})
                 if detalhes:
@@ -608,7 +649,7 @@ class EstagiarioAgent:
                     })
                 # Síntese LLM em Markdown
                 base_para_sintese = retrieved if retrieved else [c for c in candidatos if (c.get("id") in top_ids)][:10]
-                llm_txt = self._llm_answer(question, base_para_sintese)
+                llm_txt = self._llm_answer(question, base_para_sintese, context_prompt)
                 if llm_txt and len(llm_txt) > 500:
                     return AgentAnswer(True, llm_txt, {"itens": base_para_sintese[:15]})
                 # Se a síntese acima falhar, tenta construir resumo a partir dos artigos brutos
