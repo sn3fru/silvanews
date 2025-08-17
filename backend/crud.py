@@ -530,12 +530,15 @@ def agg_estatisticas_gerais(db: Session):
 def agg_noticias_por_tag(db: Session, limit: int = 10):
     """
     Retorna contagem de notícias por tag, agrupando as menores como "Outros"
+    Usa dados da tabela ClusterEvento (processados) em vez de ArtigoBruto (brutos)
     """
-    # Busca todas as tags com contagem
-    q = db.query(ArtigoBruto.tag, func.count(ArtigoBruto.id).label('qtd')).filter(
-        ArtigoBruto.tag.isnot(None),
-        ArtigoBruto.tag != ''
-    ).group_by(ArtigoBruto.tag).order_by(func.count(ArtigoBruto.id).desc()).all()
+    # Busca todas as tags com contagem dos clusters processados
+    q = db.query(ClusterEvento.tag, func.count(ClusterEvento.id).label('qtd')).filter(
+        ClusterEvento.tag.isnot(None),
+        ClusterEvento.tag != '',
+        ClusterEvento.tag != 'IRRELEVANTE',
+        ClusterEvento.status == 'ativo'
+    ).group_by(ClusterEvento.tag).order_by(func.count(ClusterEvento.id).desc()).all()
     
     if not q:
         return []
@@ -559,11 +562,14 @@ def agg_noticias_por_tag(db: Session, limit: int = 10):
 def agg_noticias_por_prioridade(db: Session):
     """
     Retorna contagem de notícias por prioridade
+    Usa dados da tabela ClusterEvento (processados) em vez de ArtigoBruto (brutos)
     """
-    q = db.query(ArtigoBruto.prioridade, func.count(ArtigoBruto.id).label('qtd')).filter(
-        ArtigoBruto.prioridade.isnot(None),
-        ArtigoBruto.prioridade != ''
-    ).group_by(ArtigoBruto.prioridade).order_by(func.count(ArtigoBruto.id).desc()).all()
+    q = db.query(ClusterEvento.prioridade, func.count(ClusterEvento.id).label('qtd')).filter(
+        ClusterEvento.prioridade.isnot(None),
+        ClusterEvento.prioridade != '',
+        ClusterEvento.prioridade != 'IRRELEVANTE',
+        ClusterEvento.status == 'ativo'
+    ).group_by(ClusterEvento.prioridade).order_by(func.count(ClusterEvento.id).desc()).all()
     
     return [{"prioridade": item.prioridade or "Sem Prioridade", "qtd": item.qtd} for item in q]
 

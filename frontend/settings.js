@@ -1163,19 +1163,21 @@ async function carregarBIDados() {
                 </table>
             </div>
             
-            <!-- Gráficos de Pizza -->
-            <div class="charts-section">
-                <div class="chart-container">
-                    <div class="chart-card">
-                        <h3>🏷️ Notícias por Tag (Top 10)</h3>
-                        <canvas id="chart-tags" width="400" height="400"></canvas>
-                    </div>
-                    <div class="chart-card">
-                        <h3>🎯 Notícias por Prioridade</h3>
-                        <canvas id="chart-prioridade" width="400" height="400"></canvas>
-                    </div>
-                </div>
-            </div>
+                         <!-- Gráficos de Pizza -->
+             <div class="charts-section">
+                 <div class="chart-container">
+                     <div class="chart-card">
+                         <h3>🏷️ Notícias por Tag (Top 10)</h3>
+                         <canvas id="chart-tags" width="400" height="400"></canvas>
+                     </div>
+                 </div>
+                 <div class="chart-container">
+                     <div class="chart-card">
+                         <h3>🎯 Notícias por Prioridade</h3>
+                         <canvas id="chart-prioridade" width="400" height="400"></canvas>
+                     </div>
+                 </div>
+             </div>
             
             <div class="upload-section">
                 <h3>�� Estimativa de Custos</h3>
@@ -1227,6 +1229,7 @@ function criarGraficoTags(dados) {
         
         const labels = dados.map(item => item.tag || 'Sem Tag');
         const data = dados.map(item => item.qtd || 0);
+        const total = data.reduce((a, b) => a + b, 0);
         
         // Cores para as tags
         const cores = [
@@ -1234,6 +1237,7 @@ function criarGraficoTags(dados) {
             '#FF9F40', '#FF6384', '#C9CBCF', '#4BC0C0', '#FF6384'
         ];
         
+        // Cria gráfico com legendas desabilitadas
         window.chartTags = new Chart(ctx, {
             type: 'pie',
             data: {
@@ -1246,28 +1250,32 @@ function criarGraficoTags(dados) {
                 }]
             },
             options: {
-                responsive: true,
+                responsive: false,
                 maintainAspectRatio: false,
                 plugins: {
                     legend: {
-                        position: 'bottom',
-                        labels: {
-                            padding: 20,
-                            usePointStyle: true
-                        }
+                        display: false
                     },
                     tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleColor: '#fff',
+                        bodyColor: '#fff',
+                        borderColor: '#fff',
+                        borderWidth: 1,
                         callbacks: {
                             label: function(context) {
-                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
                                 const percentage = ((context.parsed / total) * 100).toFixed(1);
-                                return `${context.label}: ${context.parsed} (${percentage}%)`;
+                                return `${context.label}: ${context.parsed} artigos (${percentage}%)`;
                             }
                         }
                     }
                 }
             }
         });
+        
+        // Cria legenda à direita
+        criarLegendaDireita('chart-tags', labels, data, cores.slice(0, labels.length), total);
+        
     } catch (e) {
         console.error('Erro ao criar gráfico de tags:', e);
     }
@@ -1295,6 +1303,7 @@ function criarGraficoPrioridade(dados) {
         
         const labels = dados.map(item => item.prioridade || 'Sem Prioridade');
         const data = dados.map(item => item.qtd || 0);
+        const total = data.reduce((a, b) => a + b, 0);
         
         // Cores específicas para prioridades
         const cores = {
@@ -1306,6 +1315,7 @@ function criarGraficoPrioridade(dados) {
         
         const backgroundColor = labels.map(label => cores[label] || '#6c757d');
         
+        // Cria gráfico com legendas desabilitadas
         window.chartPrioridade = new Chart(ctx, {
             type: 'pie',
             data: {
@@ -1318,30 +1328,77 @@ function criarGraficoPrioridade(dados) {
                 }]
             },
             options: {
-                responsive: true,
+                responsive: false,
                 maintainAspectRatio: false,
                 plugins: {
                     legend: {
-                        position: 'bottom',
-                        labels: {
-                            padding: 20,
-                            usePointStyle: true
-                        }
+                        display: false
                     },
                     tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleColor: '#fff',
+                        bodyColor: '#fff',
+                        borderColor: '#fff',
+                        borderWidth: 1,
                         callbacks: {
                             label: function(context) {
-                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
                                 const percentage = ((context.parsed / total) * 100).toFixed(1);
-                                return `${context.label}: ${context.parsed} (${percentage}%)`;
+                                return `${context.label}: ${context.parsed} artigos (${percentage}%)`;
                             }
                         }
                     }
                 }
             }
         });
+        
+        // Cria legenda à direita
+        criarLegendaDireita('chart-prioridade', labels, data, backgroundColor, total);
+        
     } catch (e) {
         console.error('Erro ao criar gráfico de prioridades:', e);
+    }
+}
+
+// Função para criar legenda à direita do gráfico
+function criarLegendaDireita(chartId, labels, data, cores, total) {
+    try {
+        const chartCard = document.querySelector(`#${chartId}`).closest('.chart-card');
+        if (!chartCard) return;
+        
+        // Remove legenda anterior se existir
+        const existingLegend = chartCard.querySelector('.chart-legend');
+        if (existingLegend) {
+            existingLegend.remove();
+        }
+        
+        // Cria container da legenda
+        const legendDiv = document.createElement('div');
+        legendDiv.className = 'chart-legend';
+        
+        // Cria itens da legenda
+        labels.forEach((label, index) => {
+            const count = data[index];
+            const percentage = ((count / total) * 100).toFixed(1);
+            const color = Array.isArray(cores) ? cores[index] : cores[label];
+            
+            const legendItem = document.createElement('div');
+            legendItem.className = 'legend-item';
+            legendItem.style.borderLeftColor = color;
+            
+            legendItem.innerHTML = `
+                <div class="legend-color" style="background-color: ${color}"></div>
+                <div class="legend-text">${label}</div>
+                <div class="legend-percentage">${percentage}%</div>
+            `;
+            
+            legendDiv.appendChild(legendItem);
+        });
+        
+        // Adiciona legenda ao card
+        chartCard.appendChild(legendDiv);
+        
+    } catch (e) {
+        console.error('Erro ao criar legenda:', e);
     }
 }
 

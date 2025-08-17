@@ -1399,10 +1399,46 @@ hr { border: none; border-top: 1px solid var(--cor-borda); margin: 1.5rem 0; }
     margin: 2rem 0;
 }
 
+.chart-legend {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.2rem 0;
+}
+
+.legend-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.legend-text {
+    flex: 1;
+    font-weight: 500;
+    color: var(--cor-texto-principal);
+    font-size: 0.9rem;
+}
+
+.legend-percentage {
+    font-weight: bold;
+    color: var(--cor-destaque-btg);
+    min-width: 50px;
+    text-align: right;
+    font-size: 0.9rem;
+}
+
 .chart-container {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 3rem;
     margin-top: 1rem;
 }
 
@@ -1412,6 +1448,10 @@ hr { border: none; border-top: 1px solid var(--cor-borda); margin: 1.5rem 0; }
     border-radius: 8px;
     border: 1px solid var(--cor-borda);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    display: flex;
+    align-items: center;
+    gap: 3rem;
+    width: 100%;
 }
 
 .chart-card h3 {
@@ -1422,39 +1462,108 @@ hr { border: none; border-top: 1px solid var(--cor-borda); margin: 1.5rem 0; }
 }
 
 .chart-card canvas {
-    max-width: 100%;
-    height: 300px !important;
-    margin: 0 auto;
-    display: block;
+    width: 400px !important;
+    height: 400px !important;
+    flex-shrink: 0;
 }
+
+/* Resumo de prioridades abaixo do gráfico */
+.priority-summary {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+}
+
+.priority-summary h4 {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.9rem;
+    color: #495057;
+    text-align: center;
+}
+
+.priority-items {
+    display: flex;
+    justify-content: space-around;
+    gap: 1rem;
+}
+
+.priority-item {
+    text-align: center;
+    padding: 0.5rem;
+    border-radius: 6px;
+    background: white;
+    border: 1px solid #dee2e6;
+    min-width: 80px;
+}
+
+.priority-label {
+    font-size: 0.8rem;
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+}
+
+.priority-count {
+    font-size: 1.1rem;
+    font-weight: bold;
+}
+
+.priority-p1 { color: #dc3545; }
+.priority-p2 { color: #ffc107; }
+.priority-p3 { color: #17a2b8; }
 
 /* Stats Grid Styles */
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
     margin-bottom: 2rem;
+    padding: 1rem 0;
 }
 
 .stat-card {
-    background: white;
-    padding: 1.5rem;
-    border-radius: 8px;
-    border: 1px solid var(--cor-borda);
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    padding: 2rem 1.5rem;
+    border-radius: 12px;
+    border: 2px solid var(--cor-borda);
     text-align: center;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--cor-destaque-btg), #007bff, #28a745);
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    border-color: var(--cor-destaque-btg);
 }
 
 .stat-number {
-    font-size: 2rem;
+    font-size: 2.5rem;
     font-weight: bold;
-    color: var(--cor-destaque-btg);
+    color: #ffffff; /* Branco para máximo contraste */
     margin-bottom: 0.5rem;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .stat-label {
-    color: var(--cor-texto-secundario);
-    font-size: 0.9rem;
+    color: #e9ecef; /* Cinza claro para melhor contraste */
+    font-size: 1rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 /* Responsive adjustments for charts */
@@ -1466,9 +1575,45 @@ hr { border: none; border-top: 1px solid var(--cor-borda); margin: 1.5rem 0; }
     
     .stats-grid {
         grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .stat-card {
+        padding: 1.5rem 1rem;
+    }
+    
+    .stat-number {
+        font-size: 2rem;
+    }
+    
+    .stat-label {
+        font-size: 0.9rem;
+    }
+    
+    .chart-card {
+        flex-direction: column;
+        gap: 1rem;
     }
     
     .chart-card canvas {
-        height: 250px !important;
+        width: 300px !important;
+        height: 300px !important;
+    }
+    
+    .chart-legend {
+        width: 100%;
+    }
+    
+    .legend-item {
+        padding: 0.3rem 0;
+    }
+    
+    .legend-text {
+        font-size: 0.85rem;
+    }
+    
+    .legend-percentage {
+        font-size: 0.85rem;
+        min-width: 45px;
     }
 }
