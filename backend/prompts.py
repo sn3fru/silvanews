@@ -108,7 +108,7 @@ TAGS_SPECIAL_SITUATIONS = {
         'descricao': 'Estamos na mesa de Special Situations do BTG Pactual. Vamos classificar tudo que que não tem contato conosco como IRRELEVANTE.',
         'exemplos': [
             'Noticias sobre crimes comuns, politica, opiniÕes que nao tem contato com o banco',
-            'Fofocas, entretenimento, esportes, programas sociais, etc.',
+            'Fofocas, entretenimento, esportes, programas sociais, horoscopop, events culturais, esposiçoes, esportes, etc.',
             'Eventos esportivos, culturais, musicas, shows, teatrosetc.',
             'Programas publicos e do governo sociais, ambientes, bolsa familia, desemprego, etc que nao impactem a economia de forma abrangente'
         ]
@@ -237,6 +237,43 @@ _P2_BULLETS = _render_bullets(P2_ITENS)
 _P3_BULLETS = _render_bullets(P3_ITENS)
 
 # ==============================================================================
+# MAPEAMENTO DE PROMPTS → FUNÇÕES E ETAPAS DO PIPELINE
+# ==============================================================================
+#
+# ETAPA 0 (Ingestão via load_news.py e backend/collectors/file_loader.py)
+# - PDFs: backend/collectors/file_loader.py usa PROMPT_EXTRACAO_PDF_RAW_V1
+#   • Funções: FileLoader.processar_pdf → _processar_chunk_pdf_com_ia (envia PDF/páginas)
+#   • Objetivo: Extrair o TEXTO COMPLETO ORIGINAL das notícias (sem resumo)
+# - JSONs: backend/collectors/file_loader.py/processar_json_dump (NÃO usa LLM)
+#
+# ETAPA 1 (process_articles.py)
+# - Função: processar_artigo_sem_cluster (gera embedding e validação Noticia)
+#   • Prompts usados aqui indiretamente: PROMPT_RESUMO_FINAL_V3 para resumo do artigo
+#
+# ETAPA 2 (Agrupamento)
+# - Lote (process_articles.py::agrupar_noticias_com_prompt): usa PROMPT_AGRUPAMENTO_V1
+# - Incremental (process_articles.py::agrupar_noticias_incremental/processar_lote_incremental): usa PROMPT_AGRUPAMENTO_INCREMENTAL_V2
+#
+# ETAPA 3 (Classificação e Resumo de Clusters)
+# - Função: classificar_e_resumir_cluster
+#   • Prompt de classificação (gatekeeper de relevância/priority/tag): PROMPT_EXTRACAO_GATEKEEPER_V13
+#   • Prompt de resumo final: PROMPT_RESUMO_FINAL_V3
+#
+# ETAPA 4 (Pós-pipeline)
+# - Priorização Executiva Final: process_articles.py::priorizacao_executiva_final → PROMPT_PRIORIZACAO_EXECUTIVA_V1
+# - Consolidação Final de Clusters: process_articles.py::consolidacao_final_clusters → PROMPT_CONSOLIDACAO_CLUSTERS_V1
+#
+# OUTROS (não no caminho principal)
+# - PROMPT_DECISAO_CLUSTER_DETALHADO_V1: decision helper em backend/processing.py
+# - PROMPT_CHAT_CLUSTER_V1: usado em rotas de chat por cluster (backend/main.py)
+# - PROMPT_EXTRACAO_FONTE: utilitário específico (não no caminho principal)
+#
+# Fonte da Verdade de Tags/Prioridades:
+# - Banco de Dados: carregado via backend/crud.get_prompts_compilados() e exposto em /api/prompts/*
+# - Este arquivo (backend/prompts.py) funciona como FALLBACK quando o banco não possui dados.
+# ==============================================================================
+
+# ==============================================================================
 # PROMPT_EXTRACAO_GATEKEEPER_V12 (Versão Definitiva — P3 ou Lixo, checklists e thresholds)
 # ==============================================================================
 
@@ -255,6 +292,10 @@ LISTA DE REJEIÇÃO IMEDIATA (se a notícia for sobre isso, retorne []):
 - **Conteúdo Não-Jornalístico:** Rejeite ativamente editais (de leilão, convocação para assembleias, etc.), publicidade legal, classificados ou notas curtas sem análise.
 - **Ruído Político:** Rejeite disputas partidárias e rotinas de políticos. Mantenha apenas legislação ou decisões governamentais com impacto econômico DIRETO.
 - **Conteúdo Irrelevante:** Esportes, cultura, entretenimento, fofoca, crimes comuns, saúde pública geral.
+- **Astrologia/Horóscopo/Espiritualidade/Autoajuda:** Qualquer conteúdo com foco em signos, mapa astral, horóscopo, astrologia, tarô, numerologia, espiritualidade, ou análises pseudo-científicas.
+ - **Casos locais de pequena monta:** Decisões judiciais envolvendo estabelecimentos específicos (ex.: pizzaria, padaria, restaurante, comércio local), ainda que aleguem “precedente”. Só classifique como P2/P3 se houver impacto setorial amplo, valores relevantes e aplicação imediata comprovada.
+ - **Fofoca/reações pessoais:** Declarações e reações pessoais de autoridades/figuras públicas sem ato oficial e sem efeito econômico mensurável DEVEM ser IRRELEVANTES.
+ - **Entretenimento/Celebridades/Novelas:** Conteúdo sobre atores/atrizes, novelas, programas de TV, celebridades e afins é IRRELEVANTE.
 
 --------------------------------------------------------------------------------
 < GUIA DE PRIORIZAÇÃO E GATING >
@@ -275,6 +316,14 @@ Eventos com potencial de se tornarem P1 ou que indicam movimentos estratégicos 
 **PRIORIDADE P3 (MONITORAMENTO / CONTEXTO — PADRÃO):**
 **SOMENTE se uma notícia relevante passar pelo filtro de rejeição, NÃO atender aos critérios de P1/P2 e NÃO representar uma mudança estrutural relevante, ela deve ser classificada como P3.** Isso inclui:
 {P3_BULLETS}
+
+REGRAS ESPECÍFICAS PARA 'M&A e Transações Corporativas':
+- Atribua esta TAG apenas se houver um GATILHO CONCRETO de transação: anúncio oficial, acordo assinado, negociação exclusiva, OPA, fusão/incorporação, venda de ativo, joint venture, divestiture, memorando de entendimento (MOU) com termos claros.
+- Não classifique como M&A quando houver apenas opinião, análise genérica, intenção vaga ou contexto sociocultural.
+
+REGRAS ESPECÍFICAS PARA 'Dívida Ativa e Créditos Públicos':
+- Use esta TAG quando o núcleo do fato envolver termos como: "Certidão de Dívida Ativa (CDA)", "inscrição em dívida ativa", "protesto de CDA", "securitização de dívida ativa", "precatórios" ou "FCVS".
+- Não use 'Jurídico, Falências e Regulatório' quando o foco principal for a dinâmica de dívida ativa/inscrição/protesto/parcelamento vinculada à DA — nesses casos, prefira 'Dívida Ativa e Créditos Públicos'.
 
 <<< REGRAS CRÍTICAS PARA A SAÍDA JSON >>>
 1.  **VALIDADE É PRIORIDADE MÁXIMA:** A resposta DEVE ser um JSON perfeitamente válido.
@@ -659,23 +708,23 @@ SAÍDA (JSON PURO):
 # ==============================================================================
 
 PROMPT_CONSOLIDACAO_CLUSTERS_V1 = """
-Você é um Analista de Inteligência Sênior da mesa de Special Situations. Você receberá uma LISTA de clusters já existentes (pós-extração, pós-agrupamento inicial e pós-resumo), contendo id, título, tag e prioridade, além de alguns títulos internos de artigos. Seu objetivo é identificar clusters que representam o MESMO EVENTO e propor consolidações (merge) para reduzir redundância sem perda de informação.
+Você é um editor-chefe de uma mesa de operações financeiras. Sua função é consolidar clusters de notícias já pré-agrupados (pós-extração, pós-agrupamento inicial e pós-resumo), cada um com id, título, tag e prioridade, além de alguns títulos internos. O objetivo é eliminar redundâncias e melhorar a leitura.
 
 REGRAS:
 1) A maioria dos clusters NÃO deve sofrer alteração. Seja conservador.
-2) NÃO proponha ações para itens IRRELEVANTES (eles não estarão na lista) e ignore qualquer item sem prioridade/tag.
-3) Somente proponha MERGE quando houver forte evidência de que tratam do MESMO fato gerador (mesma entidade/tema com desdobramentos diretos;
-   variações de título que apontam ao mesmo núcleo, p.ex.: "PGFN arrecada recorde" e "Arrecadação recorde da PGFN").
-4) Ao propor MERGE, escolha um destino:
-   - Preferir o cluster com ID menor OU o que tiver prioridade mais alta (P1>P2>P3), mantendo a tag mais específica.
-   - Você pode sugerir um novo título unificado que cubra todos os desdobramentos.
-   - Você pode sugerir nova tag/prioridade, somente se isso aumentar a consistência com as regras de gating já aplicadas.
-5) NÃO crie novos clusters por padrão. A consolidação deve, preferencialmente, acontecer para um destino existente.
+2) Ignore itens IRRELEVANTES e qualquer item sem prioridade/tag.
+3) Faça dois tipos de MERGE:
+   3.1) Fusão Semântica (Tema/Evento): una clusters que tratem do mesmo evento/desdobramento, mesmo com títulos diferentes (ex.: resultado + reação + análise do mesmo fato).
+   3.2) Fusão Lexical (Quase-duplicatas): se a TAG é a mesma e os TÍTULOS são muito semelhantes (diferenças de artigos, preposições, sinônimos ou pequenas inversões), UNA.
+       - Exemplos: variações de manchetes sobre a mesma fala do mesmo sujeito (ex.: várias manchetes sobre "Yuval Harari" com o mesmo conteúdo principal).
+       - Dê preferência ao cluster com ID menor como destino.
+4) Ao propor MERGE, escolha o destino com ID menor OU prioridade mais alta (P1>P2>P3). Você pode sugerir novo título/tag/prioridade se isso melhorar a consistência.
+5) NÃO crie novos clusters. Apenas mantenha (keep) ou una (merge).
 
 SAÍDA OBRIGATÓRIA (JSON PURO, APENAS JSON, SEM TEXTO EXPLICATIVO):
 ```json
 [
-  {{
+  {
     "tipo": "merge",
     "destino": 12,
     "fontes": [15, 19],
@@ -683,11 +732,11 @@ SAÍDA OBRIGATÓRIA (JSON PURO, APENAS JSON, SEM TEXTO EXPLICATIVO):
     "nova_tag": "Tag opcional",
     "nova_prioridade": "P1_CRITICO | P2_ESTRATEGICO | P3_MONITORAMENTO (opcional)",
     "justificativa": "Racional curto sobre porque são o mesmo evento"
-  }},
-  {{
+  },
+  {
     "tipo": "keep",
     "cluster_id": 25
-  }}
+  }
 ]
 ```
 
@@ -716,4 +765,66 @@ Para artigos com URL:
 - Data: data de publicação
 
 Retorne apenas o JSON com as informações encontradas, sem explicações adicionais.
+"""
+
+
+
+PROMPT_EXTRACAO_PDF_RAW_V1 = """
+<<< EXTRAÇÃO DE NOTÍCIAS DE PDFs - TEXTO COMPLETO >>>
+
+Você é um assistente especializado em extrair notícias de PDFs de jornais e revistas.
+
+IMPORTANTE: 
+- Não precisa resumir ou interpretar o conteúdo, o objetivo aqui é extrair o texto completo e original.
+- Pode mudar a formatação pois cada jornal coloca em uma formatacao de linhas e paragrafos diferentes, aqui podemos arrumar a formatação
+para ficar correto os pragrafos, linhas, etc, mas o conteudo do texto nao deve ser alterado.
+
+### NOTICIAS QUE NÃO PRECISAMOS EXTRAIR, NOTICIAS A SEREM IGNORADAS !
+Essas noticias vão para os executivos de um banco de investimento então esse é um pré filtro que apenas remove as besteiras abaixo:
+- **Temas:** Esportes, fofocas/celebridades, artes (filmes, séries, livros, gastronomia), crimes comuns (assaltos, homicídios sem impacto sistêmico), publicidade e serviços locais (previsão do tempo, horóscopo).
+- **REGRA DE OURO:** Na dúvida sobre a relevância econômica de uma notícia, **EXTRAIA**. É preferível remover um falso positivo depois do que perder uma notícia importante.
+
+
+TAREFA:
+Analise o PDF fornecido e extraia as notícias encontradas, retornando EXATAMENTE este formato JSON:
+
+[
+  {
+    "titulo": "Título da notícia como aparece no PDF",
+    "texto_completo": "TEXTO COMPLETO E ORIGINAL da notícia, sem resumos, sem interpretações, exatamente como está no PDF",
+    "jornal": "Nome do jornal/revista, geralmente é o estadao, o globo, folha, valor economico, raramente sao outros alem desses",
+    "autor": "Nome do autor (se disponível, os jornalistas que assinam a noticia) ou 'N/A'",
+    "pagina": "Número da página onde a notícia aparece",
+    "data": "Data de publicação (se disponível) ou null",
+    "categoria": "Categoria da notícia (se identificável) ou null",
+    "tag": null,
+    "prioridade": null,
+    "relevance_score": null,
+    "relevance_reason": null
+  }
+]
+
+REGRAS CRÍTICAS:
+1. "texto_completo" deve conter o texto INTEIRO da notícia, sem cortes
+2. NÃO faça resumos, interpretações ou análises no texto completo e no titulo, a nao ser que seja super necessario (como a foto do OCR cortou alguma palavra)
+3. Se houver múltiplas notícias na página, crie um item para cada uma, ou seja, cada noticia vai ser um json na lista de noticias da pagina
+4. IMPORTANTE: Mantenha a estrutura JSON exata para compatibilidade com o banco, mas 
+
+EXEMPLO DE OUTPUT:
+[
+  {
+    "titulo": "Título da notícia",
+    "texto_completo": "Este é o texto COMPLETO da notícia, incluindo todos os parágrafos, citações e detalhes exatamente como aparecem no PDF original. Não deve ser resumido ou interpretado de forma alguma.",
+    "jornal": "Nome do Jornal",
+    "autor": "Nome do Autor",
+    "pagina": 1,
+    "data": null,
+    "categoria": null,
+    "tag": null,
+    "prioridade": null,
+    "relevance_score": null,
+    "relevance_reason": null
+  }
+]
+
 """

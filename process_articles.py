@@ -15,6 +15,7 @@ import time
 from datetime import datetime, date
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+import concurrent.futures
 
 # Adiciona o diretório backend ao path
 backend_dir = Path(__file__).parent / "backend"
@@ -210,6 +211,78 @@ def extrair_json_da_resposta(resposta: str) -> Any:
         return fallback
 
     return None
+
+# ---------------- GATING EXPLÍCITO (REGRAS DETERMINÍSTICAS) -----------------
+def _aplicar_gating_explicito_cluster(db: Session, cluster_id: int, debug: bool = True) -> None:
+    """
+    Aplica regras determinísticas para evitar classificações absurdas:
+    - Conteúdos astrológicos/horóscopo/espiritualidade/autoajuda/psicologia-pop => IRRELEVANTE
+    - Se tag for 'M&A e Transações Corporativas' e não houver gatilhos de M&A no texto, rebaixa prioridade para P3
+    """
+    try:
+        cluster = get_cluster_by_id(db, cluster_id)
+        if not cluster:
+            return
+        artigos = get_artigos_by_cluster(db, cluster_id)
+        texto_total = " ".join([
+            (a.titulo_extraido or "") + " " + (a.texto_processado or "") for a in artigos
+        ]) + " " + (cluster.titulo_cluster or "") + " " + (cluster.resumo_cluster or "")
+
+        # 1) Bloqueio de astrologia/horóscopo/espiritualidade/autoajuda
+        padrao_bloqueio = re.compile(r"\b(hor[oó]scopo|astrolog|zod[ií]aco|signo[s]?|mapa\s+astral|tar[oô]|vident|numerolog|mercurio\s+retr[oó]grado)\b", re.IGNORECASE)
+        if padrao_bloqueio.search(texto_total):
+            if debug:
+                print(f"    🚫 GATING: Cluster {cluster_id} marcado IRRELEVANTE (astrologia/horóscopo detectado)")
+            cluster.prioridade = "IRRELEVANTE"
+            cluster.tag = "IRRELEVANTE"
+            cluster.resumo_cluster = "Conteúdo irrelevante (astrologia/horóscopo/espiritualidade) para a mesa de Special Situations"
+            db.commit()
+            return
+
+        # 2) Validação de M&A (necessita gatilhos explícitos)
+        if (cluster.tag or "").strip() == 'M&A e Transações Corporativas':
+            padrao_ma = re.compile(r"\b(aquisi[cç][aã]o|compra|venda\s+de\s+ativo[s]?|divestiture|f(us[aã]o|us[oã])|incorpora[cç][aã]o|opa\b|oferta\s+p(ú|u)blica\s+de\s+aquisi[cç][aã]o|joint\s+venture|desinvestimento|alien[aá]c[aã]o|acordo\s+(vinculante|definitivo|assinado)|memorando\s+de\s+entendimento|negocia[cç][aã]o\s+exclusiva)\b", re.IGNORECASE)
+            if not padrao_ma.search(texto_total):
+                if cluster.prioridade in ("P1_CRITICO", "P2_ESTRATEGICO"):
+                    if debug:
+                        print(f"    ⚖️ GATING: Rebaixando Cluster {cluster_id} (M&A sem gatilho) → P3_MONITORAMENTO")
+                    cluster.prioridade = "P3_MONITORAMENTO"
+                    db.commit()
+    except Exception as _e:
+        if debug:
+            print(f"    ⚠️ GATING: Falha ao aplicar regras para cluster {cluster_id}: {_e}")
+
+
+def _corrigir_tag_deterministica_cluster(db: Session, cluster_id: int, debug: bool = True) -> None:
+    """
+    Correção determinística de TAG baseada em palavras-chave de alto sinal.
+    - Se detectar termos claros de 'Dívida Ativa e Créditos Públicos' (CDA/Certidão de Dívida Ativa, Dívida Ativa,
+      securitização de dívida ativa, protesto de CDA, Precatórios, FCVS), força a TAG correspondente.
+    """
+    try:
+        cluster = get_cluster_by_id(db, cluster_id)
+        if not cluster or (cluster.tag or "").strip() == 'IRRELEVANTE':
+            return
+        artigos = get_artigos_by_cluster(db, cluster_id)
+        texto_total = " ".join([
+            (a.titulo_extraido or "") + " " + (a.texto_processado or "") for a in artigos
+        ]) + " " + (cluster.titulo_cluster or "") + " " + (cluster.resumo_cluster or "")
+
+        alvo_divida_ativa = 'Dívida Ativa e Créditos Públicos'
+        if (cluster.tag or '').strip() != alvo_divida_ativa:
+            padrao_divida_ativa = re.compile(
+                r"\b(certid[aã]o\s+de\s+d[ií]vida\s+ativa|\bCDA\b|d[ií]vida\s+ativa|protesto\s+de\s+CDA|securitiza[cç][aã]o\s+de\s+d[ií]vida\s+ativa|precat[óo]ri|\bFCVS\b)\b",
+                re.IGNORECASE,
+            )
+            if padrao_divida_ativa.search(texto_total):
+                antigo = (cluster.tag or '').strip()
+                cluster.tag = alvo_divida_ativa
+                db.commit()
+                if debug:
+                    print(f"    🏷️ TAG FIX: Cluster {cluster_id} '{antigo}' → '{alvo_divida_ativa}' (sinais fortes: CDA/Dívida Ativa)")
+    except Exception as _e:
+        if debug:
+            print(f"    ⚠️ TAG FIX: Falha ao corrigir tag para cluster {cluster_id}: {_e}")
 
 def corrigir_json_strings(json_str: str) -> str:
     import re
@@ -454,114 +527,134 @@ def extrair_classificacoes_incremental_seguro(resposta: str) -> Optional[List[Di
 
 def processar_artigos_pendentes(limite: int = 10) -> bool:
     """
-    Processa artigos pendentes seguindo o fluxo de negócio correto:
-    1. Processa TODAS as notícias pendentes (extração de dados)
-    2. Cria clusters/agrupamentos por fato gerador usando prompt de agrupamento
-    3. Classifica prioridade e gera resumos seletivos
+    Fluxo em estágios com sincronização entre etapas e paralelismo onde seguro:
+    1) ETAPA 1 (paralela): processa TODAS as notícias pendentes
+    2) ETAPA 2 (síncrona): agrupamento (incremental ou em lote)
+    3) ETAPA 3 (paralela): classificar clusters e gerar resumos
+    4) ETAPA 4 (síncrona): priorização executiva e consolidação final; re-sumariza se necessário
     """
     db = SessionLocal()
     try:
-        # Busca artigos pendentes
         artigos_pendentes = get_artigos_pendentes(db, limite=limite)
-        
         if not artigos_pendentes:
             print("SUCESSO: Nenhum artigo pendente encontrado")
             return True
-        
+
         print(f"ARTIGOS: Encontrados {len(artigos_pendentes)} artigos pendentes")
-        
-        # Estatísticas do banco
+
         total_artigos = db.query(ArtigoBruto).count()
         artigos_processados = db.query(ArtigoBruto).filter(ArtigoBruto.status == "processado").count()
         artigos_erro = db.query(ArtigoBruto).filter(ArtigoBruto.status == "erro").count()
-        clusters_existentes = db.query(ClusterEvento).count()
-        
-        print(f"ESTATISTICAS: Total artigos: {total_artigos}, Processados: {artigos_processados}, Erros: {artigos_erro}, Clusters: {clusters_existentes}")
-        
-        # ETAPA 1: Processar TODAS as notícias pendentes
-        print(f"\nETAPA 1: Processando {len(artigos_pendentes)} artigos pendentes...")
-        
+        clusters_existentes_count = db.query(ClusterEvento).count()
+        print(f"ESTATISTICAS: Total artigos: {total_artigos}, Processados: {artigos_processados}, Erros: {artigos_erro}, Clusters: {clusters_existentes_count}")
+
+        # ETAPA 1 — paralela
+        print(f"\nETAPA 1: Processando {len(artigos_pendentes)} artigos pendentes em paralelo...")
+        def _worker_proc(id_artigo: int) -> bool:
+            _db = SessionLocal()
+            try:
+                return processar_artigo_sem_cluster(_db, id_artigo, client)
+            finally:
+                _db.close()
+
+        max_workers = min(8, max(2, (os.cpu_count() or 4)))
         sucessos = 0
         erros = 0
-        
-        for i, artigo in enumerate(artigos_pendentes, 1):
-            print(f"  PROCESSANDO: Artigo {i}/{len(artigos_pendentes)} (ID: {artigo.id})...")
-            
-            # Usa a função do backend para processar cada artigo (SEM clusterização)
-            if processar_artigo_sem_cluster(db, artigo.id, client):
-                sucessos += 1
-                print(f"    SUCESSO: Artigo {artigo.id} processado")
-            else:
-                erros += 1
-                print(f"    ERRO: Falha no processamento do artigo {artigo.id}")
-            
-            time.sleep(0.1)  # Pausa leve entre processamentos (throttle)
-        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as ex:
+            futures = {ex.submit(_worker_proc, art.id): art.id for art in artigos_pendentes}
+            for i, fut in enumerate(concurrent.futures.as_completed(futures), 1):
+                try:
+                    if fut.result():
+                        sucessos += 1
+                    else:
+                        erros += 1
+                except Exception:
+                    erros += 1
+                if i % 10 == 0 or i == len(futures):
+                    print(f"  Progresso ETAPA 1: {i}/{len(futures)} | ok={sucessos} err={erros}")
+
         print(f"ETAPA 1 CONCLUIDA: Sucessos: {sucessos}, Erros: {erros}")
-        
-        # ETAPA 2: Agrupamento inteligente com pivot automático
+        if sucessos == 0 and len(artigos_pendentes) > 0:
+            print("❌ Nenhum artigo processado com sucesso. Abortando.")
+            return False
+
+        # ETAPA 2 — síncrona
         print(f"\nETAPA 2: Agrupamento inteligente com pivot automático...")
-        
-        # Verifica se há clusters existentes hoje para decidir o modo
         hoje = get_date_brasil_str()
-        clusters_existentes = db.query(ClusterEvento).filter(
+        clusters_existentes_hoje = db.query(ClusterEvento).filter(
             func.date(ClusterEvento.created_at) == hoje,
             ClusterEvento.status == 'ativo'
         ).count()
-        
-        if clusters_existentes > 0:
-            # Modo incremental: anexa a clusters existentes
-            print(f"🎯 MODO INCREMENTAL: {clusters_existentes} clusters existentes encontrados")
+        if clusters_existentes_hoje > 0:
+            print(f"🎯 MODO INCREMENTAL: {clusters_existentes_hoje} clusters existentes encontrados")
             sucesso_agrupamento = agrupar_noticias_incremental(db, client)
         else:
-            # Modo em lote: cria clusters do zero
             print("🎯 MODO EM LOTE: Nenhum cluster existente, criando do zero")
             sucesso_agrupamento = agrupar_noticias_com_prompt(db, client)
-        
-        if sucesso_agrupamento:
-            print("ETAPA 2 CONCLUIDA: Agrupamento realizado com sucesso")
-        else:
+        if not sucesso_agrupamento:
             print("ETAPA 2 FALHOU: Erro no agrupamento")
             return False
-        
-        # ETAPA 3: Classificar e gerar resumos usando prompts
-        print(f"\nETAPA 3: Classificando clusters e gerando resumos...")
-        
-        # Busca apenas clusters ativos hoje que NÃO têm resumo (novos)
-        hoje = get_date_brasil_str()
+        print("ETAPA 2 CONCLUIDA: Agrupamento realizado com sucesso")
+
+        # ETAPA 3 — paralela
+        print(f"\nETAPA 3: Classificando clusters e gerando resumos em paralelo...")
         clusters_hoje = db.query(ClusterEvento).filter(
             ClusterEvento.status == 'ativo',
             ClusterEvento.created_at >= hoje,
-            ClusterEvento.resumo_cluster.is_(None)  # Apenas clusters sem resumo
+            ClusterEvento.resumo_cluster.is_(None)
         ).all()
-        
+
+        def _worker_classificar(cid: int) -> bool:
+            _db = SessionLocal()
+            try:
+                return classificar_e_resumir_cluster(_db, cid, client, debug=False)
+            finally:
+                _db.close()
+
         resumos_gerados = 0
-        
-        for cluster in clusters_hoje:
-            cid = cluster.id
-            titulo_tmp = (cluster.titulo_cluster or "").replace("\n", " ").strip()[:100]
-            print(f"📝 Cluster {cid}: '{titulo_tmp}'")
-            
-            # Classifica o cluster usando prompts do prompts.py
-            if classificar_e_resumir_cluster(db, cid, client):
-                resumos_gerados += 1
-                print(f"    ✅ Cluster {cid} - Classificado e resumido")
-            else:
-                print(f"    ❌ Cluster {cid} - Falha na classificação")
-        
+        if clusters_hoje:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as ex:
+                futures = {ex.submit(_worker_classificar, c.id): c.id for c in clusters_hoje}
+                for fut in concurrent.futures.as_completed(futures):
+                    try:
+                        if fut.result():
+                            resumos_gerados += 1
+                    except Exception:
+                        pass
         print(f"ETAPA 3 CONCLUIDA: Resumos gerados: {resumos_gerados}")
 
-        # ETAPA 4 é executada externamente (no main ou por chamadores como reprocess_today)
-        print(f"\nETAPA 4: será executada pelo orquestrador (main) ou chamador externo.")
-        
-        # Resumo final
+        # ETAPA 4 — síncrona
+        print(f"\nETAPA 4: Priorização executiva e consolidação final de clusters...")
+        ok_prior = priorizacao_executiva_final(SessionLocal(), client)
+        ok_cons = consolidacao_final_clusters(SessionLocal(), client)
+        if not (ok_prior and ok_cons):
+            print("⚠️ Etapa 4 concluída com avisos (alguma parte falhou)")
+        else:
+            print("ETAPA 4 CONCLUIDA: Priorização/Consolidação aplicadas")
+
+        # Re-sumariza clusters que ainda ficaram sem resumo após consolidação
+        db2 = SessionLocal()
+        try:
+            pendentes = db2.query(ClusterEvento).filter(
+                ClusterEvento.status == 'ativo',
+                ClusterEvento.created_at >= hoje,
+                ClusterEvento.resumo_cluster.is_(None)
+            ).all()
+        finally:
+            db2.close()
+        if pendentes:
+            print(f"Re-sumariando {len(pendentes)} clusters sem resumo após a consolidação...")
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as ex:
+                futures = {ex.submit(_worker_classificar, c.id): c.id for c in pendentes}
+                for _ in concurrent.futures.as_completed(futures):
+                    pass
+
         print(f"\nPROCESSAMENTO CONCLUIDO:")
         print(f"  Artigos processados: {sucessos}")
         print(f"  Resumos gerados: {resumos_gerados}")
-        print(f"  Priorização executiva: delegada ao orquestrador")
-        
+        print(f"  Etapa 4 executada: {'sim' if (ok_prior and ok_cons) else 'parcial'}")
         return True
-        
+
     except Exception as e:
         print(f"ERRO: Erro geral no processamento: {e}")
         import traceback
@@ -744,6 +837,11 @@ def classificar_e_resumir_cluster(db: Session, cluster_id: int, client, debug: b
             # Mantém classificação mesmo sem resumo
 
         db.commit()
+
+        # GATING determinístico pós-classificação para evitar absurdos (ex.: horóscopo como P1 M&A)
+        _aplicar_gating_explicito_cluster(db, cluster_id, debug)
+        # Correção determinística de TAG para casos de Dívida Ativa/CDA
+        _corrigir_tag_deterministica_cluster(db, cluster_id, debug)
         return True
 
     except Exception as e:
@@ -869,7 +967,7 @@ def priorizacao_executiva_final(db: Session, client, debug: bool = True) -> bool
                 print("ℹ️ Priorização executiva: nenhum cluster ativo hoje")
             return True
 
-        # Tenta ONE-SHOT com todos os itens e max de tokens; se falhar, faz fallback para lotes
+        # Decide estratégia: usa batching direto quando muitos itens, senão tenta one-shot
         itens_finais_all = []
         id_map_all = {}
         for idx, c in enumerate(clusters_hoje):
@@ -884,65 +982,68 @@ def priorizacao_executiva_final(db: Session, client, debug: bool = True) -> bool
             })
             id_map_all[idx] = c.id
 
-        prompt_all = PROMPT_PRIORIZACAO_EXECUTIVA_V1.format(
-            ITENS_FINAIS=json.dumps(itens_finais_all, indent=2, ensure_ascii=False)
-        )
+        TAMANHO_LOTE_PRIORIZACAO = 60
+        usar_one_shot = len(itens_finais_all) <= TAMANHO_LOTE_PRIORIZACAO
 
-        if debug:
-            print(f"🧮 DEBUG: Priorização one-shot para {len(itens_finais_all)} itens...")
-
-        try:
-            resp_all = client.generate_content(
-                prompt_all,
-                generation_config={
-                    'temperature': 0.1,
-                    'top_p': 0.8,
-                    'max_output_tokens': 8192
-                }
+        if usar_one_shot:
+            prompt_all = PROMPT_PRIORIZACAO_EXECUTIVA_V1.format(
+                ITENS_FINAIS=json.dumps(itens_finais_all, indent=2, ensure_ascii=False)
             )
-        except Exception as e:
-            if debug:
-                print(f"❌ Priorização one-shot falhou na chamada: {e}")
-            resp_all = None
 
-        if resp_all and resp_all.text:
             if debug:
-                prev = resp_all.text[:500].replace('\n', ' ')
-                print(f"📥 Priorização one-shot (prev 500): {prev}")
-            resultado_all = extrair_json_da_resposta(resp_all.text)
-            if not isinstance(resultado_all, list) or len(resultado_all) == 0:
-                resultado_all = extrair_priorizacao_executiva_seguro(resp_all.text)
-            # Se veio uma lista mas sem 'id', faz fallback regex
-            if isinstance(resultado_all, list) and resultado_all and not any(isinstance(it, dict) and it.get('id') is not None for it in resultado_all):
-                resultado_all = extrair_priorizacao_executiva_seguro(resp_all.text)
-            if isinstance(resultado_all, list) and len(resultado_all) > 0:
-                alteracoes = 0
-                for item in resultado_all:
-                    try:
-                        rid = item.get("id")
-                        decisao = item.get("decisao_prioridade_final")
-                        tag = item.get("tag_final") or item.get("tag_atribuida_inicial")
-                        justificativa = item.get("justificativa_executiva")
-                        cid = id_map_all.get(rid)
-                        if cid is None:
-                            continue
-                        cluster = get_cluster_by_id(db, cid)
-                        if not cluster:
-                            continue
-                        if decisao and decisao != cluster.prioridade:
-                            update_cluster_priority(db, cid, decisao, motivo=justificativa or "priorização executiva")
-                            alteracoes += 1
-                        if tag and tag != cluster.tag:
-                            update_cluster_tags(db, cid, [tag], motivo="priorização executiva")
-                            alteracoes += 1
-                    except Exception:
-                        continue
+                print(f"🧮 DEBUG: Priorização one-shot para {len(itens_finais_all)} itens...")
+
+            try:
+                resp_all = client.generate_content(
+                    prompt_all,
+                    generation_config={
+                        'temperature': 0.1,
+                        'top_p': 0.8,
+                        'max_output_tokens': 8192
+                    }
+                )
+            except Exception as e:
                 if debug:
-                    print(f"✅ Priorização executiva (one-shot) aplicada. Alterações: {alteracoes}")
-                return True
+                    print(f"❌ Priorização one-shot falhou na chamada: {e}")
+                resp_all = None
 
-        # Fallback: Batching dos itens para evitar truncamento e JSON quebrado
-        TAMANHO_LOTE_PRIORIZACAO = 80
+            if resp_all and resp_all.text:
+                if debug:
+                    prev = resp_all.text[:500].replace('\n', ' ')
+                    print(f"📥 Priorização one-shot (prev 500): {prev}")
+                resultado_all = extrair_json_da_resposta(resp_all.text)
+                if not isinstance(resultado_all, list) or len(resultado_all) == 0:
+                    resultado_all = extrair_priorizacao_executiva_seguro(resp_all.text)
+                # Se veio uma lista mas sem 'id', faz fallback regex
+                if isinstance(resultado_all, list) and resultado_all and not any(isinstance(it, dict) and it.get('id') is not None for it in resultado_all):
+                    resultado_all = extrair_priorizacao_executiva_seguro(resp_all.text)
+                if isinstance(resultado_all, list) and len(resultado_all) > 0:
+                    alteracoes = 0
+                    for item in resultado_all:
+                        try:
+                            rid = item.get("id")
+                            decisao = item.get("decisao_prioridade_final")
+                            tag = item.get("tag_final") or item.get("tag_atribuida_inicial")
+                            justificativa = item.get("justificativa_executiva")
+                            cid = id_map_all.get(rid)
+                            if cid is None:
+                                continue
+                            cluster = get_cluster_by_id(db, cid)
+                            if not cluster:
+                                continue
+                            if decisao and decisao != cluster.prioridade:
+                                update_cluster_priority(db, cid, decisao, motivo=justificativa or "priorização executiva")
+                                alteracoes += 1
+                            if tag and tag != cluster.tag:
+                                update_cluster_tags(db, cid, [tag], motivo="priorização executiva")
+                                alteracoes += 1
+                        except Exception:
+                            continue
+                    if debug:
+                        print(f"✅ Priorização executiva (one-shot) aplicada. Alterações: {alteracoes}")
+                    return True
+
+        # Batching dos itens para evitar truncamento e JSON quebrado
         lotes = [clusters_hoje[i:i + TAMANHO_LOTE_PRIORIZACAO] for i in range(0, len(clusters_hoje), TAMANHO_LOTE_PRIORIZACAO)]
 
         alteracoes_total = 0
@@ -1125,7 +1226,7 @@ def consolidacao_final_clusters(db: Session, client, debug: bool = True) -> bool
                         continue
                 if debug:
                     print(f"✅ Consolidação final (one-shot) aplicada. merges={merges_aplicados_total}, keeps={keeps_total}")
-                return True
+                # NÃO retorna aqui; segue para fallback determinístico para capturar duplicatas residuais
 
         # Fallback: Processa em lotes para evitar respostas truncadas
         TAMANHO_LOTE_CONSOLIDACAO = 80
@@ -1249,7 +1350,106 @@ def consolidacao_final_clusters(db: Session, client, debug: bool = True) -> bool
             keeps_total += keeps
 
         if debug:
-            print(f"✅ Consolidação final aplicada. merges={merges_aplicados_total}, keeps={keeps_total}")
+            print(f"✅ Consolidação por sugestões aplicada. merges={merges_aplicados_total}, keeps={keeps_total}")
+
+        # Passo final: Fallback determinístico SEM modelo para captar quase-duplicatas remanescentes
+        try:
+            if debug:
+                print("🔁 Consolidação determinística por título/tag (pós-sugestões)...")
+            # Recarrega clusters atuais do dia
+            hoje2 = get_date_brasil_str()
+            clusters2 = db.query(ClusterEvento).filter(
+                ClusterEvento.status == 'ativo',
+                ClusterEvento.created_at >= hoje2,
+                ClusterEvento.prioridade != 'IRRELEVANTE',
+                ClusterEvento.tag != 'IRRELEVANTE'
+            ).all()
+
+            # Prepara normalização de título
+            import unicodedata, re as _re
+            def _norm_tokens(t: str) -> List[str]:
+                if not isinstance(t, str):
+                    return []
+                t0 = unicodedata.normalize('NFKD', t)
+                t0 = ''.join(c for c in t0 if not unicodedata.combining(c))
+                t0 = t0.lower()
+                t0 = _re.sub(r"[^a-z0-9\s]", " ", t0).strip()
+                tokens = [tok for tok in t0.split() if len(tok) > 2]
+                return tokens
+
+            def _jaccard(a: List[str], b: List[str]) -> float:
+                if not a or not b:
+                    return 0.0
+                sa, sb = set(a), set(b)
+                inter = len(sa & sb)
+                uni = len(sa | sb)
+                return (inter / uni) if uni else 0.0
+
+            # Índice por tag
+            tag_to_items: Dict[str, List[Dict[str, Any]]] = {}
+            for c in clusters2:
+                toks = _norm_tokens(c.titulo_cluster or "")
+                if not toks:
+                    continue
+                tag_to_items.setdefault(c.tag or '', []).append({
+                    'id': c.id,
+                    'tokens': toks,
+                    'prio': c.prioridade or 'P3_MONITORAMENTO'
+                })
+
+            # Gera grupos por tag usando união por similaridade de Jaccard
+            from collections import defaultdict
+            merges_deterministic = 0
+            for tag, items in tag_to_items.items():
+                n = len(items)
+                if n <= 1:
+                    continue
+                parent = list(range(n))
+                def find(x: int) -> int:
+                    while parent[x] != x:
+                        parent[x] = parent[parent[x]]
+                        x = parent[x]
+                    return x
+                def union(x: int, y: int) -> None:
+                    rx, ry = find(x), find(y)
+                    if rx != ry:
+                        parent[ry] = rx
+
+                # Só aplica para P3 por segurança; evita merges agressivos em P1/P2
+                idxs = [i for i, it in enumerate(items) if it['prio'] == 'P3_MONITORAMENTO']
+                for i in range(len(idxs)):
+                    for j in range(i + 1, len(idxs)):
+                        a, b = items[idxs[i]], items[idxs[j]]
+                        jac = _jaccard(a['tokens'], b['tokens'])
+                        if jac >= 0.85:
+                            union(idxs[i], idxs[j])
+
+                comps: Dict[int, List[int]] = defaultdict(list)
+                for i in range(n):
+                    comps[find(i)].append(i)
+
+                for comp in comps.values():
+                    # filtra apenas componentes com mais de 1 P3
+                    comp_p3 = [k for k in comp if items[k]['prio'] == 'P3_MONITORAMENTO']
+                    if len(comp_p3) <= 1:
+                        continue
+                    destino = min(items[k]['id'] for k in comp_p3)
+                    fontes = [items[k]['id'] for k in comp_p3 if items[k]['id'] != destino]
+                    if not fontes:
+                        continue
+                    try:
+                        from backend.crud import merge_clusters as _merge
+                        _merge(db, destino_id=destino, fontes_ids=fontes, motivo='fallback deterministico titulo/tag etapa 4 (P3)')
+                        merges_deterministic += 1
+                    except Exception:
+                        continue
+
+            if debug:
+                print(f"✅ Consolidação determinística aplicada. merges={merges_deterministic}")
+        except Exception as _e:
+            if debug:
+                print(f"⚠️ Consolidação determinística falhou: {_e}")
+
         return True
 
     except Exception as e:

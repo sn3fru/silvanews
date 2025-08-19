@@ -25,7 +25,7 @@ try:
     from ..database import SessionLocal
     from ..models import ArtigoBrutoCreate
     from ..crud import create_artigo_bruto, get_artigo_by_hash, create_log
-    from ..prompts import PROMPT_EXTRACAO_PERMISSIVO_V8
+    from ..prompts import PROMPT_EXTRACAO_PDF_RAW_V1
     from ..utils import get_datetime_brasil_str, get_date_brasil_str
 except ImportError:
     # Fallback para execução direta
@@ -33,7 +33,7 @@ except ImportError:
         from database import SessionLocal
         from models import ArtigoBrutoCreate
         from crud import create_artigo_bruto, get_artigo_by_hash, create_log
-        from prompts import PROMPT_EXTRACAO_PERMISSIVO_V8
+        from prompts import PROMPT_EXTRACAO_PDF_RAW_V1
         from utils import get_datetime_brasil_str, get_date_brasil_str
     except ImportError as e:
         print(f"❌ ERRO: Não foi possível importar módulos do backend: {e}")
@@ -62,7 +62,7 @@ class FileLoader:
         # Injeção de dependência: o cliente Gemini é recebido aqui.
         # Isso centraliza a configuração e torna a classe mais testável.
         self.client = client
-        self.extraction_prompt = PROMPT_EXTRACAO_PERMISSIVO_V8
+        self.extraction_prompt = PROMPT_EXTRACAO_PDF_RAW_V1
         # Config padrão para tarefas de decisão (alinhado ao poc_silva)
         self.generation_config_decision = {
             "temperature": 0.1,

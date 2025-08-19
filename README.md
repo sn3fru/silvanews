@@ -35,11 +35,25 @@ Plataforma de inteligência de mercado que transforma alto volume de notícias e
 - **Migração**: Use `python seed_prompts.py` para popular o banco com dados iniciais após criar as tabelas.
 
 ### Pipeline (passo a passo)
-1) Ingestão: `load_news.py` lê PDFs/JSONs e grava artigos brutos (status `pendente`) com **`texto_bruto` preservado** (conteúdo original completo).
-2) Processamento inicial: extrai dados, gera embeddings e marca `pronto_agrupar` - **`texto_bruto` permanece inalterado**.
-3) Agrupamento: cria/atualiza clusters por fato gerador (modo em lote ou incremental automático).
-4) Classificação e Resumos: define prioridade/tag e gera **resumo do cluster** (não da notícia individual) no tamanho certo - salva em `texto_processado`.
-5) Priorização Executiva Final e Consolidação Final (Etapa 4): reclassifica rigidamente P1/P2/P3/IRRELEVANTE e, em seguida, consolida clusters redundantes do dia via `PROMPT_CONSOLIDACAO_CLUSTERS_V1` (merges conservadores, soft delete dos duplicados, preservando resumos existentes).
+1) Ingestão
+   - `load_news.py` chama `backend/collectors/file_loader.py`
+   - PDFs: usa `PROMPT_EXTRACAO_PDF_RAW_V1` para extrair TEXTO COMPLETO ORIGINAL (sem resumo)
+   - JSONs: ingeridos diretamente sem LLM
+   - Salva como artigos brutos (status `pendente`) com `texto_bruto` preservado
+2) Processamento inicial (Etapa 1)
+   - `process_articles.py::processar_artigo_sem_cluster`
+   - Valida dados, gera embeddings e pode gerar um resumo curto via `PROMPT_RESUMO_FINAL_V3` (sem clusterização)
+   - Marca `pronto_agrupar`
+3) Agrupamento (Etapa 2)
+   - Lote: `process_articles.py::agrupar_noticias_com_prompt` → `PROMPT_AGRUPAMENTO_V1`
+   - Incremental: `process_articles.py::agrupar_noticias_incremental` → `PROMPT_AGRUPAMENTO_INCREMENTAL_V2`
+4) Classificação e Resumo (Etapa 3)
+   - `process_articles.py::classificar_e_resumir_cluster`
+   - Classificação/Prioridade/Tag: `PROMPT_EXTRACAO_GATEKEEPER_V13`
+   - Resumo do CLUSTER: `PROMPT_RESUMO_FINAL_V3` (salvo em `texto_processado` do cluster)
+5) Priorização e Consolidação (Etapa 4)
+   - Priorização executiva: `process_articles.py::priorizacao_executiva_final` → `PROMPT_PRIORIZACAO_EXECUTIVA_V1` (batched)
+   - Consolidação final: `process_articles.py::consolidacao_final_clusters` → `PROMPT_CONSOLIDACAO_CLUSTERS_V1` + fallback determinístico (Jaccard por título e mesma tag)
 6) Exposição: API `FastAPI` alimenta o frontend; CRUD e endpoints admin.
 
 ```mermaid
@@ -57,7 +71,8 @@ graph TD
 ```
 
 ### LLMs e prompts (o que roda e para quê)
-- Extração e triagem inicial: `PROMPT_EXTRACAO_PERMISSIVO_V8`.
+- Extração de PDFs: `PROMPT_EXTRACAO_PDF_RAW_V1`.
+- Gatekeeper de relevância/priority/tag (clusters): `PROMPT_EXTRACAO_GATEKEEPER_V13`.
 - Agrupamento em lote: `PROMPT_AGRUPAMENTO_V1`.
 - Agrupamento incremental (novas notícias do dia): `PROMPT_AGRUPAMENTO_INCREMENTAL_V2` (contexto enriquecido com `titulos_internos`).
 - Resumo executivo por prioridade: `PROMPT_RESUMO_FINAL_V3`.

@@ -294,31 +294,34 @@ let tagsDisponiveis = [];
 
 async function carregarTagsDisponiveis() {
     try {
-        // Busca clusters para extrair as tags
-        const response = await fetch('/api/feed?page=1&limit=100');
+        // Busca as TAGS CANÔNICAS do backend (prompts)
+        const response = await fetch('/api/prompts/tags');
         if (!response.ok) {
-            throw new Error('Falha ao carregar clusters');
+            throw new Error('Falha ao carregar tags do backend');
         }
-        
-        const data = await response.json();
-        const clusters = data.clusters || [];
-        
-        // Extrai tags únicas dos clusters
-        const tagsUnicas = new Set();
-        clusters.forEach(cluster => {
-            if (cluster.tag) {
-                tagsUnicas.add(cluster.tag);
-            }
-        });
-        
-        tagsDisponiveis = Array.from(tagsUnicas).sort();
-        
-        console.log('Tags carregadas dos clusters:', tagsDisponiveis);
+
+        const tags = await response.json();
+        // Ordena por ordem (se existir) e mapeia nomes
+        tagsDisponiveis = (Array.isArray(tags) ? tags : [])
+            .sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
+            .map(t => t.nome);
+
+        console.log('Tags canônicas carregadas:', tagsDisponiveis);
         populateTagFiltersIfNeeded();
     } catch (error) {
-        console.error('Erro ao carregar tags dos clusters:', error);
-        // Fallback para tags antigas se a API falhar
-        tagsDisponiveis = ['Governo e Politica', 'Economia e Tecnologia', 'Judicionario', 'Empresas Privadas'];
+        console.error('Erro ao carregar tags canônicas:', error);
+        // Fallback para lista canônica atual (prompts)
+        tagsDisponiveis = [
+            'M&A e Transações Corporativas',
+            'Jurídico, Falências e Regulatório',
+            'Dívida Ativa e Créditos Públicos',
+            'Distressed Assets e NPLs',
+            'Mercado de Capitais e Finanças Corporativas',
+            'Política Econômica (Brasil)',
+            'Internacional (Economia e Política)',
+            'Tecnologia e Setores Estratégicos',
+            'IRRELEVANTE'
+        ];
         populateTagFiltersIfNeeded();
     }
 }
@@ -326,12 +329,18 @@ async function carregarTagsDisponiveis() {
 function generateTagOptions(selectedTag) {
     if (!tagsDisponiveis || tagsDisponiveis.length === 0) {
         // Fallback se as tags não foram carregadas
-        return `
-            <option value="Governo e Politica" ${selectedTag === 'Governo e Politica' ? 'selected' : ''}>Governo e Politica</option>
-            <option value="Economia e Tecnologia" ${selectedTag === 'Economia e Tecnologia' ? 'selected' : ''}>Economia e Tecnologia</option>
-            <option value="Judicionario" ${selectedTag === 'Judicionario' ? 'selected' : ''}>Judicionario</option>
-            <option value="Empresas Privadas" ${selectedTag === 'Empresas Privadas' ? 'selected' : ''}>Empresas Privadas</option>
-        `;
+        const fallback = [
+            'M&A e Transações Corporativas',
+            'Jurídico, Falências e Regulatório',
+            'Dívida Ativa e Créditos Públicos',
+            'Distressed Assets e NPLs',
+            'Mercado de Capitais e Finanças Corporativas',
+            'Política Econômica (Brasil)',
+            'Internacional (Economia e Política)',
+            'Tecnologia e Setores Estratégicos',
+            'IRRELEVANTE'
+        ];
+        return fallback.map(tag => `<option value="${tag}" ${selectedTag === tag ? 'selected' : ''}>${tag}</option>`).join('');
     }
     
     return tagsDisponiveis.map(tag => 
@@ -1103,12 +1112,12 @@ async function carregarBIDados() {
     const statsData = await stats.json();
     
     // séries por dia (invertendo a ordem)
-    const s = await fetch(`${API_BASE}/bi/series-por-dia?dias=30`);
-    const sd = await s.json();
-    
-    // por fonte
-    const f = await fetch(`${API_BASE}/bi/noticias-por-fonte?limit=20`);
-    const fd = await f.json();
+        const s = await fetch(`${API_BASE}/bi/series-por-dia?dias=30`);
+        const sd = await s.json();
+
+        // por fonte
+        const f = await fetch(`${API_BASE}/bi/noticias-por-fonte?limit=20`);
+        const fd = await f.json();
     
     // Gráfico por tag
     const tags = await fetch(`${API_BASE}/bi/noticias-por-tag?limit=10`);
