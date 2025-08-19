@@ -20,6 +20,9 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 from pathlib import Path
 import os
+import time
+# Evite imports locais dentro de blocos; import global seguro para update de prioridade
+from backend.crud import update_cluster_priority
 
 try:
     # Imports relativos ao backend já existente
@@ -84,6 +87,207 @@ class EstagiarioAgent:
                 "Jurídico", "M&A", "Mercado de Capitais", "Política Econômica",
                 "Internacional", "Tecnologia e Setores Estratégicos", "Distressed Assets", "Outros"
             ]
+        # Controle simples de iterações por hora (LLM refinamentos)
+        self._iter_timestamps: List[float] = []
+        self._iter_limit_per_hour: int = 10
+
+    def _catalogo_tags(self, db) -> List[str]:
+        """Retorna as tags canônicas a partir do banco; fallback para self.tags_permitidas."""
+        try:
+            from backend.crud import get_prompts_compilados
+            comp = get_prompts_compilados(db)
+            tags_payload = comp.get('tags') or {}
+            if isinstance(tags_payload, dict) and tags_payload:
+                return list(tags_payload.keys())
+        except Exception:
+            pass
+        return self.tags_permitidas or []
+
+    def _normalize_str(self, s: str) -> str:
+        import unicodedata, re
+        s = s or ""
+        s = ''.join(c for c in unicodedata.normalize('NFKD', s) if not unicodedata.combining(c))
+        s = s.lower()
+        s = re.sub(r"[^\w\s]", " ", s)
+        s = re.sub(r"\s+", " ", s).strip()
+        return s
+
+    def _extract_keywords_simple(self, text: str) -> List[str]:
+        import re
+        t = (text or '').lower()
+        # remove pontuação simples
+        t = re.sub(r"[^\w\sçáéíóúãõâêîôûàèìòù]", " ", t)
+        tokens = [w for w in t.split() if len(w) >= 3]
+        stops = set(["das","dos","de","da","do","para","por","com","uma","umas","noticias","notícia","noticia","hoje","essa","dessa","sobre","que","nas","nos","na","no","pegue","troque","tag"]) 
+        return [w for w in tokens if w not in stops][:8]
+
+    def _within_iteration_budget(self) -> bool:
+        now = time.time()
+        # remove eventos mais antigos que 1h
+        self._iter_timestamps = [t for t in self._iter_timestamps if now - t < 3600]
+        return len(self._iter_timestamps) < self._iter_limit_per_hour
+
+    def _consume_iteration(self) -> None:
+        self._iter_timestamps.append(time.time())
+
+    def _llm_choose_tag_from_phrase(self, phrase: str, catalogo_tags: List[str]) -> Optional[str]:
+        if not self.model:
+            return None
+        try:
+            instr = (
+                "Escolha UMA única TAG da lista a seguir que melhor descreva a frase. "
+                "Responda APENAS com JSON {\"tag\": \"<nome exato>\"}.\n\n"
+                f"Frase: {phrase}\n"
+                f"Tags: {catalogo_tags}\n"
+            )
+            print("[Estagiario] LLM choose_tag_from_phrase: solicitando JSON...")
+            resp = self.model.generate_content(instr, generation_config={'temperature': 0.1, 'max_output_tokens': 128})
+            raw = (resp.text or '').strip()
+            print(f"[Estagiario] LLM choose_tag_from_phrase (raw): {raw[:400]}")
+            import json, re
+            if raw.startswith('```'):
+                raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip(), flags=re.IGNORECASE)
+            data = {}
+            try:
+                data = json.loads(raw)
+            except Exception:
+                m = re.search(r"\{[\s\S]*\}", raw)
+                data = json.loads(m.group(0)) if m else {}
+            tag = data.get('tag') if isinstance(data, dict) else None
+            if tag and any(tag.lower() == t.lower() for t in catalogo_tags):
+                for t in catalogo_tags:
+                    if tag.lower() == t.lower():
+                        return t
+            return None
+        except Exception as e:
+            print(f"[Estagiario] Falha LLM choose_tag_from_phrase: {e}")
+            return None
+
+    def _resolve_tag_canonically(self, db, question: str, cluster_id: int, default_guess: Optional[str]) -> Optional[str]:
+        catalogo = self._catalogo_tags(db)
+        tentativa = self._extract_target_tag(question, question)
+        norm = self._normalize_str(tentativa) if tentativa else ''
+        if norm in ['juridico e falencia','juridico e falencias','juridico falencia','juridico falencias','jurídico e falência','jurídico e falências']:
+            tentativa = 'Jurídico, Falências e Regulatório'
+        # 1) candidato explícito
+        if tentativa and any(tentativa.lower() == t.lower() for t in catalogo):
+            for t in catalogo:
+                if tentativa.lower() == t.lower():
+                    print(f"[Estagiario] Resolve tag: candidato explícito '{t}'")
+                    return t
+        # 2) default_guess
+        if default_guess and any(default_guess.lower() == t.lower() for t in catalogo):
+            for t in catalogo:
+                if default_guess.lower() == t.lower():
+                    print(f"[Estagiario] Resolve tag: default_guess '{t}'")
+                    return t
+        # 3) LLM contexto cluster
+        if self._within_iteration_budget():
+            self._consume_iteration()
+            tctx = self._llm_choose_tag(db, cluster_id)
+            if tctx:
+                print(f"[Estagiario] Resolve tag: LLM contexto → '{tctx}'")
+                return tctx
+        # 4) LLM frase
+        if self._within_iteration_budget():
+            self._consume_iteration()
+            tphrase = self._llm_choose_tag_from_phrase(question, catalogo)
+            if tphrase:
+                print(f"[Estagiario] Resolve tag: LLM frase → '{tphrase}'")
+                return tphrase
+        print("[Estagiario] Resolve tag: falhou em todas as tentativas")
+        return None
+
+    def _resolve_priority(self, db, question: str, cluster_id: int, default_guess: Optional[str]) -> Optional[str]:
+        pr = self._extract_target_priority(question)
+        if pr in self.prioridades_permitidas:
+            print(f"[Estagiario] Resolve prio: explícita '{pr}'")
+            return pr
+        if default_guess in self.prioridades_permitidas:
+            print(f"[Estagiario] Resolve prio: default_guess '{default_guess}'")
+            return default_guess
+        if self._within_iteration_budget():
+            self._consume_iteration()
+            pctx = self._llm_choose_priority(db, cluster_id)
+            if pctx in self.prioridades_permitidas:
+                print(f"[Estagiario] Resolve prio: LLM contexto → '{pctx}'")
+                return pctx
+        # LLM por frase
+        if self._within_iteration_budget() and self.model:
+            self._consume_iteration()
+            try:
+                instr = (
+                    "Escolha a PRIORIDADE (P1_CRITICO, P2_ESTRATEGICO, P3_MONITORAMENTO, IRRELEVANTE) que melhor corresponde à frase. "
+                    "Responda APENAS com JSON {\"prioridade\": \"<nivel>\"}.\n\n"
+                    f"Frase: {question}\n"
+                )
+                print("[Estagiario] LLM choose_priority_from_phrase: solicitando JSON...")
+                resp = self.model.generate_content(instr, generation_config={'temperature': 0.1, 'max_output_tokens': 128})
+                raw = (resp.text or '').strip()
+                print(f"[Estagiario] LLM choose_priority_from_phrase (raw): {raw[:400]}")
+                import json, re
+                if raw.startswith('```'):
+                    raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip(), flags=re.IGNORECASE)
+                data = {}
+                try:
+                    data = json.loads(raw)
+                except Exception:
+                    m = re.search(r"\{[\s\S]*\}", raw)
+                    data = json.loads(m.group(0)) if m else {}
+                p = data.get('prioridade') if isinstance(data, dict) else None
+                if p in self.prioridades_permitidas:
+                    print(f"[Estagiario] Resolve prio: LLM frase → '{p}'")
+                    return p
+            except Exception as e:
+                print(f"[Estagiario] Falha LLM choose_priority_from_phrase: {e}")
+        print("[Estagiario] Resolve prio: falhou em todas as tentativas")
+        return None
+
+    def _llm_pick_best_by_title(self, titulo_alvo: str, candidatos: List[Dict[str, Any]]) -> List[int]:
+        """Pede ao LLM para escolher o(s) melhor(es) candidatos por título. Retorna lista de IDs (pode ser 1)."""
+        if not self.model or not candidatos:
+            return []
+        try:
+            instr = (
+                "Escolha o MELHOR MATCH pelo título alvo. Responda APENAS com JSON.\n"
+                "Formato preferido: {\"ids\": [<id1>, <id2>]} ou {\"id\": <id>}\n\n"
+                f"Título alvo: {titulo_alvo}\n"
+                f"Candidatos: {[{'id': c.get('id'), 'titulo': c.get('titulo') or c.get('titulo_final')} for c in candidatos]}\n"
+            )
+            print("[Estagiario] LLM pick-best-candidate: solicitando JSON...")
+            resp = self.model.generate_content(instr, generation_config={'temperature': 0.1, 'max_output_tokens': 128})
+            raw = (resp.text or '').strip()
+            print(f"[Estagiario] LLM pick-best-candidate (raw): {raw[:400]}")
+            import json, re
+            if raw.startswith('```'):
+                raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip(), flags=re.IGNORECASE)
+            try:
+                data = json.loads(raw)
+            except Exception:
+                m = re.search(r"\{[\s\S]*\}", raw)
+                data = json.loads(m.group(0)) if m else {}
+            ids: List[int] = []
+            if isinstance(data, dict):
+                if 'ids' in data and isinstance(data['ids'], list):
+                    for x in data['ids']:
+                        try:
+                            ids.append(int(x))
+                        except Exception:
+                            pass
+                elif 'id' in data:
+                    try:
+                        ids.append(int(data['id']))
+                    except Exception:
+                        pass
+            # filtra por candidatos válidos
+            cand_ids = set([c.get('id') for c in candidatos])
+            ids = [i for i in ids if i in cand_ids]
+            if not ids and candidatos:
+                ids = [candidatos[0].get('id')]
+            return ids
+        except Exception as e:
+            print(f"[Estagiario] Falha LLM pick-best: {e}")
+            return []
 
     def _open_db(self):
         print("[Estagiario] Abrindo sessão DB...")
@@ -288,6 +492,186 @@ class EstagiarioAgent:
             print(f"[Estagiario] Falha na triagem LLM: {e}")
             return []
 
+    def _llm_generate_search_spec(self, question: str) -> Optional[Dict[str, Any]]:
+        """Pede ao LLM um plano de busca (prioridades, tags canônicas e keywords) em JSON estrito."""
+        if not self.model:
+            return None
+        try:
+            # Constrói catálogo de tags para orientar a escolha canônica
+            catalogo_tags = self.tags_permitidas or []
+            instr = (
+                "Você é um agente de planejamento. Gere um ESPEC JSON ESTRITO com as chaves: "
+                "priorities (array com valores entre 'P1_CRITICO','P2_ESTRATEGICO','P3_MONITORAMENTO' ou vazio), "
+                "tags (array com nomes EXATOS da lista fornecida), keywords (array de até 8 termos curtos em pt-br).\n"
+                "Regra: use apenas tags da lista permitida. Não explique, responda somente JSON.\n\n"
+                f"Pergunta: {question}\n"
+                f"Tags permitidas: {catalogo_tags}\n"
+            )
+            resp = self.model.generate_content(instr, generation_config={'temperature': 0.2, 'max_output_tokens': 256})
+            raw = (resp.text or "").strip()
+            import json, re
+            # Remove cercas ```json ... ``` se vierem
+            if raw.startswith("```"):
+                raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip(), flags=re.IGNORECASE)
+            # Fallback: extrai primeiro objeto JSON
+            try:
+                data = json.loads(raw)
+            except Exception:
+                m = re.search(r"\{[\s\S]*\}", raw)
+                data = json.loads(m.group(0)) if m else {}
+            # Sanitiza
+            out: Dict[str, Any] = {
+                'priorities': [p for p in (data.get('priorities') or []) if p in self.prioridades_permitidas],
+                'tags': [t for t in (data.get('tags') or []) if any(t.lower() == c.lower() for c in catalogo_tags)],
+                'keywords': [k for k in (data.get('keywords') or []) if isinstance(k, str)][:8],
+            }
+            return out
+        except Exception as e:
+            print(f"[Estagiario] Falha no plano de busca LLM: {e}")
+            return None
+
+    def _llm_understand_edit(self, question: str) -> Optional[Dict[str, Any]]:
+        """Usa LLM para entender edição solicitada e normalizar para o catálogo de tags/prioridades."""
+        if not self.model:
+            return None
+        try:
+            catalogo_tags = self.tags_permitidas or []
+            instr = (
+                "Você é um agente de edição. Converta a solicitação abaixo em JSON ESTRITO com as chaves possíveis: "
+                "operation ('update_tag'|'update_priority'|'merge'), cluster_id (int|null), cluster_title (string|null), "
+                "new_tag (string|null), new_priority ('P1_CRITICO'|'P2_ESTRATEGICO'|'P3_MONITORAMENTO'|'IRRELEVANTE'|null). "
+                "Se new_tag for pedida, ESCOLHA EXATAMENTE um nome da lista de tags permitidas. Não explique.\n\n"
+                f"Solicitação: {question}\n"
+                f"Tags permitidas: {catalogo_tags}\n"
+            )
+            print("[Estagiario] LLM understand_edit: solicitando JSON...")
+            resp = self.model.generate_content(instr, generation_config={'temperature': 0.1, 'max_output_tokens': 256})
+            raw = (resp.text or "").strip()
+            print(f"[Estagiario] LLM understand_edit (raw): {raw[:400]}")
+            import json, re
+            if raw.startswith("```"):
+                raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip(), flags=re.IGNORECASE)
+            try:
+                data = json.loads(raw)
+            except Exception:
+                m = re.search(r"\{[\s\S]*\}", raw)
+                data = json.loads(m.group(0)) if m else {}
+            # Valida campos básicos
+            op = data.get('operation')
+            if op not in ('update_tag', 'update_priority', 'merge'):
+                return None
+            # Normaliza prioridade
+            pr = data.get('new_priority')
+            if pr and pr not in self.prioridades_permitidas:
+                pr = None
+            # Normaliza tag contra catálogo
+            nt = data.get('new_tag')
+            if nt and not any(nt.lower() == c.lower() for c in catalogo_tags):
+                nt = None
+            return {
+                'operation': op,
+                'cluster_id': data.get('cluster_id'),
+                'cluster_title': data.get('cluster_title'),
+                'new_tag': nt,
+                'new_priority': pr,
+            }
+        except Exception as e:
+            print(f"[Estagiario] Falha no entendimento de edição LLM: {e}")
+            return None
+
+    def _llm_choose_tag(self, db, cluster_id: int) -> Optional[str]:
+        """Decide a TAG correta via LLM com base no catálogo do banco e no contexto do cluster."""
+        if not self.model:
+            return None
+        try:
+            # Carrega catálogo de tags canônicas
+            catalogo_tags = self.tags_permitidas or []
+            if not catalogo_tags:
+                return None
+            # Carrega contexto do cluster
+            try:
+                from backend.crud import get_cluster_details_by_id
+                ctx = get_cluster_details_by_id(db, cluster_id) or {}
+            except Exception:
+                ctx = {}
+            titulo = ctx.get('titulo_final') or ctx.get('titulo') or ''
+            resumo = ctx.get('resumo_final') or ctx.get('resumo') or ''
+            artigos = ctx.get('artigos') or []
+            artigos_titulos = [a.get('titulo') for a in artigos[:5] if a.get('titulo')]
+            instr = (
+                "Classifique o cluster abaixo em UMA única TAG, escolhendo EXATAMENTE um nome da lista de tags permitidas. "
+                "Responda APENAS com JSON no formato {\"tag\": \"<nome exato>\"}. Não explique.\n\n"
+                f"Tags permitidas: {catalogo_tags}\n"
+                f"Titulo: {titulo}\n"
+                f"Resumo: {resumo}\n"
+                f"Artigos (títulos): {artigos_titulos}\n"
+            )
+            print("[Estagiario] LLM choose_tag: solicitando JSON...")
+            print("[Estagiario] LLM choose_priority: solicitando JSON...")
+            resp = self.model.generate_content(instr, generation_config={'temperature': 0.1, 'max_output_tokens': 128})
+            raw = (resp.text or '').strip()
+            print(f"[Estagiario] LLM choose_priority (raw): {raw[:400]}")
+            print(f"[Estagiario] LLM choose_tag (raw): {raw[:400]}")
+            import json, re
+            if raw.startswith('```'):
+                raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip(), flags=re.IGNORECASE)
+            try:
+                data = json.loads(raw)
+            except Exception:
+                m = re.search(r"\{[\s\S]*\}", raw)
+                data = json.loads(m.group(0)) if m else {}
+            tag = data.get('tag') if isinstance(data, dict) else None
+            if tag and any(tag.lower() == t.lower() for t in catalogo_tags):
+                # Normaliza para o nome do catálogo
+                for t in catalogo_tags:
+                    if tag.lower() == t.lower():
+                        return t
+            return None
+        except Exception as e:
+            print(f"[Estagiario] Falha no LLM escolha de tag: {e}")
+            return None
+
+    def _fallback_understand_edit(self, question: str) -> Optional[Dict[str, Any]]:
+        """Fallback leve e seguro quando o LLM não retorna JSON: extrai intenção básica.
+        - Suporta: alterar tag por título parcial do enunciado (após dois-pontos) e mapear tag destino por aliases.
+        """
+        qlow = (question or "").strip()
+        if not qlow:
+            return None
+        qlow_norm = qlow.lower()
+        # Extrai título: primeiro procura entre aspas, senão tenta após o último ':'
+        import re
+        title = None
+        m = re.search(r'["\']([^"\']{5,200})["\']', qlow)
+        if m:
+            title = m.group(1).strip()
+        if not title and ':' in qlow:
+            title = qlow.split(':')[-1].strip()
+        # Determina operação/tag
+        if 'tag' in qlow_norm or 'categoria' in qlow_norm or 'classificada' in qlow_norm:
+            # Mapeia para catálogo
+            destino = None
+            # Sinais fortes de Dívida Ativa
+            if any(k in qlow_norm for k in ['divida ativa', 'dívida ativa', 'cda']):
+                for t in self.tags_permitidas:
+                    if 'dívida ativa' in t.lower() or 'divida ativa' in t.lower():
+                        destino = t
+                        break
+            # Busca match direto por nome de tag na frase
+            if not destino:
+                for t in self.tags_permitidas:
+                    if t.lower() in qlow_norm:
+                        destino = t
+                        break
+            if destino and title:
+                return {
+                    'operation': 'update_tag',
+                    'cluster_id': None,
+                    'cluster_title': title,
+                    'new_tag': destino,
+                    'new_priority': None,
+                }
+        return None
     def _infer_filters(self, question: str) -> Dict[str, Any]:
         """Inferir prioridades, tags e keywords a partir da pergunta para reduzir o universo."""
         import unicodedata
@@ -367,6 +751,295 @@ class EstagiarioAgent:
             print(f"[Estagiario] Falha ao contar irrelevantes precisos: {e}")
             return 0
 
+    def _handle_edit_command(self, db, question: str, q: str, target_date: datetime.date) -> AgentAnswer:
+        """
+        Processa comandos de edição com lógica inteligente:
+        1. Identifica o que alterar (tag/prioridade)
+        2. Encontra o cluster por ID ou título parcial
+        3. Executa a alteração
+        """
+        import re
+        
+        # ETAPA 1: Detecta comandos diretos com ID de cluster
+        # update prioridade: "atualize prioridade do cluster 123 para p2"
+        m = re.search(r"prioridade.*cluster\s+(\d+)\s+para\s+(p1|p2|p3|irrelevante)", q)
+        if m:
+            cluster_id = int(m.group(1))
+            alvo = m.group(2).upper()
+            mapa = {"P1": "P1_CRITICO", "P2": "P2_ESTRATEGICO", "P3": "P3_MONITORAMENTO", "IRRELEVANTE": "IRRELEVANTE"}
+            nova_pr = mapa.get(alvo)
+            if nova_pr and nova_pr in self.prioridades_permitidas:
+                from backend.crud import update_cluster_priority
+                ok = update_cluster_priority(db, cluster_id, nova_pr, motivo=f"Estagiario: ajuste solicitado '{question}'")
+                return AgentAnswer(bool(ok), ("✅ Prioridade atualizada." if ok else "Falha ao atualizar prioridade."))
+            return AgentAnswer(False, "Prioridade não permitida.")
+
+        # update tag: "troque a tag do cluster 456 para Internacional"
+        m = re.search(r"tag.*cluster\s+(\d+)\s+para\s+([\wãáàâêíçõéú\s-]+)", q)
+        if m:
+            cluster_id = int(m.group(1))
+            tag = m.group(2).strip()
+            return self._update_cluster_tag(db, cluster_id, tag, question)
+
+        # merge: "merge o cluster 111 no 222"
+        m = re.search(r"merge.*cluster\s+(\d+)\s+no\s+(\d+)", q)
+        if m:
+            origem = int(m.group(1))
+            destino = int(m.group(2))
+            if origem == destino:
+                return AgentAnswer(False, "IDs de origem e destino iguais.")
+            from backend.crud import merge_clusters
+            res = merge_clusters(db, destino_id=destino, fontes_ids=[origem], motivo=f"Estagiario: merge solicitado '{question}'")
+            return AgentAnswer(True, f"✅ Merge efetuado. Artigos movidos: {res.get('artigos_movidos',0)}; Clusters encerrados: {res.get('clusters_descartados',0)}.")
+
+        # ETAPA 2: Comandos inteligentes com busca por título
+        # Extrai trecho do título mencionado
+        titulo_patterns = [
+            r'noticia.*?["\'](.*?)["\'"]',
+            r'noticia.*?:\s*["\'](.*?)["\'"]',
+            r'essa noticia.*?["\'](.*?)["\'"]',
+            r'noticia.*?de hoje.*?["\'](.*?)["\'"]',
+            r'["\'](.*?)["\']\s*foi classificada',
+            r'["\'](.*?)["\']\s*está.*tag',
+        ]
+        
+        titulo_encontrado = None
+        for pattern in titulo_patterns:
+            m = re.search(pattern, question, re.IGNORECASE)
+            if m:
+                titulo_encontrado = m.group(1).strip()
+                break
+        
+        # Se não encontrou título entre aspas, tenta extrair de forma mais flexível
+        if not titulo_encontrado:
+            # Procura por padrões como "noticia de hoje: texto" ou "essa noticia texto"
+            flexible_patterns = [
+                r'noticia.*?de hoje\s*:\s*(.{10,80}?)\s*(?:foi|está|mude|altere|corrija)',
+                r'essa noticia.*?:\s*(.{10,80}?)\s*(?:foi|está|mude|altere|corrija)',
+                r'noticia.*?:\s*(.{10,80}?)\s*(?:foi|está|mude|altere|corrija)',
+            ]
+            for pattern in flexible_patterns:
+                m = re.search(pattern, question, re.IGNORECASE)
+                if m:
+                    titulo_encontrado = m.group(1).strip()
+                    break
+        
+        if not titulo_encontrado:
+            return AgentAnswer(False, "❌ Não consegui identificar qual notícia alterar. Use aspas no título ou o ID do cluster.\nExemplos:\n- 'mude a tag da notícia \"Título da notícia\" para Dívida Ativa'\n- 'atualize prioridade do cluster 123 para p2'")
+
+        print(f"[Estagiario] Título extraído: '{titulo_encontrado}'")
+
+        # ETAPA 3: Busca clusters por título parcial
+        clusters_candidatos = self._find_clusters_by_partial_title(db, titulo_encontrado, target_date)
+        if not clusters_candidatos:
+            return AgentAnswer(False, f"❌ Nenhuma notícia encontrada com título similar a: '{titulo_encontrado}'")
+        
+        if len(clusters_candidatos) > 1:
+            # Múltiplos candidatos: lista para o usuário escolher
+            lista_opcoes = []
+            for i, c in enumerate(clusters_candidatos[:5], 1):
+                lista_opcoes.append(f"{i}. [ID {c['id']}] {c['titulo']} (Tag: {c['tag']}, Prioridade: {c['prioridade']})")
+            
+            return AgentAnswer(False, f"❌ Encontrei {len(clusters_candidatos)} notícias similares. Seja mais específico ou use o ID:\n\n" + "\n".join(lista_opcoes))
+        
+        # ETAPA 4: Cluster único encontrado - executa alteração
+        cluster = clusters_candidatos[0]
+        cluster_id = cluster['id']
+        
+        # Detecta o tipo de alteração desejada
+        if any(word in q for word in ["tag", "categoria", "classificada", "classificar"]):
+            # Alteração de TAG
+            nova_tag = self._extract_target_tag(question, q)
+            if not nova_tag:
+                print("[Estagiario] Edit: tag não encontrada na frase, pedindo LLM para escolher a tag canônica...")
+                nova_tag = self._llm_choose_tag(db, cluster_id)
+                if not nova_tag:
+                    return AgentAnswer(False, f"❌ Não consegui identificar para qual tag alterar. Notícia encontrada: [ID {cluster_id}] {cluster['titulo']}")
+            return self._update_cluster_tag(db, cluster_id, nova_tag, question, cluster['titulo'])
+            
+        elif any(word in q for word in ["prioridade", "p1", "p2", "p3"]):
+            # Alteração de PRIORIDADE
+            nova_prioridade = self._extract_target_priority(q)
+            if not nova_prioridade:
+                print("[Estagiario] Edit: prioridade não encontrada na frase, pedindo LLM para escolher...")
+                nova_prioridade = self._llm_choose_priority(db, cluster_id)
+                if not nova_prioridade:
+                    return AgentAnswer(False, f"❌ Não consegui identificar para qual prioridade alterar. Notícia encontrada: [ID {cluster_id}] {cluster['titulo']}")
+            ok = update_cluster_priority(db, cluster_id, nova_prioridade, motivo=f"Estagiario: ajuste solicitado '{question}'")
+            if ok:
+                return AgentAnswer(True, f"✅ Prioridade atualizada para {nova_prioridade}!\n\n📰 Notícia: [ID {cluster_id}] {cluster['titulo']}")
+            else:
+                return AgentAnswer(False, f"❌ Falha ao atualizar prioridade da notícia [ID {cluster_id}] {cluster['titulo']}")
+        
+        return AgentAnswer(False, f"❌ Comando de edição não reconhecido. Notícia encontrada: [ID {cluster_id}] {cluster['titulo']}\n\nEspecifique se quer alterar 'tag' ou 'prioridade'.")
+
+    def _find_clusters_by_partial_title(self, db, titulo_busca: str, target_date: datetime.date, limit: int = 5) -> List[Dict[str, Any]]:
+        """Busca clusters por título parcial usando LIKE."""
+        try:
+            from sqlalchemy import func, and_
+            # Normaliza busca
+            titulo_busca_norm = titulo_busca.lower().strip()
+            
+            clusters = db.query(ClusterEvento).filter(
+                and_(
+                    func.date(ClusterEvento.created_at) == target_date,
+                    ClusterEvento.status == 'ativo',
+                    func.lower(ClusterEvento.titulo_cluster).like(f'%{titulo_busca_norm}%')
+                )
+            ).limit(limit).all()
+            
+            resultado = []
+            for c in clusters:
+                resultado.append({
+                    'id': c.id,
+                    'titulo': c.titulo_cluster,
+                    'tag': c.tag,
+                    'prioridade': c.prioridade
+                })
+            
+            print(f"[Estagiario] Busca por '{titulo_busca}' encontrou {len(resultado)} clusters")
+            return resultado
+            
+        except Exception as e:
+            print(f"[Estagiario] Erro na busca por título: {e}")
+            return []
+
+    def _extract_target_tag(self, question: str, q: str) -> Optional[str]:
+        """Extrai a tag de destino da pergunta."""
+        # Mapeia termos comuns para tags canônicas
+        tag_aliases = {
+            "divida ativa": "Dívida Ativa e Créditos Públicos",
+            "dívida ativa": "Dívida Ativa e Créditos Públicos", 
+            "creditos publicos": "Dívida Ativa e Créditos Públicos",
+            "créditos públicos": "Dívida Ativa e Créditos Públicos",
+            "cda": "Dívida Ativa e Créditos Públicos",
+            "m&a": "M&A e Transações Corporativas",
+            "ma": "M&A e Transações Corporativas",
+            "transacoes": "M&A e Transações Corporativas",
+            "transações": "M&A e Transações Corporativas",
+            "juridico": "Jurídico, Falências e Regulatório",
+            "jurídico": "Jurídico, Falências e Regulatório",
+            "falencias": "Jurídico, Falências e Regulatório",
+            "falências": "Jurídico, Falências e Regulatório",
+            "regulatorio": "Jurídico, Falências e Regulatório",
+            "regulatório": "Jurídico, Falências e Regulatório",
+            "mercado de capitais": "Mercado de Capitais e Ofertas Públicas",
+            "ofertas publicas": "Mercado de Capitais e Ofertas Públicas",
+            "ofertas públicas": "Mercado de Capitais e Ofertas Públicas",
+            "internacional": "Política Econômica e Internacional",
+            "politica economica": "Política Econômica e Internacional",
+            "política econômica": "Política Econômica e Internacional",
+            "tecnologia": "Tecnologia e Setores Estratégicos",
+            "setores estrategicos": "Tecnologia e Setores Estratégicos",
+            "setores estratégicos": "Tecnologia e Setores Estratégicos",
+            "distressed": "Distressed Assets e NPLs",
+            "npls": "Distressed Assets e NPLs"
+        }
+        
+        # Busca por padrões de destino
+        import re
+        # 1) Após "para" com aspas (aceita curvas)
+        m = re.search(r'para\s*["\'“”]([^"\'“”]+)["\'“”]', q, re.IGNORECASE)
+        if m:
+            tag_candidata = m.group(1).strip()
+            low = tag_candidata.lower()
+            if low in tag_aliases:
+                return tag_aliases[low]
+            return tag_candidata
+        # 2) Último bloco entre aspas pode ser a TAG
+        quoted = re.findall(r'["\'“”]([^"\'“”]+)["\'“”]', question)
+        if quoted:
+            possivel = quoted[-1].strip()
+            return possivel
+        # 3) Padrões sem aspas
+        m = re.search(r'(?:mude|altere|troque).*?para\s+(.+)$', q, re.IGNORECASE)
+        if m:
+            return m.group(1).strip()
+        
+        return None
+
+    def _extract_target_priority(self, q: str) -> Optional[str]:
+        """Extrai a prioridade de destino da pergunta."""
+        import re
+        patterns = [
+            r'para\s+(p1|p2|p3|irrelevante)',
+            r'prioridade\s+(p1|p2|p3|irrelevante)',
+            r'(p1|p2|p3|irrelevante)'
+        ]
+        
+        for pattern in patterns:
+            m = re.search(pattern, q, re.IGNORECASE)
+            if m:
+                alvo = m.group(1).upper()
+                mapa = {"P1": "P1_CRITICO", "P2": "P2_ESTRATEGICO", "P3": "P3_MONITORAMENTO", "IRRELEVANTE": "IRRELEVANTE"}
+                return mapa.get(alvo)
+        
+        return None
+
+    def _llm_choose_priority(self, db, cluster_id: int) -> Optional[str]:
+        """Decide a PRIORIDADE via LLM (P1_CRITICO, P2_ESTRATEGICO, P3_MONITORAMENTO, IRRELEVANTE)."""
+        if not self.model:
+            return None
+        try:
+            niveis = self.prioridades_permitidas
+            from backend.crud import get_cluster_details_by_id
+            ctx = get_cluster_details_by_id(db, cluster_id) or {}
+            titulo = ctx.get('titulo_final') or ctx.get('titulo') or ''
+            resumo = ctx.get('resumo_final') or ctx.get('resumo') or ''
+            instr = (
+                "Classifique a PRIORIDADE do cluster em UMA das seguintes: 'P1_CRITICO','P2_ESTRATEGICO','P3_MONITORAMENTO','IRRELEVANTE'. "
+                "Responda APENAS com JSON no formato {\"prioridade\": \"<nivel>\"}. Não explique.\n\n"
+                f"Titulo: {titulo}\n"
+                f"Resumo: {resumo}\n"
+            )
+            resp = self.model.generate_content(instr, generation_config={'temperature': 0.1, 'max_output_tokens': 128})
+            raw = (resp.text or '').strip()
+            import json, re
+            if raw.startswith('```'):
+                raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip(), flags=re.IGNORECASE)
+            try:
+                data = json.loads(raw)
+            except Exception:
+                m = re.search(r"\{[\s\S]*\}", raw)
+                data = json.loads(m.group(0)) if m else {}
+            pr = data.get('prioridade') if isinstance(data, dict) else None
+            if pr in niveis:
+                return pr
+            return None
+        except Exception as e:
+            print(f"[Estagiario] Falha no LLM escolha de prioridade: {e}")
+            return None
+
+    def _update_cluster_tag(self, db, cluster_id: int, nova_tag: str, question: str, titulo_cluster: str = None) -> AgentAnswer:
+        """Atualiza tag de um cluster com validação."""
+        # Valida contra catálogo
+        tag_valida = None
+        catalogo = self._catalogo_tags(db)
+        for tag_oficial in catalogo:
+            if nova_tag.lower() == tag_oficial.lower():
+                tag_valida = tag_oficial
+                break
+        
+        if not tag_valida:
+            # Busca match parcial
+            for tag_oficial in catalogo:
+                if nova_tag.lower() in tag_oficial.lower() or tag_oficial.lower() in nova_tag.lower():
+                    tag_valida = tag_oficial
+                    break
+        
+        if not tag_valida:
+            tags_disponiveis = "', '".join(catalogo)
+            return AgentAnswer(False, f"❌ Tag '{nova_tag}' não reconhecida.\n\nTags disponíveis: '{tags_disponiveis}'")
+        
+        from backend.crud import update_cluster_tags
+        ok = update_cluster_tags(db, cluster_id, [tag_valida], motivo=f"Estagiario: ajuste solicitado '{question}'")
+        
+        if ok:
+            cluster_info = f"[ID {cluster_id}]" + (f" {titulo_cluster}" if titulo_cluster else "")
+            return AgentAnswer(True, f"✅ Tag atualizada para '{tag_valida}'!\n\n📰 Notícia: {cluster_info}")
+        else:
+            return AgentAnswer(False, f"❌ Falha ao atualizar tag da notícia [ID {cluster_id}]")
+
     def answer_with_context(self, question: str, chat_history: List[Dict[str, Any]], date_str: Optional[str] = None) -> AgentAnswer:
         """
         Responde perguntas mantendo o contexto da conversa anterior.
@@ -416,6 +1089,75 @@ class EstagiarioAgent:
 
             q = (question or "").lower()
 
+            # Roteamento ADMIN (CONSULTA DE TAGS): perguntas como "quais são as tags disponíveis" vão direto ao banco
+            if (any(k in q for k in ["tag", "tags"]) and any(k in q for k in ["disponiveis", "disponíveis", "lista", "listagem", "todas"])) or (
+                any(k in q for k in ["tag", "tags"]) and any(k in q for k in ["exemplo", "exemplos"]) and ("banco" in q or "catálogo" in q or "catalogo" in q or "disponiveis" in q or "disponíveis" in q or "site" in q or "tabela" in q)
+            ):
+                try:
+                    from backend.crud import get_prompts_compilados
+                    comp = get_prompts_compilados(db)
+                    tags_payload = comp.get("tags") or {}
+                    # Normaliza em linhas (nome, descricao, exemplos)
+                    rows = []
+                    if isinstance(tags_payload, dict):
+                        for nome, meta in tags_payload.items():
+                            try:
+                                desc = (meta.get("descricao") or "").strip()
+                                exemplos = meta.get("exemplos") or []
+                            except AttributeError:
+                                desc = ""
+                                exemplos = []
+                            rows.append((nome, desc, exemplos))
+                    elif isinstance(tags_payload, list):
+                        for t in tags_payload:
+                            if isinstance(t, dict):
+                                nome = t.get("nome") or t.get("tag") or "(sem nome)"
+                                desc = (t.get("descricao") or "").strip()
+                                exemplos = t.get("exemplos") or []
+                                rows.append((nome, desc, exemplos))
+                    if not rows:
+                        return AgentAnswer(True, "Nenhuma tag configurada no banco.")
+                    # Renderiza em Markdown (tabela)
+                    def esc(s: str) -> str:
+                        return str(s).replace("|", "\\|")
+                    linhas = [
+                        "### Tags (catálogo do banco)",
+                        "",
+                        "| Tag | Descrição | Exemplos |",
+                        "|---|---|---|",
+                    ]
+                    for nome, desc, exemplos in rows:
+                        ex_list = exemplos if isinstance(exemplos, list) else []
+                        exemplos_txt = "; ".join([str(e) for e in ex_list[:8]])
+                        linhas.append(f"| {esc(nome)} | {esc(desc)} | {esc(exemplos_txt)} |")
+                    return AgentAnswer(True, "\n".join(linhas), {"tags": tags_payload})
+                except Exception as e:
+                    print(f"[Estagiario] Falha ao consultar tags do banco: {e}")
+                    return AgentAnswer(False, "Falha ao consultar tags do banco.")
+
+            if ("prioridade" in q or "prioridades" in q) and ("exemplo" in q or "exemplos" in q or "itens" in q):
+                try:
+                    from backend.crud import get_prompts_compilados
+                    comp = get_prompts_compilados(db)
+                    p1 = comp.get("p1", [])
+                    p2 = comp.get("p2", [])
+                    p3 = comp.get("p3", [])
+                    linhas = ["### Prioridades (catalogo do banco)"]
+                    def render(nivel: str, itens):
+                        linhas.append(f"- **{nivel}**:")
+                        if itens:
+                            for it in itens[:20]:
+                                linhas.append(f"  - {it}")
+                        else:
+                            linhas.append("  - (sem itens)")
+                    render("P1_CRITICO", p1)
+                    render("P2_ESTRATEGICO", p2)
+                    render("P3_MONITORAMENTO", p3)
+                    return AgentAnswer(True, "\n".join(linhas), {"p1": p1, "p2": p2, "p3": p3})
+                except Exception as e:
+                    print(f"[Estagiario] Falha ao consultar prioridades do banco: {e}")
+                    return AgentAnswer(False, "Falha ao consultar prioridades do banco.")
+
             # Executor ReAct (opcional por flag) para casos genéricos
             if os.getenv("ESTAGIARIO_REACT") == "1":
                 try:
@@ -429,48 +1171,195 @@ class EstagiarioAgent:
                     print(f"[Estagiario] Falha executor ReAct: {e}")
                     # cai para heurística abaixo
 
-            # Caso: comandos de edição (seguros e sempre unitários)
-            if q.startswith("atualize ") or q.startswith("troque ") or q.startswith("mude ") or q.startswith("merge ") or q.startswith("unir ") or q.startswith("unifica "):
-                print("[Estagiario] Caso: comando de edição")
-                import re
-                # update prioridade: "atualize prioridade do cluster 123 para p2"
-                m = re.search(r"prioridade.*cluster\s+(\d+)\s+para\s+(p1|p2|p3|irrelevante)", q)
-                if m:
-                    cluster_id = int(m.group(1))
-                    alvo = m.group(2).upper()
-                    mapa = {"P1": "P1_CRITICO", "P2": "P2_ESTRATEGICO", "P3": "P3_MONITORAMENTO", "IRRELEVANTE": "IRRELEVANTE"}
-                    nova_pr = mapa.get(alvo)
-                    if nova_pr and nova_pr in self.prioridades_permitidas:
-                        from backend.crud import update_cluster_priority
-                        ok = update_cluster_priority(db, cluster_id, nova_pr, motivo=f"Estagiario: ajuste solicitado '{question}'")
-                        return AgentAnswer(bool(ok), ("✅ Prioridade atualizada." if ok else "Falha ao atualizar prioridade."))
-                    return AgentAnswer(False, "Prioridade não permitida.")
-
-                # update tag: "troque a tag do cluster 456 para Internacional"
-                m = re.search(r"tag.*cluster\s+(\d+)\s+para\s+([\wãáàâêíçõéú-]+)", q)
-                if m:
-                    cluster_id = int(m.group(1))
-                    tag = m.group(2)
-                    # valida contra catálogo
-                    if any(tag.lower() == t.lower() for t in self.tags_permitidas):
-                        from backend.crud import update_cluster_tags
-                        ok = update_cluster_tags(db, cluster_id, [tag], motivo=f"Estagiario: ajuste solicitado '{question}'")
-                        return AgentAnswer(bool(ok), ("✅ Tag atualizada." if ok else "Falha ao atualizar tag."))
-                    return AgentAnswer(False, "Tag não permitida.")
-
-                # merge: "merge o cluster 111 no 222" (sempre unitário; nunca múltiplos)
-                m = re.search(r"merge.*cluster\s+(\d+)\s+no\s+(\d+)", q)
-                if m:
-                    origem = int(m.group(1))
-                    destino = int(m.group(2))
-                    if origem == destino:
-                        return AgentAnswer(False, "IDs de origem e destino iguais.")
-                    from backend.crud import merge_clusters
-                    res = merge_clusters(db, destino_id=destino, fontes_ids=[origem], motivo=f"Estagiario: merge solicitado '{question}'")
-                    # não reescreve título/tag/prioridade por padrão; mantém destino como autoridade
-                    return AgentAnswer(True, f"✅ Merge efetuado. Artigos movidos: {res.get('artigos_movidos',0)}; Clusters encerrados: {res.get('clusters_descartados',0)}.")
-
-                return AgentAnswer(False, "Comando de edição não reconhecido. Exemplos: 'atualize prioridade do cluster 123 para p2', 'troque a tag do cluster 456 para Internacional', 'merge o cluster 111 no 222'.")
+            # ROTEAMENTO DE INTENÇÃO: Detecta comandos de edição/alteração
+            edit_triggers = ["atualize", "troque", "mude", "altere", "corrija", "modifique", "merge", "unir", "unifica", "classificada", "foi classificada", "tag errada", "prioridade errada"]
+            is_edit_command = any(trigger in q for trigger in edit_triggers)
+            
+            if is_edit_command:
+                print("[Estagiario] Detectado: comando de edição/alteração")
+                # Primeiro tenta entender via LLM a operação desejada (camada agentica)
+                spec = self._llm_understand_edit(question)
+                if not spec:
+                    # Fallback robusto quando LLM não devolve JSON válido
+                    spec = self._fallback_understand_edit(question)
+                if not spec:
+                    # Nova estratégia: extrair possíveis entidades (título não fornecido) a partir de keywords e deixar o LLM escolher direto
+                    kws = self._extract_keywords_simple(question)
+                    print(f"[Estagiario] Edit: nenhum spec; tentando keywords={kws}")
+                    universo = self._fetch_clusters(db, target_date, priority=None)
+                    candidatos = []
+                    for it in universo:
+                        blob = ((it.get('titulo_final') or '') + '\n' + (it.get('resumo_final') or '')).lower()
+                        if all(k in blob for k in kws):
+                            candidatos.append({'id': it.get('id'), 'titulo': it.get('titulo_final')})
+                    if candidatos:
+                        ids = self._llm_pick_best_by_title(" ".join(kws), candidatos)
+                        if ids:
+                            # Assume update_tag se 'tag' na pergunta, senão update_priority se 'p1/p2/p3/prioridade'
+                            op_guess = 'update_tag' if 'tag' in q or 'categoria' in q else ('update_priority' if any(x in q for x in ['p1','p2','p3','prioridade']) else 'update_tag')
+                            spec = {'operation': op_guess, 'cluster_id': ids[0], 'cluster_title': None, 'new_tag': None, 'new_priority': None}
+                if spec:
+                    # Se veio cluster_id, tenta aplicar direto; senão, usa cluster_title parcial para buscar
+                    op = spec.get('operation')
+                    cid = spec.get('cluster_id')
+                    ctitle = spec.get('cluster_title')
+                    new_tag = spec.get('new_tag')
+                    new_pr = spec.get('new_priority')
+                    cand: List[Dict[str, Any]] = []
+                    apply_all = ('todas' in q) or ('todos' in q)
+                    if cid:
+                        if op == 'update_tag':
+                            # Resolve tag com múltiplas tentativas (explícita → contexto → frase), respeitando budget de iterações
+                            tag_escolhida = self._resolve_tag_canonically(db, question, int(cid), new_tag)
+                            if not tag_escolhida:
+                                return AgentAnswer(False, f"❌ Não consegui determinar a tag correta para o cluster [ID {cid}].")
+                            return self._update_cluster_tag(db, int(cid), tag_escolhida, question)
+                        if op == 'update_priority':
+                            pr_escolhida = self._resolve_priority(db, question, int(cid), new_pr)
+                            if not pr_escolhida:
+                                return AgentAnswer(False, f"❌ Não consegui determinar a prioridade correta para o cluster [ID {cid}].")
+                            ok = update_cluster_priority(db, int(cid), pr_escolhida, motivo=f"Estagiario: ajuste solicitado '{question}'")
+                            return AgentAnswer(bool(ok), (f"✅ Prioridade atualizada para {pr_escolhida}." if ok else "Falha ao atualizar prioridade."))
+                    # Sem ID: tenta busca por título parcial ou por keywords/LLM search spec
+                    if ctitle:
+                        cand = self._find_clusters_by_partial_title(db, ctitle, target_date)
+                        if not cand:
+                            # Tenta buscar por palavras-chave do ctitle
+                            filtros = self._llm_generate_search_spec(ctitle)
+                            kws = (filtros.get('keywords') if filtros else None) or self._extract_keywords_simple(ctitle)
+                            prios = (filtros.get('priorities') if filtros else []) if filtros else []
+                            tgs = (filtros.get('tags') if filtros else []) if filtros else []
+                            print(f"[Estagiario] Busca por LLM-spec: prios={prios} tags={tgs} keywords={kws}")
+                            universo: List[Dict[str, Any]] = []
+                            if prios:
+                                for p in prios:
+                                    universo.extend(self._fetch_clusters(db, target_date, priority=p))
+                            else:
+                                universo = self._fetch_clusters(db, target_date, priority=None)
+                            # Filtra por tags se houver
+                            if tgs:
+                                tgset = set([t.lower() for t in tgs])
+                                universo = [u for u in universo if (u.get('tag') or '').lower() in tgset]
+                            # Candidatos por keywords (qualquer match)
+                            candidatos = []
+                            for it in universo:
+                                blob = ((it.get('titulo_final') or '') + '\n' + (it.get('resumo_final') or '')).lower()
+                                if any(k.lower() in blob for k in kws):
+                                    candidatos.append({'id': it.get('id'), 'titulo': it.get('titulo_final')})
+                            print(f"[Estagiario] Candidatos por keywords: {len(candidatos)}")
+                            if candidatos:
+                                ids = self._llm_pick_best_by_title(ctitle, candidatos)
+                                if ids:
+                                    cand = [{'id': i, 'titulo': next((c['titulo'] for c in candidatos if c['id']==i), '')} for i in ids]
+                            if not cand:
+                                return AgentAnswer(False, f"❌ Não encontrei notícia com título similar a: '{ctitle}'")
+                    else:
+                        # Sem título nem ID: pede SPEC ao LLM e monta busca dinâmica
+                        filtros = self._llm_generate_search_spec(question)
+                        kws = (filtros.get('keywords') if filtros else None) or self._extract_keywords_simple(question)
+                        prios = (filtros.get('priorities') if filtros else []) if filtros else []
+                        tgs = (filtros.get('tags') if filtros else []) if filtros else []
+                        print(f"[Estagiario] Edit: sem título; buscando por prios={prios} tags={tgs} keywords={kws}")
+                        universo: List[Dict[str, Any]] = []
+                        if prios:
+                            for p in prios:
+                                universo.extend(self._fetch_clusters(db, target_date, priority=p))
+                        else:
+                            universo = self._fetch_clusters(db, target_date, priority=None)
+                        if tgs:
+                            tgset = set([t.lower() for t in tgs])
+                            universo = [u for u in universo if (u.get('tag') or '').lower() in tgset]
+                        candidatos = []
+                        for it in universo:
+                            blob = ((it.get('titulo_final') or '') + '\n' + (it.get('resumo_final') or '')).lower()
+                            if any(k.lower() in blob for k in kws):
+                                candidatos.append({'id': it.get('id'), 'titulo': it.get('titulo_final')})
+                        print(f"[Estagiario] Candidatos por keywords (sem título): {len(candidatos)}")
+                        if candidatos:
+                            ids = self._llm_pick_best_by_title(' '.join(kws), candidatos)
+                            if ids:
+                                cand = [{'id': i, 'titulo': next((c['titulo'] for c in candidatos if c['id']==i), '')} for i in ids]
+                        if not cand:
+                            return AgentAnswer(False, "❌ Não consegui localizar a notícia a partir da descrição. Tente incluir um trecho do título entre aspas.")
+                        if len(cand) > 1 and self.model:
+                            # Usa LLM para escolher o melhor candidato com base no título solicitado
+                            instr = (
+                                "Escolha o MELHOR MATCH pelo título solicitado. Responda APENAS com JSON do tipo {\"id\": <id>}\n\n"
+                                f"Título alvo: {ctitle}\n"
+                                f"Candidatos: {[{'id': c['id'], 'titulo': c['titulo']} for c in cand]}\n"
+                            )
+                            print("[Estagiario] LLM pick-best-candidate: solicitando JSON...")
+                            r = self.model.generate_content(instr, generation_config={'temperature': 0.1, 'max_output_tokens': 64})
+                            raw = (r.text or '').strip()
+                            print(f"[Estagiario] LLM pick-best-candidate (raw): {raw[:300]}")
+                            import json, re
+                            if raw.startswith('```'):
+                                raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip(), flags=re.IGNORECASE)
+                            escolha_id = None
+                            escolha_ids: List[int] = []
+                            try:
+                                data = json.loads(raw)
+                                if isinstance(data.get('ids'), list):
+                                    for x in data.get('ids'):
+                                        try:
+                                            escolha_ids.append(int(x))
+                                        except Exception:
+                                            pass
+                                escolha_id = int(data.get('id')) if isinstance(data.get('id'), (int, str)) else None
+                            except Exception:
+                                m = re.search(r"\d+", raw)
+                                escolha_id = int(m.group(0)) if m else None
+                            if apply_all and escolha_ids:
+                                keep = set([i for i in escolha_ids if any(c['id']==i for c in cand)])
+                                if keep:
+                                    cand = [c for c in cand if c['id'] in keep]
+                            elif escolha_id and any(c['id'] == escolha_id for c in cand):
+                                cand = [c for c in cand if c['id'] == escolha_id]
+                            else:
+                                cand = [cand[0]]
+                        # prossegue com único
+                        targets = cand if apply_all and len(cand) > 1 else [cand[0]]
+                        print("[Estagiario] Edit: alvos escolhidos:", 
+                              ", ".join([f"[ID {t['id']}] {t.get('titulo')}" for t in targets]))
+                        if op == 'update_tag':
+                            aplicados = []
+                            for t in targets:
+                                tag_escolhida = self._resolve_tag_canonically(db, question, t['id'], new_tag)
+                                if not tag_escolhida:
+                                    continue
+                                res = self._update_cluster_tag(db, t['id'], tag_escolhida, question, t.get('titulo'))
+                                try:
+                                    det = get_cluster_details_by_id(db, t['id'])
+                                    print(f"[Estagiario] DB confirm tag: [ID {t['id']}] tag={det.get('tag')} prio={det.get('prioridade')}")
+                                except Exception:
+                                    pass
+                                if res and res.ok:
+                                    aplicados.append((t['id'], t.get('titulo'), tag_escolhida))
+                            if aplicados:
+                                linhas = [f"✅ Tag '{tg}' aplicada em [ID {cid}] {ttl}" for cid, ttl, tg in aplicados]
+                                return AgentAnswer(True, "\n".join(linhas))
+                            return AgentAnswer(False, "❌ Não foi possível aplicar a tag nos alvos escolhidos.")
+                        if op == 'update_priority':
+                            aplicados = []
+                            for t in targets:
+                                pr_escolhida = self._resolve_priority(db, question, t['id'], new_pr)
+                                if not pr_escolhida:
+                                    continue
+                                ok = update_cluster_priority(db, t['id'], pr_escolhida, motivo=f"Estagiario: ajuste solicitado '{question}'")
+                                try:
+                                    det = get_cluster_details_by_id(db, t['id'])
+                                    print(f"[Estagiario] DB confirm prio: [ID {t['id']}] tag={det.get('tag')} prio={det.get('prioridade')}")
+                                except Exception:
+                                    pass
+                                if ok:
+                                    aplicados.append((t['id'], t.get('titulo'), pr_escolhida))
+                            if aplicados:
+                                linhas = [f"✅ Prioridade '{pr}' aplicada em [ID {cid}] {ttl}" for cid, ttl, pr in aplicados]
+                                return AgentAnswer(True, "\n".join(linhas))
+                            return AgentAnswer(False, "❌ Não foi possível aplicar a prioridade nos alvos escolhidos.")
+                    # Se LLM entendeu 'merge', manter fluxo manual por segurança
+                # Fallback: heurística atual
+                return self._handle_edit_command(db, question, q, target_date)
 
             # Caso 1: contagem de IRRELEVANTES
             if "irrelevante" in q and ("quantas" in q or "liste" in q or "conta" in q):
@@ -603,25 +1492,27 @@ class EstagiarioAgent:
 
             # Caso 4: busca genérica com plano (inferir filtros → filtrar → ranquear → aprofundar → síntese Markdown)
             try:
-                print("[Estagiario] Caso: busca genérica por palavras-chave (com plano)")
-                filtros = self._infer_filters(q)
+                print("[Estagiario] Caso: busca genérica (plano via LLM → execução)")
+                # Pede ao LLM um plano de busca (prioridades/tags/keywords) e usa como primeira camada
+                filtros = self._llm_generate_search_spec(question) or self._infer_filters(q)
                 # Coleta priorizada por prioridades inferidas ou ALL
                 candidatos: List[Dict[str, Any]] = []
-                if filtros["priorities"]:
-                    for p in filtros["priorities"]:
+                if filtros.get("priorities"):
+                    for p in filtros.get("priorities"):
                         candidatos.extend(self._fetch_clusters(db, target_date, priority=p))
                 else:
                     candidatos = self._fetch_clusters(db, target_date, priority=None)
                 print(f"[Estagiario] Candidatos (pré-tag): {len(candidatos)}")
                 # Filtra por tags inferidas (se houver)
-                if filtros["tags"]:
-                    candidatos = [c for c in candidatos if any(tg in (c.get("tag") or '').lower() for tg in filtros["tags"]) ]
+                if filtros.get("tags"):
+                    tgset = set([t.lower() for t in filtros.get("tags")])
+                    candidatos = [c for c in candidatos if (c.get("tag") or '').lower() in tgset]
                 print(f"[Estagiario] Após filtro de tags: {len(candidatos)}")
                 # Opcional: filtragem leve por keyword (evita perder muito recall)
-                if filtros["keywords"] and len(candidatos) > 160:
+                if filtros.get("keywords") and len(candidatos) > 160:
                     def contains_kw(c):
                         L = ((c.get("titulo_final") or "") + "\n" + (c.get("resumo_final") or "")).lower()
-                        return any(k in L for k in filtros["keywords"])
+                        return any(k.lower() in L for k in filtros.get("keywords"))
                     candidatos = [c for c in candidatos if contains_kw(c)]
                     print(f"[Estagiario] Após filtro leve de keywords: {len(candidatos)}")
                 if not candidatos:

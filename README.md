@@ -80,6 +80,20 @@ graph TD
 - Priorização executiva (pós-pipeline): `PROMPT_PRIORIZACAO_EXECUTIVA_V1`.
 - Consolidação final de clusters (Etapa 4): `PROMPT_CONSOLIDACAO_CLUSTERS_V1`.
 
+### Agente Estagiário: plano → execução (agentic)
+- O agente agora opera com camadas LLM para planejar e executar:
+  1. Entender intenção (consultar notícias, ADMIN, ou EDIÇÃO no DB)
+  2. Se EDIÇÃO (trocar tag/prioridade):
+     - Entende operação via LLM (JSON: operation/cluster_id/cluster_title/new_tag/new_priority)
+     - Se não houver `new_tag`/`new_priority`, consulta o LLM com o CATÁLOGO do banco e o contexto do cluster para decidir a tag/prioridade corretas
+     - Resolve o cluster por ID ou título parcial do dia e aplica via CRUD
+  3. Se CONSULTA (ex.: “quero trocar de carro para um elétrico, tem promoção?”):
+     - Pede ao LLM um SPEC JSON de busca (priorities/tags/keywords)
+     - Coleta candidatos do DB, triagem via LLM, aprofunda top-K e sintetiza resposta
+
+Endpoints do agente
+- `POST /api/estagiario/start`, `POST /api/estagiario/send`, `GET /api/estagiario/messages/{session_id}`
+
 Prompts opcionais/POC (não usados no pipeline padrão):
 - `PROMPT_RESUMO_CRITICO_V1` (POC de resumo crítico)
 - `PROMPT_RADAR_MONITORAMENTO_V1` (POC de bullets de radar P3)

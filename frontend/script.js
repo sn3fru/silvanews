@@ -2632,19 +2632,56 @@ function inserirCardEstagiario() {
             throw error;
         }
     }
-    // Renderização simples de Markdown (títulos, negrito, itálico, listas, links)
+    // Renderização simples de Markdown (títulos, negrito, itálico, listas, links, TABELAS)
     function renderMarkdown(mdRaw) {
-        let html = (mdRaw || '').toString();
-        // Escapes básicos não implementados (texto vem do nosso backend)
+        let md = (mdRaw || '').toString();
+        // Converte tabelas Markdown (| a | b |) em <table>
+        (function convertTables(){
+            const lines = md.split('\n');
+            let out = [];
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                if (/^\|.*\|\s*$/.test(line)) {
+                    // possível início de tabela: precisa ter separador na próxima linha
+                    const sep = lines[i+1] || '';
+                    if (/^\|[\s:\-\|]+\|\s*$/.test(sep)) {
+                        // coleta bloco da tabela
+                        const tblLines = [];
+                        tblLines.push(line);
+                        tblLines.push(sep);
+                        let j = i + 2;
+                        while (j < lines.length && /^\|.*\|\s*$/.test(lines[j])) { tblLines.push(lines[j]); j++; }
+                        i = j - 1; // avança o índice externo
+                        const headerCells = tblLines[0].trim().replace(/^\||\|$/g, '').split('|').map(s => s.trim());
+                        const bodyLines = tblLines.slice(2);
+                        const bodyRows = bodyLines.map(r => r.trim().replace(/^\||\|$/g, '').split('|').map(s => s.trim()));
+                        let tableHtml = '<table class="md-table"><thead><tr>';
+                        for (const h of headerCells) tableHtml += `<th>${h}<\/th>`;
+                        tableHtml += '<\/tr><\/thead><tbody>';
+                        for (const row of bodyRows) {
+                            if (row.length === 1 && row[0] === '') continue;
+                            tableHtml += '<tr>' + row.map(c => `<td>${c}<\/td>`).join('') + '<\/tr>';
+                        }
+                        tableHtml += '<\/tbody><\/table>';
+                        out.push(tableHtml);
+                        continue;
+                    }
+                }
+                out.push(line);
+            }
+            md = out.join('\n');
+        })();
+
+        let html = md;
         // Títulos
         html = html
-            .replace(/^###\s+(.*)$/gim, '<h3>$1</h3>')
-            .replace(/^##\s+(.*)$/gim, '<h2>$1</h2>')
-            .replace(/^#\s+(.*)$/gim, '<h1>$1</h1>');
+            .replace(/^###\s+(.*)$/gim, '<h3>$1<\/h3>')
+            .replace(/^##\s+(.*)$/gim, '<h2>$1<\/h2>')
+            .replace(/^#\s+(.*)$/gim, '<h1>$1<\/h1>');
         // Negrito e itálico
         html = html
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>');
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1<\/strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1<\/em>');
         // Links [texto](url)
         html = html.replace(/\[(.*?)\]\((https?:\/\/[^\s)]+)\)/gim, '<a href="$2" target="_blank" rel="noopener noreferrer">$1<\/a>');
         // Listas com "- "
@@ -2657,7 +2694,9 @@ function inserirCardEstagiario() {
             const items = m.split(/\n/g).map(l => l.replace(/^\d+\.\s+/, '')).map(t => `<li>${t}<\/li>`).join('');
             return `<ol>${items}<\/ol>`;
         });
-        // Quebras de parágrafo: linhas vazias viram espaçamento, linhas simples mantêm coerência
+        // Quebras de parágrafo: cuidado para não quebrar a <table>
+        // Remove quebras dentro de <table> para não inserir <br/>
+        html = html.replace(/<table[\s\S]*?<\/table>/g, (tbl) => tbl.replace(/\n/g, ''));
         html = html
             .replace(/\n{2,}/g, '<br/><br/>')
             .replace(/\n/g, '<br/>' );

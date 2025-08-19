@@ -1346,11 +1346,12 @@ def get_prompts_compilados(db: Session) -> Dict[str, Any]:
     p3: List[str] = []
     for r in pr_rows:
         n = (r.nivel or '').upper()
-        if n == 'P1_CRITICO':
+        # Aceita tanto rótulos curtos (P1/P2/P3) quanto nomes completos
+        if n in ('P1', 'P1_CRITICO', 'P1-CRITICO'):
             p1.append(r.texto)
-        elif n == 'P2_ESTRATEGICO':
+        elif n in ('P2', 'P2_ESTRATEGICO', 'P2-ESTRATEGICO', 'P2_ESTRATÉGICO'):
             p2.append(r.texto)
-        elif n == 'P3_MONITORAMENTO':
+        elif n in ('P3', 'P3_MONITORAMENTO', 'P3-MONITORAMENTO'):
             p3.append(r.texto)
 
     return {
