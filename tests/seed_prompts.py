@@ -8,6 +8,7 @@ os dados padrão que estavam hardcoded no arquivo prompts.py.
 import os
 import sys
 from datetime import datetime, timezone
+import argparse
 
 # Adiciona o diretório atual ao path para importar os módulos
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -37,13 +38,13 @@ TAGS_SPECIAL_SITUATIONS_ORIGINAL = {
     },
     'Dívida Ativa e Créditos Públicos': {
         'descricao': 'Oportunidades de aquisição ou securitização de créditos detidos por ou contra entidades públicas.',
-        'exemplos': [
-            'Venda de grandes blocos ou securitização de Dívida Ativa por estados e municípios',
-            'Qualquer noticia relacionada a lei nº 208, de 2 de julho de 2024 que regula a securitização da divida dos entes publicos, estados e municipios',
-            'Crédito Tributário (grandes teses, oportunidades de monetização)',
-            'Notícias sobre a liquidação ou venda de carteiras de Precatórios',
-            'AlteraçÕes nas leis de cobrança de impostos municipais ou estaduais (especialmente ICMS, ISS E IPTU)',
-            'Créditos FCVS (apenas notícias sobre liquidação ou venda de grandes volumes)'
+        "exemplos": [
+            "Qualquer noticia relacionada a divida ativa de Estado, Município ou mesmo da União",
+            "Qualquer noticia relacionada a lei complementar nº 208, de 2 de julho de 2024 que regula a securitização da divida dos entes publicos, estados e municipios",
+            "Qualquer notícia relacionada a matéria tributária, ou à cobrança de impostos, taxas, que afetem a arrecadação, especialmente sobre divida ativa",
+            "Notícias sobre a liquidação ou venda de carteiras de Precatórios",
+            "AlteraçÕes nas leis de cobrança de impostos municipais ou estaduais (especialmente ICMS, ISS E IPTU)",
+            "Créditos FCVS (apenas notícias sobre liquidação ou venda de grandes volumes)"
         ]
     },
     'Distressed Assets e NPLs': {
@@ -147,83 +148,111 @@ P3_ITENS_ORIGINAL = [
 ]
 
 
-def seed_prompts():
-    """Popula o banco de dados com os dados iniciais dos prompts"""
+def seed_prompts(tags: bool, prioridades: bool, templates: bool, recreate: bool) -> None:
+    """Popula o banco de dados com os dados iniciais dos prompts.
+
+    Args:
+        tags: Se True, popula a tabela de tags.
+        prioridades: Se True, popula a tabela de prioridades.
+        templates: Se True, popula a tabela de templates.
+        recreate: Se True, apaga os dados existentes antes de inserir (recria conteúdo).
+    """
     db = SessionLocal()
-    
+
     try:
         print("🌱 Populando banco de dados com prompts iniciais...")
-        
-        # Verifica se já existem dados
-        if db.query(PromptTag).count() > 0:
-            print("⚠️ Tabela de tags já possui dados. Pulando...")
-        else:
-            print("📝 Inserindo tags temáticas...")
-            for i, (tag_name, tag_data) in enumerate(TAGS_SPECIAL_SITUATIONS_ORIGINAL.items(), 1):
-                tag = PromptTag(
-                    nome=tag_name,
-                    descricao=tag_data['descricao'],
-                    exemplos=tag_data['exemplos'],
-                    ordem=i + 1,
-                    created_at=datetime.now(timezone.utc),
-                    updated_at=datetime.now(timezone.utc)
-                )
-                db.add(tag)
-            print(f"✅ {len(TAGS_SPECIAL_SITUATIONS_ORIGINAL)} tags inseridas")
-        
-        # Verifica se já existem dados de prioridade
-        if db.query(PromptPrioridadeItem).count() > 0:
-            print("⚠️ Tabela de prioridades já possui dados. Pulando...")
-        else:
-            print("🎯 Inserindo itens de prioridade...")
-            
-            # P1 - CRÍTICO
-            for i, item in enumerate(P1_ITENS_ORIGINAL):
-                prioridade = PromptPrioridadeItem(
-                    nivel='P1_CRITICO',
-                    texto=item,
-                    ordem=i + 1,
-                    created_at=datetime.now(timezone.utc),
-                    updated_at=datetime.now(timezone.utc)
-                )
-                db.add(prioridade)
-            
-            # P2 - ESTRATÉGICO
-            for i, item in enumerate(P2_ITENS_ORIGINAL):
-                prioridade = PromptPrioridadeItem(
-                    nivel='P2_ESTRATEGICO',
-                    texto=item,
-                    ordem=i + 1,
-                    created_at=datetime.now(timezone.utc),
-                    updated_at=datetime.now(timezone.utc)
-                )
-                db.add(prioridade)
-            
-            # P3 - MONITORAMENTO
-            for i, item in enumerate(P3_ITENS_ORIGINAL):
-                prioridade = PromptPrioridadeItem(
-                    nivel='P3_MONITORAMENTO',
-                    texto=item,
-                    ordem=i + 1,
-                    created_at=datetime.now(timezone.utc),
-                    updated_at=datetime.now(timezone.utc)
-                )
-                db.add(prioridade)
-            
-            total_prioridades = len(P1_ITENS_ORIGINAL) + len(P2_ITENS_ORIGINAL) + len(P3_ITENS_ORIGINAL)
-            print(f"✅ {total_prioridades} itens de prioridade inseridos")
-        
-        # Verifica se já existem templates
-        if db.query(PromptTemplate).count() > 0:
-            print("⚠️ Tabela de templates já possui dados. Pulando...")
-        else:
-            print("📋 Inserindo templates padrão...")
-            
-            # Template de resumo/clusterização
-            template_resumo = PromptTemplate(
-                chave='resumo',
-                descricao='Prompt principal para resumo e clusterização de notícias',
-                conteudo='''Você é um assistente especializado em análise de notícias financeiras e econômicas.
+
+        # ---------------- Tags ----------------
+        if tags:
+            current = db.query(PromptTag).count()
+            if recreate and current > 0:
+                print(f"♻️ Limpando tabela PromptTag (registros atuais: {current})...")
+                db.query(PromptTag).delete()
+                db.commit()
+                current = 0
+            if current > 0:
+                print("⚠️ Tabela de tags já possui dados. Pulando (use --recreate para substituir)...")
+            else:
+                print("📝 Inserindo tags temáticas...")
+                for i, (tag_name, tag_data) in enumerate(TAGS_SPECIAL_SITUATIONS_ORIGINAL.items(), 1):
+                    tag = PromptTag(
+                        nome=tag_name,
+                        descricao=tag_data['descricao'],
+                        exemplos=tag_data['exemplos'],
+                        ordem=i + 1,
+                        created_at=datetime.now(timezone.utc),
+                        updated_at=datetime.now(timezone.utc)
+                    )
+                    db.add(tag)
+                print(f"✅ {len(TAGS_SPECIAL_SITUATIONS_ORIGINAL)} tags inseridas")
+
+        # ---------------- Prioridades ----------------
+        if prioridades:
+            current = db.query(PromptPrioridadeItem).count()
+            if recreate and current > 0:
+                print(f"♻️ Limpando tabela PromptPrioridadeItem (registros atuais: {current})...")
+                db.query(PromptPrioridadeItem).delete()
+                db.commit()
+                current = 0
+            if current > 0:
+                print("⚠️ Tabela de prioridades já possui dados. Pulando (use --recreate para substituir)...")
+            else:
+                print("🎯 Inserindo itens de prioridade...")
+
+                # P1 - CRÍTICO
+                for i, item in enumerate(P1_ITENS_ORIGINAL):
+                    prioridade = PromptPrioridadeItem(
+                        nivel='P1_CRITICO',
+                        texto=item,
+                        ordem=i + 1,
+                        created_at=datetime.now(timezone.utc),
+                        updated_at=datetime.now(timezone.utc)
+                    )
+                    db.add(prioridade)
+
+                # P2 - ESTRATÉGICO
+                for i, item in enumerate(P2_ITENS_ORIGINAL):
+                    prioridade = PromptPrioridadeItem(
+                        nivel='P2_ESTRATEGICO',
+                        texto=item,
+                        ordem=i + 1,
+                        created_at=datetime.now(timezone.utc),
+                        updated_at=datetime.now(timezone.utc)
+                    )
+                    db.add(prioridade)
+
+                # P3 - MONITORAMENTO
+                for i, item in enumerate(P3_ITENS_ORIGINAL):
+                    prioridade = PromptPrioridadeItem(
+                        nivel='P3_MONITORAMENTO',
+                        texto=item,
+                        ordem=i + 1,
+                        created_at=datetime.now(timezone.utc),
+                        updated_at=datetime.now(timezone.utc)
+                    )
+                    db.add(prioridade)
+
+                total_prioridades = len(P1_ITENS_ORIGINAL) + len(P2_ITENS_ORIGINAL) + len(P3_ITENS_ORIGINAL)
+                print(f"✅ {total_prioridades} itens de prioridade inseridos")
+
+        # ---------------- Templates ----------------
+        if templates:
+            current = db.query(PromptTemplate).count()
+            if recreate and current > 0:
+                print(f"♻️ Limpando tabela PromptTemplate (registros atuais: {current})...")
+                db.query(PromptTemplate).delete()
+                db.commit()
+                current = 0
+            if current > 0:
+                print("⚠️ Tabela de templates já possui dados. Pulando (use --recreate para substituir)...")
+            else:
+                print("📋 Inserindo templates padrão...")
+
+                # Template de resumo/clusterização
+                template_resumo = PromptTemplate(
+                    chave='resumo',
+                    descricao='Prompt principal para resumo e clusterização de notícias',
+                    conteudo='''Você é um assistente especializado em análise de notícias financeiras e econômicas.
 
 ANALISE a notícia fornecida e:
 
@@ -261,14 +290,14 @@ RESUMO: [resumo_executivo]
 CLUSTER: [sugestao_agrupamento_ou_none]''',
                 created_at=datetime.now(timezone.utc),
                 updated_at=datetime.now(timezone.utc)
-            )
-            db.add(template_resumo)
-            
-            # Template de relevância
-            template_relevancia = PromptTemplate(
-                chave='relevancia',
-                descricao='Prompt para análise de relevância de notícias',
-                conteudo='''Analise se a notícia é RELEVANTE para investidores e analistas financeiros.
+                )
+                db.add(template_resumo)
+
+                # Template de relevância
+                template_relevancia = PromptTemplate(
+                    chave='relevancia',
+                    descricao='Prompt para análise de relevância de notícias',
+                    conteudo='''Analise se a notícia é RELEVANTE para investidores e analistas financeiros.
 
 CRITÉRIOS DE RELEVÂNCIA:
 - Impacto potencial no mercado de capitais
@@ -285,14 +314,14 @@ RELEVANTE: [SIM/NÃO]
 JUSTIFICATIVA: [breve explicação]''',
                 created_at=datetime.now(timezone.utc),
                 updated_at=datetime.now(timezone.utc)
-            )
-            db.add(template_relevancia)
-            
-            # Template de extração
-            template_extracao = PromptTemplate(
-                chave='extracao',
-                descricao='Prompt para extração de dados estruturados de notícias',
-                conteudo='''Extraia as seguintes informações da notícia:
+                )
+                db.add(template_relevancia)
+
+                # Template de extração
+                template_extracao = PromptTemplate(
+                    chave='extracao',
+                    descricao='Prompt para extração de dados estruturados de notícias',
+                    conteudo='''Extraia as seguintes informações da notícia:
 
 ENTIDADES:
 - Empresas mencionadas
@@ -320,14 +349,14 @@ RESPONDA EM JSON:
 }''',
                 created_at=datetime.now(timezone.utc),
                 updated_at=datetime.now(timezone.utc)
-            )
-            db.add(template_extracao)
-            
-            print("✅ 3 templates padrão inseridos")
-        
+                )
+                db.add(template_extracao)
+
+                print("✅ 3 templates padrão inseridos")
+
         db.commit()
         print("🎉 População do banco concluída com sucesso!")
-        
+
     except Exception as e:
         print(f"❌ Erro ao popular banco: {e}")
         db.rollback()
@@ -337,4 +366,20 @@ RESPONDA EM JSON:
 
 
 if __name__ == "__main__":
-    seed_prompts()
+    parser = argparse.ArgumentParser(description="Seed de prompts (tags, prioridades, templates)")
+    parser.add_argument("--tags", action="store_true", help="Popular tabela de tags")
+    parser.add_argument("--prioridades", action="store_true", help="Popular tabela de prioridades (P1/P2/P3)")
+    parser.add_argument("--templates", action="store_true", help="Popular tabela de templates")
+    parser.add_argument("--recreate", action="store_true", help="Apagar dados existentes antes de inserir (recriar conteúdo)")
+
+    args = parser.parse_args()
+
+    # Se nenhuma seleção foi feita, assume todas
+    run_tags = bool(args.tags or (not args.tags and not args.prioridades and not args.templates))
+    run_prior = bool(args.prioridades or (not args.tags and not args.prioridades and not args.templates))
+    run_tmpl = bool(args.templates or (not args.tags and not args.prioridades and not args.templates))
+
+    print(
+        f"⚙️  Opções: tags={run_tags}, prioridades={run_prior}, templates={run_tmpl}, recreate={args.recreate}"
+    )
+    seed_prompts(tags=run_tags, prioridades=run_prior, templates=run_tmpl, recreate=args.recreate)

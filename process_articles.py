@@ -49,9 +49,9 @@ from backend.processing import (
     gerar_embedding, bytes_to_embedding, calcular_similaridade_cosseno,
     processar_artigo_pipeline, gerar_resumo_cluster, find_or_create_cluster
 )
-from backend.prompts import PROMPT_AGRUPAMENTO_V1, PROMPT_RESUMO_FINAL_V3, PROMPT_PRIORIZACAO_EXECUTIVA_V1, TAGS_SPECIAL_SITUATIONS
+from backend.prompts import PROMPT_AGRUPAMENTO_V1, PROMPT_RESUMO_FINAL_V3, TAGS_SPECIAL_SITUATIONS
 from backend.prompts import PROMPT_CONSOLIDACAO_CLUSTERS_V1
-from backend.utils import get_date_brasil_str, get_datetime_brasil_str, corrigir_tag_invalida, corrigir_prioridade_invalida, eh_lixo_publicitario
+from backend.utils import get_date_brasil_str, get_datetime_brasil_str, corrigir_tag_invalida, corrigir_prioridade_invalida
 
 # Carrega variáveis de ambiente
 env_file = backend_dir / ".env"
@@ -59,7 +59,7 @@ load_dotenv(env_file)
 print(f"SUCESSO: Arquivo .env carregado: {env_file}")
 
 # Configuração de lotes para evitar truncamento
-BATCH_SIZE_AGRUPAMENTO = 150  # Mais conservador para garantir respostas completas do LLM
+BATCH_SIZE_AGRUPAMENTO = 60  # Reduzido para evitar truncamento em respostas de agrupamento
 
 # Configuração do Gemini
 api_key = os.getenv("GEMINI_API_KEY")
@@ -624,13 +624,12 @@ def processar_artigos_pendentes(limite: int = 10) -> bool:
         print(f"ETAPA 3 CONCLUIDA: Resumos gerados: {resumos_gerados}")
 
         # ETAPA 4 — síncrona
-        print(f"\nETAPA 4: Priorização executiva e consolidação final de clusters...")
-        ok_prior = priorizacao_executiva_final(SessionLocal(), client)
+        print(f"\nETAPA 4: Consolidação final de clusters...")
         ok_cons = consolidacao_final_clusters(SessionLocal(), client)
-        if not (ok_prior and ok_cons):
+        if not ok_cons:
             print("⚠️ Etapa 4 concluída com avisos (alguma parte falhou)")
         else:
-            print("ETAPA 4 CONCLUIDA: Priorização/Consolidação aplicadas")
+            print("ETAPA 4 CONCLUIDA: Consolidação aplicada")
 
         # Re-sumariza clusters que ainda ficaram sem resumo após consolidação
         db2 = SessionLocal()
@@ -652,7 +651,7 @@ def processar_artigos_pendentes(limite: int = 10) -> bool:
         print(f"\nPROCESSAMENTO CONCLUIDO:")
         print(f"  Artigos processados: {sucessos}")
         print(f"  Resumos gerados: {resumos_gerados}")
-        print(f"  Etapa 4 executada: {'sim' if (ok_prior and ok_cons) else 'parcial'}")
+        print(f"  Etapa 4 executada: {'sim' if ok_cons else 'parcial'}")
         return True
 
     except Exception as e:
@@ -951,187 +950,11 @@ def gerar_resumo_unificado(db: Session, cluster_id: int, client, nivel_detalhe: 
 
 def priorizacao_executiva_final(db: Session, client, debug: bool = True) -> bool:
     """
-    Aplica a priorização executiva (pós-agrupamento e pós-resumo) usando
-    PROMPT_PRIORIZACAO_EXECUTIVA_V1 sobre os clusters ativos do dia.
-    Reclassifica prioridade, ajusta score (se armazenado futuramente) e registra alterações.
+    Etapa de priorização executiva REMOVIDA. Mantida por compatibilidade, mas não faz nada.
     """
-    try:
-        hoje = get_date_brasil_str()
-        clusters_hoje = db.query(ClusterEvento).filter(
-            ClusterEvento.status == 'ativo',
-            ClusterEvento.created_at >= hoje
-        ).all()
-
-        if not clusters_hoje:
-            if debug:
-                print("ℹ️ Priorização executiva: nenhum cluster ativo hoje")
-            return True
-
-        # Decide estratégia: usa batching direto quando muitos itens, senão tenta one-shot
-        itens_finais_all = []
-        id_map_all = {}
-        for idx, c in enumerate(clusters_hoje):
-            itens_finais_all.append({
-                "id": idx,
-                "cluster_id": c.id,
-                "titulo_final": c.titulo_cluster,
-                "prioridade_atribuida_inicial": c.prioridade,
-                "tag_atribuida_inicial": c.tag,
-                "score_inicial": None,
-                "resumo_final": (c.resumo_cluster or "")[:400]
-            })
-            id_map_all[idx] = c.id
-
-        TAMANHO_LOTE_PRIORIZACAO = 60
-        usar_one_shot = len(itens_finais_all) <= TAMANHO_LOTE_PRIORIZACAO
-
-        if usar_one_shot:
-            prompt_all = PROMPT_PRIORIZACAO_EXECUTIVA_V1.format(
-                ITENS_FINAIS=json.dumps(itens_finais_all, indent=2, ensure_ascii=False)
-            )
-
-            if debug:
-                print(f"🧮 DEBUG: Priorização one-shot para {len(itens_finais_all)} itens...")
-
-            try:
-                resp_all = client.generate_content(
-                    prompt_all,
-                    generation_config={
-                        'temperature': 0.1,
-                        'top_p': 0.8,
-                        'max_output_tokens': 8192
-                    }
-                )
-            except Exception as e:
-                if debug:
-                    print(f"❌ Priorização one-shot falhou na chamada: {e}")
-                resp_all = None
-
-            if resp_all and resp_all.text:
-                if debug:
-                    prev = resp_all.text[:500].replace('\n', ' ')
-                    print(f"📥 Priorização one-shot (prev 500): {prev}")
-                resultado_all = extrair_json_da_resposta(resp_all.text)
-                if not isinstance(resultado_all, list) or len(resultado_all) == 0:
-                    resultado_all = extrair_priorizacao_executiva_seguro(resp_all.text)
-                # Se veio uma lista mas sem 'id', faz fallback regex
-                if isinstance(resultado_all, list) and resultado_all and not any(isinstance(it, dict) and it.get('id') is not None for it in resultado_all):
-                    resultado_all = extrair_priorizacao_executiva_seguro(resp_all.text)
-                if isinstance(resultado_all, list) and len(resultado_all) > 0:
-                    alteracoes = 0
-                    for item in resultado_all:
-                        try:
-                            rid = item.get("id")
-                            decisao = item.get("decisao_prioridade_final")
-                            tag = item.get("tag_final") or item.get("tag_atribuida_inicial")
-                            justificativa = item.get("justificativa_executiva")
-                            cid = id_map_all.get(rid)
-                            if cid is None:
-                                continue
-                            cluster = get_cluster_by_id(db, cid)
-                            if not cluster:
-                                continue
-                            if decisao and decisao != cluster.prioridade:
-                                update_cluster_priority(db, cid, decisao, motivo=justificativa or "priorização executiva")
-                                alteracoes += 1
-                            if tag and tag != cluster.tag:
-                                update_cluster_tags(db, cid, [tag], motivo="priorização executiva")
-                                alteracoes += 1
-                        except Exception:
-                            continue
-                    if debug:
-                        print(f"✅ Priorização executiva (one-shot) aplicada. Alterações: {alteracoes}")
-                    return True
-
-        # Batching dos itens para evitar truncamento e JSON quebrado
-        lotes = [clusters_hoje[i:i + TAMANHO_LOTE_PRIORIZACAO] for i in range(0, len(clusters_hoje), TAMANHO_LOTE_PRIORIZACAO)]
-
-        alteracoes_total = 0
-        for idx, lote in enumerate(lotes, 1):
-            itens_finais = []
-            id_map = {}
-            for j, c in enumerate(lote):
-                itens_finais.append({
-                    "id": j,
-                    "cluster_id": c.id,
-                    "titulo_final": c.titulo_cluster,
-                    "prioridade_atribuida_inicial": c.prioridade,
-                    "tag_atribuida_inicial": c.tag,
-                    "score_inicial": None,
-                    "resumo_final": (c.resumo_cluster or "")[:400]
-                })
-                id_map[j] = c.id
-
-            prompt = PROMPT_PRIORIZACAO_EXECUTIVA_V1.format(
-                ITENS_FINAIS=json.dumps(itens_finais, indent=2, ensure_ascii=False)
-            )
-
-            if debug:
-                print(f"🧮 DEBUG: Lote priorização {idx}/{len(lotes)} com {len(itens_finais)} itens...")
-
-            response = client.generate_content(
-                prompt,
-                generation_config={
-                    'temperature': 0.1,
-                    'top_p': 0.8,
-                    'max_output_tokens': 4096
-                }
-            )
-
-            if not response.text:
-                if debug:
-                    print(f"❌ Priorização executiva: resposta vazia no lote {idx}")
-                continue
-
-            if debug:
-                prev = response.text[:500].replace('\n', ' ') if isinstance(response.text, str) else 'N/A'
-                print(f"📥 Lote {idx} priorização (prev 500): {prev}")
-
-            resultado = extrair_json_da_resposta(response.text)
-            if not isinstance(resultado, list) or len(resultado) == 0:
-                resultado = extrair_priorizacao_executiva_seguro(response.text)
-            # Fallback adicional: lista sem 'id' útil
-            if isinstance(resultado, list) and resultado and not any(isinstance(it, dict) and it.get('id') is not None for it in resultado):
-                resultado = extrair_priorizacao_executiva_seguro(response.text)
-            if not isinstance(resultado, list) or len(resultado) == 0:
-                if debug:
-                    print(f"ℹ️ Priorização executiva: nenhuma decisão válida no lote {idx}")
-                continue
-
-            alteracoes = 0
-            for item in resultado:
-                try:
-                    rid = item.get("id")
-                    decisao = item.get("decisao_prioridade_final")
-                    tag = item.get("tag_final") or item.get("tag_atribuida_inicial")
-                    justificativa = item.get("justificativa_executiva")
-
-                    if rid is None or id_map.get(rid) is None:
-                        continue
-                    cluster_id = id_map[rid]
-                    cluster = get_cluster_by_id(db, cluster_id)
-                    if not cluster:
-                        continue
-
-                    if decisao and decisao != cluster.prioridade:
-                        update_cluster_priority(db, cluster_id, decisao, motivo=justificativa or "priorização executiva")
-                        alteracoes += 1
-
-                    if tag and tag != cluster.tag:
-                        update_cluster_tags(db, cluster_id, [tag], motivo="priorização executiva")
-                        alteracoes += 1
-                except Exception:
-                    continue
-
-            alteracoes_total += alteracoes
-
-        if debug:
-            print(f"✅ Priorização executiva concluída. Alterações aplicadas (total): {alteracoes_total}")
-        return True
-
-    except Exception as e:
-        print(f"❌ ERRO: Priorização executiva falhou: {e}")
-        return False
+    if debug:
+        print("ℹ️ Priorização executiva desativada. Pulando etapa.")
+    return True
 
 
 def consolidacao_final_clusters(db: Session, client, debug: bool = True) -> bool:
@@ -1156,46 +979,45 @@ def consolidacao_final_clusters(db: Session, client, debug: bool = True) -> bool
                 print("ℹ️ Consolidação final: nenhum cluster elegível hoje")
             return True
 
-        # Monta payload leve por cluster
+        # Monta payload mínimo por cluster (id, título, tag, prioridade)
         itens = []
         for c in clusters:
-            # Títulos internos (curtos) para dar contexto
-            arts = get_artigos_by_cluster(db, c.id)
-            titulos_internos = [(a.titulo_extraido or (a.texto_processado or '')[:80]) for a in arts[:4]]
             itens.append({
                 "id": c.id,
                 "titulo": c.titulo_cluster,
                 "tag": c.tag,
-                "prioridade": c.prioridade,
-                "titulos_internos": titulos_internos
+                "prioridade": c.prioridade
             })
 
         from backend.crud import merge_clusters, update_cluster_title, update_cluster_priority, update_cluster_tags
 
         # ONE-SHOT: tenta enviar todos os clusters de uma vez com max tokens; se falhar, fallback para lotes (código abaixo)
-        prompt_all = PROMPT_CONSOLIDACAO_CLUSTERS_V1.format(
-            CLUSTERS_DO_DIA=json.dumps(itens, indent=2, ensure_ascii=False)
+        # Evita KeyError de chaves JSON no format(); substitui placeholder manualmente
+        prompt_all = str(PROMPT_CONSOLIDACAO_CLUSTERS_V1).replace(
+            '{CLUSTERS_DO_DIA}',
+            json.dumps(itens, indent=2, ensure_ascii=False)
         )
         if debug:
             print(f"🧩 Consolidação one-shot: enviando {len(itens)} clusters")
         try:
             resp_all = client.generate_content(
                 prompt_all,
-                generation_config={'temperature': 0.1, 'top_p': 0.8, 'max_output_tokens': 8192}
+                generation_config={'temperature': 0.1, 'top_p': 0.8, 'max_output_tokens': 32768}
             )
         except Exception as e:
             if debug:
                 print(f"❌ Consolidação one-shot falhou na chamada: {e}")
             resp_all = None
 
+        merges_aplicados_total = 0
+        keeps_total = 0
         if resp_all and resp_all.text:
             if debug:
                 prev = resp_all.text[:500].replace('\n', ' ')
                 print(f"📥 Consolidação one-shot (prev 500): {prev}")
             sugestoes_all = extrair_sugestoes_consolidacao_seguro(resp_all.text)
             if isinstance(sugestoes_all, list) and len(sugestoes_all) > 0:
-                merges_aplicados_total = 0
-                keeps_total = 0
+                destinos_reprocessar = set()
                 for s in sugestoes_all:
                     try:
                         if not isinstance(s, dict):
@@ -1222,132 +1044,52 @@ def consolidacao_final_clusters(db: Session, client, debug: bool = True) -> bool
                                 motivo='consolidação etapa 4'
                             )
                             merges_aplicados_total += 1
+                            destinos_reprocessar.add(int(destino))
                     except Exception:
                         continue
                 if debug:
                     print(f"✅ Consolidação final (one-shot) aplicada. merges={merges_aplicados_total}, keeps={keeps_total}")
-                # NÃO retorna aqui; segue para fallback determinístico para capturar duplicatas residuais
-
-        # Fallback: Processa em lotes para evitar respostas truncadas
-        TAMANHO_LOTE_CONSOLIDACAO = 80
-        lotes = [itens[i:i + TAMANHO_LOTE_CONSOLIDACAO] for i in range(0, len(itens), TAMANHO_LOTE_CONSOLIDACAO)]
-
-        merges_aplicados_total = 0
-        keeps_total = 0
-
-        for idx, lote in enumerate(lotes, 1):
-            prompt = PROMPT_CONSOLIDACAO_CLUSTERS_V1.format(
-                CLUSTERS_DO_DIA=json.dumps(lote, indent=2, ensure_ascii=False)
-            )
-
-            if debug:
-                print(f"🧩 Consolidação: enviando lote {idx}/{len(lotes)} com {len(lote)} clusters")
-
-            response = client.generate_content(
-                prompt,
-                generation_config={
-                    'temperature': 0.1,
-                    'top_p': 0.8,
-                    'max_output_tokens': 8192
-                }
-            )
-
-            if not response.text:
-                if debug:
-                    print(f"❌ Consolidação: resposta vazia no lote {idx}")
-                continue
-
-            if debug:
-                prev = response.text[:500].replace('\n', ' ') if isinstance(response.text, str) else 'N/A'
-                print(f"📥 Lote {idx} resposta (prev 500): {prev}")
-
-            sugestoes = extrair_sugestoes_consolidacao_seguro(response.text)
-            if not isinstance(sugestoes, list) or not sugestoes:
-                if debug:
-                    print(f"ℹ️ Consolidação: nenhuma sugestão válida no lote {idx} — aplicando fallback estrito por título/tag")
-                # Fallback: de-duplicação ultra-conservadora por título normalizado + mesma tag
-                try:
-                    import unicodedata, re as _re
-                    def _norm(t: str) -> str:
-                        if not isinstance(t, str):
-                            return ''
-                        t = unicodedata.normalize('NFKD', t)
-                        t = ''.join(c for c in t if not unicodedata.combining(c))
-                        t = t.lower()
-                        t = _re.sub(r"[^a-z0-9]+", " ", t).strip()
-                        return t
-                    # mapa por (norm_title, tag)
-                    grupos = {}
-                    for it in lote:
-                        chave = (_norm(it.get('titulo') or ''), it.get('tag'))
-                        if not chave[0] or not chave[1]:
-                            continue
-                        grupos.setdefault(chave, []).append(it)
-                    merges_aplicados_fallback = 0
-                    for (_, _tag), items in grupos.items():
-                        if len(items) <= 1:
-                            continue
-                        # destino: menor id
-                        destino_id = min(i['id'] for i in items)
-                        fontes_ids = [i['id'] for i in items if i['id'] != destino_id]
-                        from backend.crud import merge_clusters as _merge
-                        _merge(db, destino_id=destino_id, fontes_ids=fontes_ids, motivo='fallback titulo/tag etapa 4')
-                        merges_aplicados_fallback += 1
-                    if debug:
-                        print(f"   ↪ fallback merges aplicados: {merges_aplicados_fallback}")
-                except Exception as _e:
-                    if debug:
-                        print(f"   ⚠️ Fallback estrito falhou: {_e}")
-                continue
-
-            if debug:
-                print(f"🔎 Lote {idx}: {len(sugestoes)} sugestões válidas")
-                for ex in sugestoes[:2]:
+                # Reprocessa (Etapa 3) os clusters destino para atualizar resumo/tag/prioridade
+                for cid in destinos_reprocessar:
                     try:
-                        print(f"   ↪ exemplo: {json.dumps(ex)[:240]}")
+                        classificar_e_resumir_cluster(db, cid, client, debug=False)
                     except Exception:
-                        pass
-
-            merges_aplicados = 0
-            keeps = 0
-            for s in sugestoes:
-                try:
-                    if not isinstance(s, dict):
                         continue
-                    tipo = (s.get('tipo') or '').lower()
-                    if tipo == 'keep' and s.get('cluster_id'):
-                        keeps += 1
-                        continue
-                    if tipo == 'merge':
-                        destino = s.get('destino')
-                        fontes = s.get('fontes') or []
-                        novo_titulo = s.get('novo_titulo')
-                        nova_tag = s.get('nova_tag')
-                        nova_prioridade = s.get('nova_prioridade')
+                return True
 
-                        if not destino or not fontes:
-                            continue
-
-                        merge_clusters(
-                            db,
-                            destino_id=int(destino),
-                            fontes_ids=[int(x) for x in fontes if isinstance(x, (int, str))],
-                            novo_titulo=novo_titulo,
-                            nova_tag=nova_tag,
-                            nova_prioridade=corigir_prioridade(nova_prioridade) if nova_prioridade else None,
-                            motivo='consolidação etapa 4'
-                        )
-                        merges_aplicados += 1
-                except Exception as e:
-                    if debug:
-                        try:
-                            print(f"   ⚠️ Erro ao aplicar sugestão: {e} | item={json.dumps(s)[:240]}")
-                        except Exception:
-                            print(f"   ⚠️ Erro ao aplicar sugestão: {e}")
+        # One-shot não produziu sugestões: aplica fallback estrito por título/tag em TODOS os itens
+        if debug:
+            print("ℹ️ Consolidação: sem sugestões — aplicando fallback estrito por título/tag (one-shot)")
+        try:
+            import unicodedata, re as _re
+            def _norm(t: str) -> str:
+                if not isinstance(t, str):
+                    return ''
+                t = unicodedata.normalize('NFKD', t)
+                t = ''.join(c for c in t if not unicodedata.combining(c))
+                t = t.lower()
+                t = _re.sub(r"[^a-z0-9]+", " ", t).strip()
+                return t
+            grupos = {}
+            for it in itens:
+                chave = (_norm(it.get('titulo') or ''), it.get('tag'))
+                if not chave[0] or not chave[1]:
                     continue
-
-            merges_aplicados_total += merges_aplicados
-            keeps_total += keeps
+                grupos.setdefault(chave, []).append(it)
+            merges_aplicados_fallback = 0
+            for (_, _tag), items in grupos.items():
+                if len(items) <= 1:
+                    continue
+                destino_id = min(i['id'] for i in items)
+                fontes_ids = [i['id'] for i in items if i['id'] != destino_id]
+                from backend.crud import merge_clusters as _merge
+                _merge(db, destino_id=destino_id, fontes_ids=fontes_ids, motivo='fallback titulo/tag etapa 4')
+                merges_aplicados_fallback += 1
+            if debug:
+                print(f"   ↪ fallback merges aplicados: {merges_aplicados_fallback}")
+        except Exception as _e:
+            if debug:
+                print(f"   ⚠️ Fallback estrito falhou: {_e}")
 
         if debug:
             print(f"✅ Consolidação por sugestões aplicada. merges={merges_aplicados_total}, keeps={keeps_total}")
@@ -1474,6 +1216,8 @@ def extrair_sugestoes_consolidacao_seguro(resposta: str) -> Optional[List[Dict[s
     Retorna lista de dicts padronizados: {tipo, destino?, fontes?, cluster_id?, novo_titulo?, nova_tag?, nova_prioridade?}
     """
     try:
+        # Limpeza leve de marcas comuns
+        resposta = resposta.replace('\u200b', '').replace("\ufeff", '')
         bruto = extrair_json_da_resposta(resposta)
         itens: List[Dict[str, Any]] = []
         if isinstance(bruto, list):
@@ -1485,14 +1229,14 @@ def extrair_sugestoes_consolidacao_seguro(resposta: str) -> Optional[List[Dict[s
 
         # Fallback por regex
         import re
-        padrao_obj = re.compile(r"\{[\s\S]*?\}")
-        candidatos = padrao_obj.findall(resposta)
+        # Captura blocos que claramente pertencem à estrutura, tolerando quebras de linha e backticks
+        candidatos = re.findall(r"\{[\s\S]*?\}", resposta)
         resultados: List[Dict[str, Any]] = []
         for cand in candidatos:
             try:
                 texto = cand
                 # Normaliza aspas/backticks
-                texto = texto.replace('```', '')
+                texto = texto.replace('```', '').replace("\n", " ").replace("\r", " ")
                 # Extrai campos
                 tipo_m = re.search(r'"tipo"\s*:\s*"(merge|keep)"', texto, re.IGNORECASE)
                 if not tipo_m:
@@ -1505,7 +1249,7 @@ def extrair_sugestoes_consolidacao_seguro(resposta: str) -> Optional[List[Dict[s
                 tag_m = re.search(r'"nova_tag"\s*:\s*"(.*?)"', texto, re.DOTALL)
                 pr_m = re.search(r'"nova_prioridade"\s*:\s*"(P1_CRITICO|P2_ESTRATEGICO|P3_MONITORAMENTO)"', texto)
 
-                if item['tipo'] == 'merge':
+                if (item.get('tipo') or '').lower() == 'merge':
                     if dest_m:
                         item['destino'] = int(dest_m.group(1))
                     fontes = []
@@ -1532,7 +1276,7 @@ def extrair_sugestoes_consolidacao_seguro(resposta: str) -> Optional[List[Dict[s
                         item['cluster_id'] = int(keep_m.group(1))
 
                 # Valida mínimos
-                if item['tipo'] == 'merge' and (not item.get('destino') or not item.get('fontes')):
+                if (item.get('tipo') or '').lower() == 'merge' and (not item.get('destino') or not item.get('fontes')):
                     continue
                 resultados.append(item)
             except Exception:
@@ -1598,7 +1342,7 @@ def agrupar_noticias_incremental(db: Session, client) -> bool:
         print(f"🔗 AGRUPAMENTO INCREMENTAL: {len(artigos_novos)} notícias novas, {len(clusters_existentes)} clusters existentes")
         
         # Determina se precisa processar em lotes
-        TAMANHO_LOTE_MAXIMO = 200  # Máximo de notícias por lote (incremental mais abrangente)
+        TAMANHO_LOTE_MAXIMO = 100  # Reduzido para evitar truncamento de respostas do modelo
         processar_em_lotes = len(artigos_novos) > TAMANHO_LOTE_MAXIMO
         
         if processar_em_lotes:
@@ -1682,7 +1426,8 @@ def processar_lote_incremental(db: Session, client, artigos_lote: List[ArtigoBru
                 a.titulo_extraido or (a.texto_processado[:80] + "...") if (a.texto_processado or "") else "Sem título"
                 for a in artigos_cluster
             ]
-            titulos = titulos[:30]
+            # Reduz contexto por cluster para evitar prompts gigantes (títulos mais representativos)
+            titulos = titulos[:10]
             cluster_data = {
                 "cluster_id": cluster.id,
                 "tema_principal": cluster.titulo_cluster,
@@ -1708,7 +1453,7 @@ def processar_lote_incremental(db: Session, client, artigos_lote: List[ArtigoBru
                 generation_config={
                     'temperature': 0.1,  # Mais determinístico
                     'top_p': 0.8,
-                    'max_output_tokens': 8192,  # Aumentado para lotes maiores
+                    'max_output_tokens': 32768,  # Aumentado para suportar resposta completa do incremental
                     'candidate_count': 1
                 }
             )
@@ -1757,29 +1502,56 @@ def processar_lote_incremental(db: Session, client, artigos_lote: List[ArtigoBru
                             print(f"  ❌ Cluster {cluster_id_existente} não encontrado")
                     
                     elif tipo == "novo_cluster":
-                        # Cria novo cluster
+                        # Cria novo cluster ou anexa a um existente se o título for genérico/ruidoso
                         tema_principal = classificacao.get("tema_principal", f"Novo Cluster - {artigo.titulo_extraido}")
-                        
-                        # Calcula embedding do artigo
-                        embedding_medio = None
-                        if artigo.embedding:
-                            embedding_medio = artigo.embedding
-                        
-                        # Cria cluster
-                        from backend.models import ClusterEventoCreate
-                        cluster_data = ClusterEventoCreate(
-                            titulo_cluster=tema_principal,
-                            resumo_cluster=None,  # Será preenchido na ETAPA 3
-                            tag="Internacional (Economia e Política)",  # Padrão, será redefinido na ETAPA 3
-                            prioridade="P3_MONITORAMENTO",  # Padrão, será redefinido na ETAPA 3
-                            embedding_medio=embedding_medio
-                        )
-                        
-                        cluster = create_cluster(db, cluster_data)
-                        associate_artigo_to_cluster(db, artigo.id, cluster.id)
-                        novos_clusters += 1
-                        tprev = (artigo.titulo_extraido or artigo.texto_processado or "").replace("\n"," ")[:100]
-                        print(f"  ✚ novo-cluster: '{tema_principal[:100]}' com '{tprev}'")
+
+                        def _titulo_generico(t: str) -> bool:
+                            t = (t or '').strip().lower()
+                            if not t:
+                                return True
+                            padroes = [
+                                'notícia sem título', 'sem título', 'sem titulo',
+                                'noticias sem titulo', 'notícias sem título'
+                            ]
+                            return any(p in t for p in padroes)
+
+                        # Se o título do novo cluster for genérico, tenta anexar ao cluster "Notícia sem título" existente do dia
+                        cluster_destino = None
+                        if _titulo_generico(tema_principal):
+                            try:
+                                candidatos = [c for c in clusters_existentes if (c.titulo_cluster or '').strip().lower().startswith('notícia sem título') or (c.titulo_cluster or '').strip().lower().startswith('noticias sem titulo') or (c.titulo_cluster or '').strip().lower().startswith('sem título')]
+                                if candidatos:
+                                    # escolhe o com menor id
+                                    cluster_destino = min(candidatos, key=lambda x: x.id)
+                            except Exception:
+                                cluster_destino = None
+
+                        if cluster_destino:
+                            associate_artigo_to_cluster(db, artigo.id, cluster_destino.id)
+                            anexacoes += 1
+                            tprev = (artigo.titulo_extraido or artigo.texto_processado or "").replace("\n"," ")[:100]
+                            print(f"  ✔ anexar(generico): '{tprev}' → cluster {cluster_destino.id}")
+                        else:
+                            # Calcula embedding do artigo
+                            embedding_medio = None
+                            if artigo.embedding:
+                                embedding_medio = artigo.embedding
+
+                            # Cria cluster
+                            from backend.models import ClusterEventoCreate
+                            cluster_data = ClusterEventoCreate(
+                                titulo_cluster=tema_principal,
+                                resumo_cluster=None,  # Será preenchido na ETAPA 3
+                                tag="Internacional (Economia e Política)",  # Padrão, será redefinido na ETAPA 3
+                                prioridade="P3_MONITORAMENTO",  # Padrão, será redefinido na ETAPA 3
+                                embedding_medio=embedding_medio
+                            )
+
+                            cluster = create_cluster(db, cluster_data)
+                            associate_artigo_to_cluster(db, artigo.id, cluster.id)
+                            novos_clusters += 1
+                            tprev = (artigo.titulo_extraido or artigo.texto_processado or "").replace("\n"," ")[:100]
+                            print(f"  ✚ novo-cluster: '{tema_principal[:100]}' com '{tprev}'")
                     
                     else:
                         print(f"  ⚠️ Tipo de classificação inválido: {tipo}")
@@ -1864,7 +1636,7 @@ IMPORTANTE: Retorne APENAS o JSON válido para este lote.
                     generation_config={
                         'temperature': 0.05,  # Ainda mais determinístico
                         'top_p': 0.7,
-                        'max_output_tokens': 8192,  # Reduzido para lotes menores
+                        'max_output_tokens': 32768,  # Aumentado para suportar listas completas de grupos
                         'candidate_count': 1,
                         'top_k': 10
                     }
@@ -2136,12 +1908,12 @@ def processar_artigo_sem_cluster(db: Session, id_artigo: int, client) -> bool:
             linhas = artigo.texto_bruto.split('\n')
             titulo = linhas[0].strip() if linhas else "Sem título"
 
-            # Pré-filtro de lixo publicitário (curto-circuito)
-            if eh_lixo_publicitario(titulo, artigo.texto_bruto):
-                prev = (titulo or "").replace("\n"," ")[:120]
-                print(f"    EXCLUIDO: LIXO_PUBLICITARIO (pré-migração) - '{prev}'")
-                update_artigo_status(db, id_artigo, 'irrelevante')
-                return True
+            # Pré-filtro de lixo publicitário (curto-circuito) — desativado temporariamente
+            # if eh_lixo_publicitario(titulo, artigo.texto_bruto):
+            #     prev = (titulo or "").replace("\n"," ")[:120]
+            #     print(f"    EXCLUIDO: LIXO_PUBLICITARIO (pré-migração) - '{prev}'")
+            #     update_artigo_status(db, id_artigo, 'irrelevante')
+            #     return True
 
             # Tenta identificar jornal/fonte dos metadados
             jornal = metadados.get('fonte_original') or 'Fonte desconhecida'
@@ -2166,12 +1938,12 @@ def processar_artigo_sem_cluster(db: Session, id_artigo: int, client) -> bool:
         if 'tag' in noticia_data:
             noticia_data['tag'] = corrigir_tag_invalida(noticia_data['tag'])
         
-        # Pré-filtro de lixo publicitário com dados migrados também (dupla checagem)
-        if eh_lixo_publicitario(noticia_data.get('titulo'), noticia_data.get('texto_completo')):
-            prev = (noticia_data.get('titulo') or "").replace("\n"," ")[:120]
-            print(f"    EXCLUIDO: LIXO_PUBLICITARIO (pós-migração) - '{prev}'")
-            update_artigo_status(db, id_artigo, 'irrelevante')
-            return True
+        # Pré-filtro de lixo publicitário com dados migrados também (dupla checagem) — desativado temporariamente
+        # if eh_lixo_publicitario(noticia_data.get('titulo'), noticia_data.get('texto_completo')):
+        #     prev = (noticia_data.get('titulo') or "").replace("\n"," ")[:120]
+        #     print(f"    EXCLUIDO: LIXO_PUBLICITARIO (pós-migração) - '{prev}'")
+        #     update_artigo_status(db, id_artigo, 'irrelevante')
+        #     return True
 
         # ETAPA 3: Validação com Pydantic
         try:
@@ -2212,60 +1984,7 @@ def processar_artigo_sem_cluster(db: Session, id_artigo: int, client) -> bool:
         }
         
         # IMPORTANTE: Preserva o texto_bruto original e salva o processado separadamente
-        # O texto_bruto NÃO deve ser alterado - é o conteúdo original do PDF/URL
-        # O texto_processado deve ser um resumo real, não uma cópia do original
-        
-        # Gera um resumo real usando o LLM para o texto_processado
-        try:
-            from backend.prompts import PROMPT_RESUMO_FINAL_V3
-            
-            # Prepara dados para o prompt de resumo
-            dados_para_resumo = {
-                "tema_principal": noticia_validada['titulo'],
-                "categoria": noticia_validada['categoria'],
-                "prioridade": noticia_validada['prioridade'],
-                "noticias": [
-                    {
-                        "titulo": noticia_validada['titulo'],
-                        "texto": noticia_validada['texto_completo'],
-                        "jornal": noticia_validada['jornal']
-                    }
-                ]
-            }
-            
-            # Usa o prompt de resumo para gerar um resumo real
-            prompt_resumo = PROMPT_RESUMO_FINAL_V3.format(
-                NIVEL_DE_DETALHE="Conciso (P3_MONITORAMENTO)",
-                DADOS_DO_GRUPO=json.dumps(dados_para_resumo, indent=2, ensure_ascii=False)
-            )
-            
-            # Chama o LLM para gerar resumo
-            response = client.generate_content(
-                prompt_resumo,
-                generation_config={
-                    'temperature': 0.3,
-                    'top_p': 0.9,
-                    'max_output_tokens': 512
-                }
-            )
-            
-            if response.text:
-                # Extrai o resumo da resposta
-                resultado_json = extrair_json_da_resposta(response.text)
-                if resultado_json and 'resumo_final' in resultado_json:
-                    resumo_limpo = resultado_json['resumo_final']
-                    if ': ' in resumo_limpo:
-                        resumo_limpo = resumo_limpo.split(': ', 1)[1]
-                    dados_processados['texto_completo'] = resumo_limpo
-                    print(f"    📝 Resumo gerado: {len(resumo_limpo)} caracteres")
-                else:
-                    print(f"    ⚠️ Falha ao extrair resumo, mantendo texto original")
-            else:
-                print(f"    ⚠️ Falha ao gerar resumo, mantendo texto original")
-                
-        except Exception as e:
-            print(f"    ⚠️ Erro ao gerar resumo: {e}, mantendo texto original")
-            # Em caso de erro, mantém o texto original como processado
+        # Etapa 1 NÃO executa prompts/LLM. Mantém o texto processado igual ao original.
         
         # Atualiza dados processados e marca como "pronto_agrupar"
         update_artigo_dados_sem_status(db, id_artigo, dados_processados, embedding_artigo)

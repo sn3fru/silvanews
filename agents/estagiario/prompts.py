@@ -14,6 +14,7 @@ Regras de uso:
 - Nunca faça operações em lote; qualquer atualização no banco deve ser unitária.
 - Nunca drope tabelas, nunca delete mais de um item.
 - Resposta final deve ser em Markdown e direta (sem descrever passos ou ferramentas), com seção final "Notícias pesquisadas" quando aplicável.
+- Quando a consulta do usuário for aberta/sem palavras-chave precisas, preferir "semantic_search" e cite as fontes (títulos) no final.
 
 Formato da Ação (JSON dentro de code fence):
 ```json

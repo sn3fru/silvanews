@@ -52,7 +52,7 @@ try:
         create_estagiario_session, add_estagiario_message, list_estagiario_messages,
         list_prompt_tags, create_prompt_tag, update_prompt_tag, delete_prompt_tag,
         list_prompt_prioridade_itens_grouped, create_prompt_prioridade_item, update_prompt_prioridade_item, delete_prompt_prioridade_item,
-        list_prompt_templates, upsert_prompt_template, delete_prompt_template
+        list_prompt_templates, upsert_prompt_template, delete_prompt_template, get_prompts_compilados
     )
     from .processing import processar_artigo_pipeline, gerar_resumo_cluster, inicializar_processamento
     from .utils import gerar_hash_unico, formatar_timestamp_relativo, get_date_brasil, parse_date_brasil
@@ -75,7 +75,7 @@ except ImportError:
         create_estagiario_session, add_estagiario_message, list_estagiario_messages,
         list_prompt_tags, create_prompt_tag, update_prompt_tag, delete_prompt_tag,
         list_prompt_prioridade_itens_grouped, create_prompt_prioridade_item, update_prompt_prioridade_item, delete_prompt_prioridade_item,
-        list_prompt_templates, upsert_prompt_template, delete_prompt_template
+        list_prompt_templates, upsert_prompt_template, delete_prompt_template, get_prompts_compilados
     )
     from backend.processing import processar_artigo_pipeline, gerar_resumo_cluster, inicializar_processamento
     from backend.utils import gerar_hash_unico, formatar_timestamp_relativo, get_date_brasil, parse_date_brasil
@@ -2936,7 +2936,7 @@ async def list_social_research(cluster_id: int, limit: int = 20, db: Session = D
 # ==============================================================================
 
 @app.get("/api/settings/prompts")
-async def get_prompts_settings() -> Dict[str, Any]:
+async def get_prompts_settings(db: Session = Depends(get_db)) -> Dict[str, Any]:
     """
     Endpoint para obter as configurações atuais dos prompts.
     """
@@ -2968,14 +2968,28 @@ async def get_prompts_settings() -> Dict[str, Any]:
         except Exception:
             prompt_chat_cluster = ""
 
+        # Dados de Tags e Prioridades vindos do banco
+        compiled = get_prompts_compilados(db)
+        tags_db = compiled.get('tags') or {}
+        p1_db = compiled.get('p1') or []
+        p2_db = compiled.get('p2') or []
+        p3_db = compiled.get('p3') or []
+
+        # Fallback para arquivo apenas se o banco estiver vazio
+        tags_final = tags_db if tags_db else getattr(prompts_module, "TAGS_SPECIAL_SITUATIONS", {})
+        p1_final = p1_db if p1_db else getattr(prompts_module, "P1_ITENS", [])
+        p2_final = p2_db if p2_db else getattr(prompts_module, "P2_ITENS", [])
+        p3_final = p3_db if p3_db else getattr(prompts_module, "P3_ITENS", [])
+
         prompts_config = {
-            "TAGS_SPECIAL_SITUATIONS": getattr(prompts_module, "TAGS_SPECIAL_SITUATIONS", {}),
-            # Mantido apenas por compatibilidade; pode não existir mais no arquivo:
+            "TAGS_SPECIAL_SITUATIONS": tags_final,
+            # Mantido por compatibilidade; pode não existir mais no arquivo:
             "LISTA_RELEVANCIA_HIERARQUICA": getattr(prompts_module, "LISTA_RELEVANCIA_HIERARQUICA", {}),
-            # Novas listas editáveis para o Gatekeeper
-            "P1_ITENS": getattr(prompts_module, "P1_ITENS", []),
-            "P2_ITENS": getattr(prompts_module, "P2_ITENS", []),
-            "P3_ITENS": getattr(prompts_module, "P3_ITENS", []),
+            # Listas editáveis (Gatekeeper) vindas do DB, com fallback
+            "P1_ITENS": p1_final,
+            "P2_ITENS": p2_final,
+            "P3_ITENS": p3_final,
+            # Prompts textuais permanecem no arquivo
             "PROMPT_EXTRACAO_PERMISSIVO_V8": getattr(prompts_module, "PROMPT_EXTRACAO_PERMISSIVO_V8", ""),
             "PROMPT_AGRUPAMENTO_V1": prompt_agrup,
             "PROMPT_RESUMO_CRITICO_V1": getattr(prompts_module, "PROMPT_RESUMO_CRITICO_V1", ""),
@@ -2996,73 +3010,75 @@ async def get_prompts_settings() -> Dict[str, Any]:
 
 @app.put("/api/settings/prompts")
 async def update_prompts_settings(
-    dados: Dict[str, Any]
+    dados: Dict[str, Any],
+    db: Session = Depends(get_db)
 ) -> StatusResponse:
     """
     Endpoint para atualizar as configurações dos prompts.
     """
     try:
+        # 1) Sincroniza TAGS e PRIORIDADES no BANCO DE DADOS
+        if "TAGS_SPECIAL_SITUATIONS" in dados and isinstance(dados["TAGS_SPECIAL_SITUATIONS"], dict):
+            incoming: Dict[str, Any] = dados["TAGS_SPECIAL_SITUATIONS"]
+            # mapa existente por nome
+            existentes = {t["nome"]: t for t in list_prompt_tags(db)}
+            nomes_incoming = set(incoming.keys())
+            nomes_existentes = set(existentes.keys())
+            # deleta os que foram removidos
+            for nome_del in (nomes_existentes - nomes_incoming):
+                try:
+                    delete_prompt_tag(db, existentes[nome_del]["id"])  # type: ignore
+                except Exception:
+                    pass
+            # upsert dos recebidos
+            for nome, info in incoming.items():
+                desc = (info or {}).get("descricao") or ""
+                exemplos = (info or {}).get("exemplos") or []
+                if nome in existentes:
+                    update_prompt_tag(db, existentes[nome]["id"], nome=nome, descricao=desc, exemplos=exemplos)  # type: ignore
+                else:
+                    create_prompt_tag(db, nome, desc, exemplos, ordem=0)
+
+        # Prioridades P1/P2/P3: substitui listas inteiras preservando ordem
+        listas_prior = {
+            "P1": dados.get("P1_ITENS") if isinstance(dados.get("P1_ITENS"), list) else None,
+            "P2": dados.get("P2_ITENS") if isinstance(dados.get("P2_ITENS"), list) else None,
+            "P3": dados.get("P3_ITENS") if isinstance(dados.get("P3_ITENS"), list) else None,
+        }
+        # apaga existentes e recria conforme nova ordem
+        grouped = list_prompt_prioridade_itens_grouped(db)
+        for nivel, lista in listas_prior.items():
+            if lista is None:
+                continue
+            # delete all current items in this level
+            for item in grouped.get(nivel, []):
+                try:
+                    delete_prompt_prioridade_item(db, item["id"])  # type: ignore
+                except Exception:
+                    pass
+            # recreate with new order
+            for idx, texto in enumerate(lista):
+                if texto and str(texto).strip():
+                    create_prompt_prioridade_item(db, nivel, str(texto).strip(), ordem=idx)
+
+        # 2) Atualiza APENAS os prompts textuais no arquivo
         prompts_path = Path(__file__).parent / "prompts.py"
-        
-        # Lê o arquivo atual
         with open(prompts_path, 'r', encoding='utf-8') as f:
             content = f.read()
-        
-        # Atualiza as variáveis específicas
-        if "TAGS_SPECIAL_SITUATIONS" in dados and isinstance(dados["TAGS_SPECIAL_SITUATIONS"], dict):
-            # Converte o dicionário para string Python
-            import json
-            tags_str = json.dumps(dados["TAGS_SPECIAL_SITUATIONS"], indent=4, ensure_ascii=False)
-            # Mantemos aspas duplas para preservar JSON válido dentro do Python
-            
-            # Substitui a variável no arquivo
-            import re
-            pattern = r'TAGS_SPECIAL_SITUATIONS\s*=\s*\{.*?\n\}'
-            replacement = f'TAGS_SPECIAL_SITUATIONS = {tags_str}'
-            content = re.sub(pattern, replacement, content, flags=re.DOTALL)
-        
-        if "LISTA_RELEVANCIA_HIERARQUICA" in dados and isinstance(dados["LISTA_RELEVANCIA_HIERARQUICA"], dict):
-            import json, re
-            relevancia_str = json.dumps(dados["LISTA_RELEVANCIA_HIERARQUICA"], indent=4, ensure_ascii=False)
-            pattern = r'LISTA_RELEVANCIA_HIERARQUICA\s*=\s*\{[\s\S]*?\}'
-            replacement = f'LISTA_RELEVANCIA_HIERARQUICA = {relevancia_str}'
-            content = re.sub(pattern, replacement, content, flags=re.DOTALL)
-
-        # Novas listas editáveis para o Gatekeeper
-        if "P1_ITENS" in dados and isinstance(dados["P1_ITENS"], list):
-            import json, re
-            p1_str = json.dumps(dados["P1_ITENS"], indent=4, ensure_ascii=False)
-            pattern = r'P1_ITENS\s*=\s*\[[\s\S]*?\]'
-            replacement = f'P1_ITENS = {p1_str}'
-            content = re.sub(pattern, replacement, content, flags=re.DOTALL)
-
-        if "P2_ITENS" in dados and isinstance(dados["P2_ITENS"], list):
-            import json, re
-            p2_str = json.dumps(dados["P2_ITENS"], indent=4, ensure_ascii=False)
-            pattern = r'P2_ITENS\s*=\s*\[[\s\S]*?\]'
-            replacement = f'P2_ITENS = {p2_str}'
-            content = re.sub(pattern, replacement, content, flags=re.DOTALL)
-
-        if "P3_ITENS" in dados and isinstance(dados["P3_ITENS"], list):
-            import json, re
-            p3_str = json.dumps(dados["P3_ITENS"], indent=4, ensure_ascii=False)
-            pattern = r'P3_ITENS\s*=\s*\[[\s\S]*?\]'
-            replacement = f'P3_ITENS = {p3_str}'
-            content = re.sub(pattern, replacement, content, flags=re.DOTALL)
         
         if "PROMPT_EXTRACAO_PERMISSIVO_V8" in dados and isinstance(dados["PROMPT_EXTRACAO_PERMISSIVO_V8"], str):
             # Substitui o prompt principal (sem prefixo f para evitar erros de formatação)
             import re
             pattern = r'PROMPT_EXTRACAO_PERMISSIVO_V8\s*=\s*f?"""[\s\S]*?"""'
             replacement = 'PROMPT_EXTRACAO_PERMISSIVO_V8 = """' + dados["PROMPT_EXTRACAO_PERMISSIVO_V8"] + '"""'
-            content = re.sub(pattern, replacement, content, flags=re.DOTALL)
+            content = re.sub(pattern, lambda m: replacement, content, flags=re.DOTALL)
 
         if "PROMPT_AGRUPAMENTO_V1" in dados and isinstance(dados["PROMPT_AGRUPAMENTO_V1"], str):
             # Atualiza o prompt de agrupamento
             import re
             pattern = r'PROMPT_AGRUPAMENTO_V1\s*=\s*"""[\s\S]*?"""'
             replacement = 'PROMPT_AGRUPAMENTO_V1 = """' + dados["PROMPT_AGRUPAMENTO_V1"] + '"""'
-            content = re.sub(pattern, replacement, content, flags=re.DOTALL)
+            content = re.sub(pattern, lambda m: replacement, content, flags=re.DOTALL)
 
         if "PROMPT_RESUMO_FINAL_V3" in dados and isinstance(dados["PROMPT_RESUMO_FINAL_V3"], str):
             import re

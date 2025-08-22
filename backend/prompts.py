@@ -24,93 +24,93 @@
 
 # Dicionário central para as tags temáticas de Special Situations.
 TAGS_SPECIAL_SITUATIONS = {
-    'M&A e Transações Corporativas': {
-        'descricao': 'Mudanças na estrutura de capital ou controle de empresas através de transações.',
-        'exemplos': [
-            'Fusões e Aquisições (M&A) - Apenas quando o fato gerador for um anúncio oficial de transação, um acordo assinado ou uma negociação formal e exclusiva em andamento. Intenções genéricas de "buscar aquisições" devem ser P3 ou rejeitadas',
-            'Venda de ativos ou subsidiárias (divestitures)',
-            'Ofertas públicas de aquisição (OPA)',
-            'Disputas por controle acionário que podem levar a uma transação'
+    "M&A e Transações Corporativas": {
+        "descricao": "Mudanças na estrutura de capital ou controle de empresas através de transações.",
+        "exemplos": [
+            "Fusões e Aquisições (M&A) - Apenas quando o fato gerador for um anúncio oficial de transação, um acordo assinado ou uma negociação formal e exclusiva em andamento. Intenções genéricas de ",
+            "Venda de ativos ou subsidiárias (divestitures)",
+            "Ofertas públicas de aquisição (OPA)",
+            "Disputas por controle acionário que podem levar a uma transação"
         ]
     },
-    'Jurídico, Falências e Regulatório': {
-        'descricao': 'Eventos legais ou regulatórios que criam estresse financeiro, oportunidades de arbitragem ou alteram o ambiente de negócios.',
-        'exemplos': [
-            'Recuperação Judicial (RJ), Falência, Pedido de Falência, Assembleia de Credores',
-            'Disputas societárias relevantes ENTRE SÓCIOS, ACIONISTAS ou CONSELHO de uma EMPRESA, com impacto em controle ou governança. (Ex: NÃO se aplica a disputas entre partidos políticos ou investigações de agentes públicos por crimes comuns)',
-            'Mudanças em Legislação (Tributária, Societária, Falimentar)',
-            'Decisões do CADE (bloqueio de fusões, imposição de remédios)',
-            'Decisões de tribunais superiores (STF, STJ) com impacto direto em empresas ou setores'
+    "Jurídico, Falências e Regulatório": {
+        "descricao": "Eventos legais ou regulatórios que criam estresse financeiro, oportunidades de arbitragem ou alteram o ambiente de negócios.",
+        "exemplos": [
+            "Recuperação Judicial (RJ), Falência, Pedido de Falência, Assembleia de Credores",
+            "Disputas societárias relevantes ENTRE SÓCIOS, ACIONISTAS ou CONSELHO de uma EMPRESA, com impacto em controle ou governança. (Ex: NÃO se aplica a disputas entre partidos políticos ou investigações de agentes públicos por crimes comuns)",
+            "Mudanças em Legislação (Tributária, Societária, Falimentar)",
+            "Decisões do CADE (bloqueio de fusões, imposição de remédios)",
+            "Decisões de tribunais superiores (STF, STJ) com impacto direto em empresas ou setores"
         ]
     },
-    'Dívida Ativa e Créditos Públicos': {
-        'descricao': 'Oportunidades de aquisição ou securitização de créditos detidos por ou contra entidades públicas.',
-        'exemplos': [
-            'Venda de grandes blocos ou securitização de Dívida Ativa por estados e municípios',
-            'Qualquer noticia relacionada a lei nº 208, de 2 de julho de 2024 que regula a securitização da divida dos entes publicos, estados e municipios',
-            'Crédito Tributário (grandes teses, oportunidades de monetização)',
-            'Notícias sobre a liquidação ou venda de carteiras de Precatórios',
-            'AlteraçÕes nas leis de cobrança de impostos municipais ou estaduais (especialmente ICMS, ISS E IPTU)',
-            'Créditos FCVS (apenas notícias sobre liquidação ou venda de grandes volumes)'
+    "Dívida Ativa e Créditos Públicos": {
+        "descricao": "Assuntos relacionados à gestão da divida ativa dos Estados, MUnicípios e da União",
+        "exemplos": [
+            "Qualquer noticia relacionada a divida ativa de Estado, Município ou mesmo da União",
+            "Qualquer noticia relacionada a lei complementar nº 208, de 2 de julho de 2024 que regula a securitização da divida dos entes publicos, estados e municipios",
+            "Qualquer notícia relacionada a matéria tributária, ou à cobrança de impostos, taxas, que afetem a arrecadação, especialmente sobre divida ativa",
+            "Notícias sobre a liquidação ou venda de carteiras de Precatórios",
+            "AlteraçÕes nas leis de cobrança de impostos municipais ou estaduais (especialmente ICMS, ISS E IPTU)",
+            "Créditos FCVS (apenas notícias sobre liquidação ou venda de grandes volumes)"
         ]
     },
-    'Distressed Assets e NPLs': {
-        'descricao': 'Ativos ou carteiras de crédito que estão sob estresse financeiro e podem ser negociados com desconto.',
-        'exemplos': [
-            'Créditos Inadimplentes (NPLs), Créditos Podres (Distressed Debt), Venda de Carteira de NPL',
-            'Leilões Judiciais de Ativos (imóveis, participações societárias > R$10 milhões)',
-            'Empresas ou ativos específicos em Crise de Liquidez Aguda'
+    "Distressed Assets e NPLs": {
+        "descricao": "Ativos ou carteiras de crédito que estão sob estresse financeiro e podem ser negociados com desconto.",
+        "exemplos": [
+            "Créditos Inadimplentes (NPLs), Créditos Podres (Distressed Debt), Venda de Carteira de NPL",
+            "Leilões Judiciais de Ativos (imóveis, participações societárias > R$10 milhões)",
+            "Empresas ou ativos específicos em Crise de Liquidez Aguda"
         ]
     },
-    'Mercado de Capitais e Finanças Corporativas': {
-        'descricao': 'Saúde financeira das empresas e movimentos no mercado de capitais que sinalizam estresse ou oportunidade.',
-        'exemplos': [
-            'Quebra de Covenants, Default de Dívida',
-            'Ativismo Acionário relevante',
-            'Grandes emissões de dívida (debêntures), renegociações de dívidas corporativas',
-            'Resultados financeiros que indiquem forte deterioração ou estresse severo'
+    "Mercado de Capitais e Finanças Corporativas": {
+        "descricao": "Saúde financeira das empresas e movimentos no mercado de capitais que sinalizam estresse ou oportunidade.",
+        "exemplos": [
+            "Quebra de Covenants, Default de Dívida",
+            "Ativismo Acionário relevante",
+            "Grandes emissões de dívida (debêntures), renegociações de dívidas corporativas",
+            "Resultados financeiros que indiquem forte deterioração ou estresse severo"
         ]
     },
-    'Política Econômica (Brasil)': {
-        'descricao': 'Decisões do governo e Banco Central do Brasil com impacto direto na saúde financeira das empresas e no ambiente de crédito.',
-        'exemplos': [
-            'Decisões de juros (Copom) e política fiscal',
-            'Grandes leilões de concessão, planos de estímulo ou contingência',
-            'Mudanças na tributação com impacto setorial amplo'
+    "Política Econômica (Brasil)": {
+        "descricao": "Decisões do governo e Banco Central do Brasil com impacto direto na saúde financeira das empresas e no ambiente de crédito.",
+        "exemplos": [
+            "Decisões de juros (Copom) e política fiscal",
+            "Grandes leilões de concessão, planos de estímulo ou contingência",
+            "Mudanças na tributação com impacto setorial amplo"
         ]
     },
-    'Internacional (Economia e Política)': {
-        'descricao': 'Eventos de política e economia que ocorrem fora do Brasil, mas cujo contexto é relevante para o mercado global.',
-        'exemplos': [
-            'Geoeconomia, Acordos Comerciais, Decisões do FED e BCE',
-            'Crises políticas ou econômicas em outros países (ex: Argentina)',
-            'Resultados de multinacionais que sirvam como termômetro de setores globais'
+    "Internacional (Economia e Política)": {
+        "descricao": "Eventos de política e economia que ocorrem fora do Brasil, mas cujo contexto é relevante para o mercado global.",
+        "exemplos": [
+            "Geoeconomia, Acordos Comerciais, Decisões do FED e BCE",
+            "Crises políticas ou econômicas em outros países (ex: Argentina)",
+            "Resultados de multinacionais que sirvam como termômetro de setores globais"
         ]
     },
-    'Tecnologia e Setores Estratégicos': {
-        'descricao': 'Tendências e grandes movimentos em setores de alto capital ou tecnologia que podem gerar oportunidades de M&A ou disrupção.',
-        'exemplos': [
-            'Inteligência Artificial (IA - grandes M&As no setor, regulação pesada)',
-            'Semicondutores (geopolítica da cadeia de suprimentos, grandes investimentos)',
-            'EnergIA Nuclear e Aeroespacial (grandes projetos, concessões)'
+    "Tecnologia e Setores Estratégicos": {
+        "descricao": "Tendências e grandes movimentos em setores de alto capital ou tecnologia que podem gerar oportunidades de M&A ou disrupção.",
+        "exemplos": [
+            "Inteligência Artificial (IA - grandes M&As no setor, regulação pesada)",
+            "Semicondutores (geopolítica da cadeia de suprimentos, grandes investimentos)",
+            "EnergIA Nuclear e Aeroespacial (grandes projetos, concessões)"
         ]
     },
-    'Divulgação de Resultados': {
-        'descricao': 'Publicações oficiais de resultados trimestrais/anuais (earnings) de empresas.',
-        'exemplos': [
-            'Divulgação de resultados trimestrais (ex.: 2T24, 3T24, 4T24)',
-            'Conference call de resultados/press release de earnings',
-            'Atualização de guidance vinculada ao release de resultados',
-            'Observação: Resultados com sinais de estresse severo (impairment, write-down, quebra de covenants) podem ser elevados para P2.'
+    "Divulgação de Resultados": {
+        "descricao": "Publicações oficiais de resultados trimestrais/anuais (earnings) de empresas.",
+        "exemplos": [
+            "Divulgação de resultados trimestrais (ex.: 2T24, 3T24, 4T24)",
+            "Conference call de resultados/press release de earnings",
+            "Atualização de guidance vinculada ao release de resultados",
+            "Observação: Resultados com sinais de estresse severo (impairment, write-down, quebra de covenants) podem ser elevados para P2."
         ]
     },
-    'IRRELEVANTE': {
-        'descricao': 'Estamos na mesa de Special Situations do BTG Pactual. Vamos classificar tudo que que não tem contato conosco como IRRELEVANTE.',
-        'exemplos': [
-            'Noticias sobre crimes comuns, politica, opiniÕes que nao tem contato com o banco',
-            'Fofocas, entretenimento, esportes, programas sociais, horoscopop, events culturais, esposiçoes, esportes, etc.',
-            'Eventos esportivos, culturais, musicas, shows, teatrosetc.',
-            'Programas publicos e do governo sociais, ambientes, bolsa familia, desemprego, etc que nao impactem a economia de forma abrangente'
+    "IRRELEVANTE": {
+        "descricao": "Estamos na mesa de Special Situations do BTG Pactual. Vamos classificar tudo que que não tem contato conosco como IRRELEVANTE.",
+        "exemplos": [
+            "Noticias sobre crimes comuns, politica, opiniÕes que nao tem contato com o banco",
+            "Fofocas, entretenimento, esportes, programas sociais, etc.",
+            "Eventos esportivos, culturais, musicas, shows, teatrosetc.",
+            "Programas publicos e do governo sociais, ambientes, bolsa familia, desemprego, etc que nao impactem a economia de forma abrangente"
         ]
     }
 }
@@ -152,6 +152,9 @@ try:
         _compiled = get_prompts_compilados(_db)
         if isinstance(_compiled, dict) and _compiled.get('tags'):
             TAGS_SPECIAL_SITUATIONS = _compiled['tags']  # type: ignore
+            print("🔗 prompts.py: TAGS_SPECIAL_SITUATIONS carregadas do BANCO de dados")
+        else:
+            print("📄 prompts.py: Usando TAGS_SPECIAL_SITUATIONS definidas no arquivo (fallback)")
     finally:
         _db.close()
 except Exception:
@@ -169,21 +172,21 @@ P1_ITENS = [
     "Anúncio de Falência ou Recuperação Judicial (RJ) de empresas Médias e Grandes",
     "Default de Dívida ou Quebra de Covenants anunciado oficialmente.",
     "Crise de Liquidez Aguda em empresa relevante ou crise soberana em país vizinho.",
-    "M&A ou Venda de Ativo RELEVANTE (> R$ 100 milhões) — ANUNCIADO OFICIALMENTE. Intenções genéricas como ‘buscar aquisições’ NÃO são P1.",
+    "M&A ou Venda de Ativo RELEVANTE (> R$ 100 milhões) — ANUNCIADO OFICIALMENTE. Intenções genéricas como 'buscar aquisições' NÃO são P1.",
     "Leilões de Ativos/Concessões inclusive NPL (> R$ 50 Milhões) com data marcada.",
     "Venda de carteiras de NPLs / Créditos Podres incluindo a venda e ou securitização de blocos de dívida ativa de estados e municípios.",
     "Notícia Crítica sobre Empresas-Foco (BTG Pactual, Banco Pan, Caixa Econômica Federal, Banco Master, PREVIC, IRB Brasil RE) que se enquadre como P1.",
     "Mudanças em Legislação com votação marcada no plenário e impacto setorial bilionário.",
-    'Política Econômica (Decisões de juros, política fiscal e outras variáveis que afetem diretamente e de forma intensa o crédito e a saúde financeira das empresas)',
-    'Decisões Grandes/Relevantes do CADE (bloqueio de fusões, imposição de remédios)',
+    "Política Econômica (Decisões de juros, política fiscal e outras variáveis que afetem diretamente e de forma intensa o crédito e a saúde financeira das empresas)",
+    "Decisões Grandes/Relevantes do CADE (bloqueio de fusões, imposição de remédios)",
     "Decisão de Tribunal Superior (STF/STJ) com precedente VINCULANTE que altera significativamente regras de Recuperação de Crédito, Direito Falimentar, Tributário ou Societário.",
     "Mudança em legislação ou regulamentação com APLICAÇÃO IMEDIATA e impacto setorial bilionário."
 ]
 
 P2_ITENS = [
     "Venda e/ou securitização de Dívida Ativa / Precatórios / FCVS.",
-    "Discussões sobre mudança na legilasção que afetem diretamente a cobrança das dividas das empresas"
-    "Decisões judiciais de outras instâncias (ex: TRFs, TJs) com precedente setorial relevante."
+    "Discussões sobre mudança na legilasção que afetem diretamente a cobrança das dividas das empresas",
+    "Decisões judiciais de outras instâncias (ex: TRFs, TJs) com precedente setorial relevante.",
     "Denúncia de gestão temerária em instituição financeira junto ao Banco Central.",
     "Suspensão judicial de um M&A ou da execução de dívidas de uma empresa relevante.",
     "Notícias importantes sobre o Mercado Imobiliário com impacto setorial amplo.",
@@ -192,7 +195,7 @@ P2_ITENS = [
     "Grandes disputas societárias em empresas relevantes.",
     "M&A ou Investimento de grande porte (> R$ 1 bilhão) nos setores de Tecnologia, IA, Energia ou Defesa.",
     "Operação de Corrupção de GRANDE ESCALA com impacto direto em empresas listadas/relevantes (ex.: Operação Ícaro).",
-    'Ativismo Acionário (grandes investidores tentando influenciar a gestão)',
+    "Ativismo Acionário (grandes investidores tentando influenciar a gestão)",
     "Mudança de jurisprudência consolidada em tribunais (TRF, TST) com impacto setorial amplo (ex: Direito do Trabalho para um setor específico, teses tributárias).",
     "Publicação de acórdão ou tese de repercussão geral com impacto direto em passivos/ativos de empresas."
 ]
@@ -201,7 +204,7 @@ P3_ITENS = [
     "Tecnologia e mercados adjacentes: avanços gerais em IA, exploração espacial, setor de defesa, gaming e criptomoedas.",
     "Acompanhamento de Empresas (Radar, essa é 1:1 com uma TAG): notícias gerais ou divulgação de resultados de Meta, Google, Alphabet, Apple, Constellation Energy, Tesla, AMD, Intel, Microsoft, Intuitive Machines, Netflix, Micron, Siemens Energy AG, e outras grandes empresas listadas.",
     "Contexto macro e político: inflação/juros/câmbio, política econômica, discussões sobre projetos de lei (sem votação marcada), eventos geopolíticos.",
-    "Atos institucionais de rotina: decisões judiciais de menor impacto, aprovações de licenças, indicações para agências, atas de assembleias."         
+    "Atos institucionais de rotina: decisões judiciais de menor impacto, aprovações de licenças, indicações para agências, atas de assembleias."
 ]
 
 def _render_bullets(itens):
@@ -221,12 +224,20 @@ try:
     try:
         _compiled2 = get_prompts_compilados(_db2)
         if isinstance(_compiled2, dict):
+            loaded_from_db = False
             if _compiled2.get('p1'):
                 P1_ITENS = _compiled2['p1']  # type: ignore
+                loaded_from_db = True
             if _compiled2.get('p2'):
                 P2_ITENS = _compiled2['p2']  # type: ignore
+                loaded_from_db = True
             if _compiled2.get('p3'):
                 P3_ITENS = _compiled2['p3']  # type: ignore
+                loaded_from_db = True
+            if loaded_from_db:
+                print("🔗 prompts.py: Listas P1/P2/P3 carregadas do BANCO de dados")
+            else:
+                print("📄 prompts.py: Usando listas P1/P2/P3 do arquivo (fallback)")
     finally:
         _db2.close()
 except Exception:
@@ -662,46 +673,46 @@ Você é um assistente especializado em análise de notícias financeiras e de n
 # PROMPT DE PRIORIZAÇÃO EXECUTIVA (PÓS-PIPELINE)
 # ==============================================================================
 
-PROMPT_PRIORIZACAO_EXECUTIVA_V1 = """
-Você é um executivo sênior da mesa de 'Special Situations' do BTG Pactual. Sua tarefa é fazer a PRIORIZAÇÃO FINAL de uma lista de itens já consolidados (pós-extração, pós-agrupamento e pós-resumo), aplicando o GATING mais rígido e descartando ruído.
+# PROMPT_PRIORIZACAO_EXECUTIVA_V1 = """
+# Você é um executivo sênior da mesa de 'Special Situations' do BTG Pactual. Sua tarefa é fazer a PRIORIZAÇÃO FINAL de uma lista de itens já consolidados (pós-extração, pós-agrupamento e pós-resumo), aplicando o GATING mais rígido e descartando ruído.
 
-OBJETIVO: Reclassificar cada item como P1_CRITICO, P2_ESTRATEGICO, P3_MONITORAMENTO ou IRRELEVANTE, ajustar o score e dar uma justificativa executiva concisa.
+# OBJETIVO: Reclassificar cada item como P1_CRITICO, P2_ESTRATEGICO, P3_MONITORAMENTO ou IRRELEVANTE, ajustar o score e dar uma justificativa executiva concisa.
 
-REGRAS DE DECISÃO (GATING RÍGIDO):
-- P1_CRITICO SOMENTE se o assunto-chave ∈ {{Recuperação Judicial, Falência, Pedido de Falência, Assembleia de Credores, Default de Dívida, Quebra de Covenants, Crise de Liquidez Aguda, M&A ANUNCIADO/OPA, Decisão do CADE com remédios vinculantes, Venda de carteira NPL / Securitização RELEVANTE com valores altos e players relevantes}}.
-- Casos de 'Divulgação de Resultados' são P1 APENAS se a empresa estiver na lista `EMPRESAS_PRIORITARIAS`. Para demais empresas, classifique como P3_MONITORAMENTO, salvo se houver estresse severo que enquadre nas regras gerais de P1.
-- NÃO É P1: assembleias rotineiras sem evento material; comunicados administrativos; rumores; política partidária; incidentes operacionais casuísticos sem risco sistêmico; notas sem materialidade mensurável; anúncios de produtos/funcionalidades sem impacto financeiro claro.
-- P2_ESTRATEGICO: potencial de impacto financeiro mensurável (players/valores/cronograma claros), porém sem gatilho imediato de P1 (ex.: mudança regulatória em tramitação, grandes investimentos/contratos anunciados sem fechamento definitivo).
-- NÃO é P2: efemérides/programas sociais genéricos (ex.: benefícios, creches), segurança/funcionalidades de apps sem materialidade setorial, política partidária, crimes, esportes/entretenimento, opinião.
-- P3_MONITORAMENTO: contexto macro geral quando útil para entendimento de cenário (ex.: FED/BCE, geoeconomia), sempre com score baixo.
-- IRRELEVANTE: crimes comuns, casos pessoais, fofoca/entretenimento/esportes/eventos, política partidária/pessoal, decisões judiciais casuísticas sem jurisprudência ampla, classificados/procurement/leilões genéricos.
+# REGRAS DE DECISÃO (GATING RÍGIDO):
+# - P1_CRITICO SOMENTE se o assunto-chave ∈ {{Recuperação Judicial, Falência, Pedido de Falência, Assembleia de Credores, Default de Dívida, Quebra de Covenants, Crise de Liquidez Aguda, M&A ANUNCIADO/OPA, Decisão do CADE com remédios vinculantes, Venda de carteira NPL / Securitização RELEVANTE com valores altos e players relevantes}}.
+# - Casos de 'Divulgação de Resultados' são P1 APENAS se a empresa estiver na lista `EMPRESAS_PRIORITARIAS`. Para demais empresas, classifique como P3_MONITORAMENTO, salvo se houver estresse severo que enquadre nas regras gerais de P1.
+# - NÃO É P1: assembleias rotineiras sem evento material; comunicados administrativos; rumores; política partidária; incidentes operacionais casuísticos sem risco sistêmico; notas sem materialidade mensurável; anúncios de produtos/funcionalidades sem impacto financeiro claro.
+# - P2_ESTRATEGICO: potencial de impacto financeiro mensurável (players/valores/cronograma claros), porém sem gatilho imediato de P1 (ex.: mudança regulatória em tramitação, grandes investimentos/contratos anunciados sem fechamento definitivo).
+# - NÃO é P2: efemérides/programas sociais genéricos (ex.: benefícios, creches), segurança/funcionalidades de apps sem materialidade setorial, política partidária, crimes, esportes/entretenimento, opinião.
+# - P3_MONITORAMENTO: contexto macro geral quando útil para entendimento de cenário (ex.: FED/BCE, geoeconomia), sempre com score baixo.
+# - IRRELEVANTE: crimes comuns, casos pessoais, fofoca/entretenimento/esportes/eventos, política partidária/pessoal, decisões judiciais casuísticas sem jurisprudência ampla, classificados/procurement/leilões genéricos.
 
-INSTRUÇÕES:
-1) Releia cada item com mente executiva e aplique as regras acima de forma estrita.
-2) Se a materialidade não estiver explícita (players, valores, cronograma, gatilho), reduza prioridade.
-3) Em dúvida razoável entre P1 e P2, rebaixe para P2; entre P2 e P3, rebaixe para P3; se não houver tese, marque IRRELEVANTE.
+# INSTRUÇÕES:
+# 1) Releia cada item com mente executiva e aplique as regras acima de forma estrita.
+# 2) Se a materialidade não estiver explícita (players, valores, cronograma, gatilho), reduza prioridade.
+# 3) Em dúvida razoável entre P1 e P2, rebaixe para P2; entre P2 e P3, rebaixe para P3; se não houver tese, marque IRRELEVANTE.
 
-ENTRADA (ITENS FINAIS):
-{ITENS_FINAIS}
+# ENTRADA (ITENS FINAIS):
+# {ITENS_FINAIS}
 
-SAÍDA (JSON PURO):
-```json
-[
-  {{
-    "id": 0,
-    "titulo_final": "...",
-    "prioridade_atribuida_inicial": "P2_ESTRATEGICO",
-    "tag_atribuida_inicial": "Mercado de Capitais e Finanças Corporativas",
-    "score_inicial": 72.0,
-    "decisao_prioridade_final": "P1_CRITICO | P2_ESTRATEGICO | P3_MONITORAMENTO | IRRELEVANTE",
-    "score_final": 88.0,
-    "justificativa_executiva": "Concisa, apontando materialidade/gatilho ou falta dela.",
-    "alteracao": "promover | rebaixar | manter",
-    "acao_recomendada": "acionar time | monitorar marco X | acompanhar | descartar"
-  }}
-]
-```
-"""
+# SAÍDA (JSON PURO):
+# ```json
+# [
+#   {{
+#     "id": 0,
+#     "titulo_final": "...",
+#     "prioridade_atribuida_inicial": "P2_ESTRATEGICO",
+#     "tag_atribuida_inicial": "Mercado de Capitais e Finanças Corporativas",
+#     "score_inicial": 72.0,
+#     "decisao_prioridade_final": "P1_CRITICO | P2_ESTRATEGICO | P3_MONITORAMENTO | IRRELEVANTE",
+#     "score_final": 88.0,
+#     "justificativa_executiva": "Concisa, apontando materialidade/gatilho ou falta dela.",
+#     "alteracao": "promover | rebaixar | manter",
+#     "acao_recomendada": "acionar time | monitorar marco X | acompanhar | descartar"
+#   }}
+# ]
+# ```
+# """
 
 # ==============================================================================
 # PROMPT DE CONSOLIDAÇÃO FINAL DE CLUSTERS (ETAPA 4 REAGRUPAMENTO)
@@ -775,15 +786,15 @@ PROMPT_EXTRACAO_PDF_RAW_V1 = """
 Você é um assistente especializado em extrair notícias de PDFs de jornais e revistas.
 
 IMPORTANTE: 
-- Não precisa resumir ou interpretar o conteúdo, o objetivo aqui é extrair o texto completo e original.
+- Não precisa alterar o texto ou interpretar o conteúdo, o objetivo aqui é extrair o texto sem mudar nenhuma semantica.
 - Pode mudar a formatação pois cada jornal coloca em uma formatacao de linhas e paragrafos diferentes, aqui podemos arrumar a formatação
-para ficar correto os pragrafos, linhas, etc, mas o conteudo do texto nao deve ser alterado.
+para ficar correto os pragrafos, linhas, etc, mas o conteudo semantico do texto não deve ser alterado.
 
-### NOTICIAS QUE NÃO PRECISAMOS EXTRAIR, NOTICIAS A SEREM IGNORADAS !
+### NOTICIAS QUE NÃO PRECISAMOS EXTRAIR, NOTICIAS A SEREM IGNORADAS / PULADAS pois são irrelevantes para o banco de investimento !
 Essas noticias vão para os executivos de um banco de investimento então esse é um pré filtro que apenas remove as besteiras abaixo:
 - **Temas:** Esportes, fofocas/celebridades, artes (filmes, séries, livros, gastronomia), crimes comuns (assaltos, homicídios sem impacto sistêmico), publicidade e serviços locais (previsão do tempo, horóscopo).
 - **REGRA DE OURO:** Na dúvida sobre a relevância econômica de uma notícia, **EXTRAIA**. É preferível remover um falso positivo depois do que perder uma notícia importante.
-
+- Anuncios publicitarios, campanhas de marketing, diario oficial, comunicados sem impactos economicos, venda de produtos, veiculos e imóveis individuais (que não sejam blocos)
 
 TAREFA:
 Analise o PDF fornecido e extraia as notícias encontradas, retornando EXATAMENTE este formato JSON:

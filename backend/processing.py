@@ -486,6 +486,19 @@ def processar_artigo_pipeline(db: Session, id_artigo: int, client) -> bool:
         }
         
         update_artigo_processado(db, id_artigo, dados_processados, embedding_artigo)
+
+        # ETAPA 6.1: Opcional — gerar embedding semântico dedicado (text-embedding-3-small) para busca
+        try:
+            from btg_alphafeed.semantic_search.embedder import get_default_embedder  # type: ignore
+            from btg_alphafeed.semantic_search.store import upsert_embedding_for_artigo  # type: ignore
+            emb = get_default_embedder()
+            texto_semantico = f"{noticia_validada['titulo']}. {noticia_validada['texto_completo']}"
+            vec = emb.embed_text(texto_semantico)
+            if isinstance(vec, np.ndarray) and vec.size > 0:
+                upsert_embedding_for_artigo(id_artigo, vec, emb.provider, emb.model)
+        except Exception as _e_semantic:
+            # Não falha o pipeline se indisponível
+            pass
         
         # ETAPA 7: Clusterização (aqui sim usa LLM se necessário)
         cluster_id = find_or_create_cluster(db, noticia_validada, embedding_artigo, client)

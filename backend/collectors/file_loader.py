@@ -115,16 +115,33 @@ class FileLoader:
 
         # Pré-correções comuns antes do parse
         try:
+            # Remove comentários estilo // e /* */
+            json_str = re.sub(r"//.*?$", "", json_str, flags=re.MULTILINE)
+            json_str = re.sub(r"/\*[\s\S]*?\*/", "", json_str)
+
+            # Normaliza aspas tipográficas para ASCII
+            json_str = (json_str
+                        .replace("\u201c", '"').replace("\u201d", '"')
+                        .replace("\u2018", "'").replace("\u2019", "'")
+                        .replace("“", '"').replace("”", '"')
+                        .replace("‘", "'").replace("’", "'"))
+
             # Corrige chaves com aspas simples: {'key': ...} -> {"key": ...}
             json_str = re.sub(r"\'(\w+)\':", r'"\1":', json_str)
+
+            # Aspas em chaves não citadas simples: {key: ...} -> {"key": ...}
+            json_str = re.sub(r'([\{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:', r'\1"\2":', json_str)
 
             # Remove quebras de linha internas em strings para evitar Unterminated string
             def _compactar_strings(m: re.Match) -> str:
                 return m.group(0).replace('\n', r'\\n')
-            json_str = re.sub(r'"[^"\\]*(?:\\.[^"\\]*)*"', _compactar_strings, json_str)
+            json_str = re.sub(r'"[^"\\]*(?:\\.[^"\\])*"', _compactar_strings, json_str)
 
             # Escapa barras invertidas que não fazem parte de sequência JSON válida
             json_str = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', json_str)
+
+            # Remove vírgulas à direita antes de } ou ]
+            json_str = re.sub(r",\s*(\}|\])", r"\1", json_str)
         except Exception as e:
             print(f"  ⚠️ Erro durante correção de string antes do parse: {e}")
 
@@ -140,7 +157,7 @@ class FileLoader:
             print(f"  ❌ Erro ao decodificar JSON (1ª tentativa): {e}")
 
         # Tentativa 2: extrair maior porção plausível entre [] ou {}
-        trecho_match = re.search(r'(\[.*\]|\{.*\})', json_str, re.DOTALL)
+        trecho_match = re.search(r'(\[[\s\S]*\]|\{[\s\S]*\})', json_str, re.DOTALL)
         if trecho_match:
             trecho = trecho_match.group(1)
             try:
@@ -180,21 +197,22 @@ class FileLoader:
             if uploaded_file.state.name != "ACTIVE":
                 raise Exception(f"Falha no processamento do arquivo na API: {uploaded_file.state.name}")
             
-            # Geração de conteúdo: prioriza a interface nova .models.generate_content
+            # Geração de conteúdo: tenta a interface nova .models.generate_content, com fallback seguro
             response = None
-            try:
+            if hasattr(self.client, 'models') and hasattr(self.client.models, 'generate_content'):
                 response = self.client.models.generate_content(
                     model='gemini-2.0-flash',
                     contents=[uploaded_file, self.extraction_prompt],
                     config=self.generation_config_decision
                 )
-            except Exception:
-                # Fallback para clientes que expõem .generate_content na raiz
+            elif hasattr(self.client, 'generate_content'):
                 response = self.client.generate_content(
                     model='models/gemini-2.0-flash',
                     contents=[uploaded_file, self.extraction_prompt],
                     generation_config=self.generation_config_decision
                 )
+            else:
+                raise AttributeError("Cliente Gemini não possui método generate_content compatível")
             self.client.files.delete(name=uploaded_file.name)  # Limpeza
 
             # Tratamento de resposta
@@ -249,6 +267,40 @@ class FileLoader:
                             'relevance_reason_ia': noticia.get('relevance_reason')
                         }
                     })
+
+            # Fallback: se nada válido foi extraído, usa texto simples da página
+            if not artigos_formatados and PDF_AVAILABLE:
+                try:
+                    with fitz.open(pdf_path) as temp_doc:
+                        texto_pagina = ''
+                        if temp_doc.page_count > 0:
+                            texto_pagina = (temp_doc.load_page(0).get_text() or '').strip()
+                    if texto_pagina:
+                        primeira_linha = texto_pagina.split('\n', 1)[0].strip()
+                        jornal_fallback = nome_arquivo_original.replace('.pdf', '')
+                        artigos_formatados.append({
+                            'texto_bruto': texto_pagina,
+                            'url_original': None,
+                            'metadados': {
+                                'titulo': primeira_linha or f"{jornal_fallback} - Página {numero_pagina or ''}",
+                                'subtitulo': '',
+                                'fonte_original': jornal_fallback,
+                                'arquivo_origem': nome_arquivo_original,
+                                'data_processamento': get_datetime_brasil_str(),
+                                'tipo_arquivo': 'pdf',
+                                'jornal': jornal_fallback,
+                                'pagina': numero_pagina,
+                                'data_publicacao': None,
+                                'data_ultima_modificacao': None,
+                                'categoria': None,
+                                'tags_originais': [],
+                                'id_hash_original': '',
+                                'link': None
+                            }
+                        })
+                        print("  🔁 Fallback: extração simples de texto aplicada para esta página.")
+                except Exception as fe:
+                    print(f"  ⚠️ Fallback de texto falhou: {fe}")
         except Exception as e:
             print(f"  ❌ Erro durante a chamada à API Gemini para '{pdf_path.name}': {e}")
         

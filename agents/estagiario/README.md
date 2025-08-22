@@ -18,6 +18,7 @@ O Estagiário é um agente que responde perguntas sobre TODAS as notícias de um
   - Promoções de carros (com/sem preço explícito, sem default oculto de valor), com triagem e síntese.
   - Impactos P1/P2/P3 na relação EUA × Rússia com fluxo resiliente (multi-estratégia, ver abaixo).
   - Busca genérica (intent → filtros → ranking → aprofundar → síntese em Markdown) com KB.
+  - Busca semântica (novo): ferramenta `semantic_search` para consultas abertas sem keywords explícitas.
   - Edições seguras no banco (unitárias): atualizar prioridade, trocar tag, merge 1→1 de clusters (guardrails abaixo).
 - **KB carregado** automaticamente para orientar o LLM (se a variável `GEMINI_API_KEY` estiver configurada).
 - **Logs detalhados** de execução: abertura de sessão, paginação, contagens, início/fim de síntese.
@@ -89,6 +90,15 @@ print(ans.text)
 - Reuso de modelos/CRUDs do backend existentes; sem migrações adicionais para o core do pipeline.
 - **Base de Conhecimento Atualizada**: O agente agora consulta automaticamente as tags e prioridades configuradas no banco de dados via `backend/prompts.py`, que carrega dinamicamente do PostgreSQL.
 - **Configuração Transparente**: As estruturas `TAGS_SPECIAL_SITUATIONS`, `P1_ITENS`, `P2_ITENS` e `P3_ITENS` são mantidas para compatibilidade, mas agora são populadas do banco de dados.
+
+### Embeddings semânticos (novo)
+- Pacote: `btg_alphafeed/semantic_search/`
+- Backfill:
+  ```bash
+  conda activate pymc2
+  python -m btg_alphafeed.semantic_search.backfill_embeddings --limit 1000 --model text-embedding-3-small
+  ```
+  Requisito opcional: `OPENAI_API_KEY` para usar `text-embedding-3-small`; sem chave, usa fallback determinístico.
 
 ### Sincronização Banco ↔ Prompts
 - O backend usa SEMPRE o banco como fonte da verdade. O arquivo `backend/prompts.py` serve de fallback.

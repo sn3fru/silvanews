@@ -7,11 +7,13 @@ class ToolExecutor:
             "query_clusters": definitions.query_clusters,
             "get_cluster_details": definitions.get_cluster_details,
             "update_cluster_priority": definitions.update_cluster_priority,
+            "semantic_search": definitions.semantic_search,
         }
         self.tool_schemas = {
             "query_clusters": definitions.QueryClustersInput,
             "get_cluster_details": definitions.GetClusterDetailsInput,
             "update_cluster_priority": definitions.UpdateClusterPriorityInput,
+            "semantic_search": definitions.SEMANTICSEARCHINPUT if hasattr(definitions, "SEMANTICSEARCHINPUT") else definitions.SemanticSearchInput,
         }
 
     def get_tool_names(self) -> list:
@@ -23,6 +25,7 @@ class ToolExecutor:
         desc.append("- query_clusters(data?: YYYY-MM-DD, prioridade?: P1_CRITICO|P2_ESTRATEGICO|P3_MONITORAMENTO, palavras_chave?: string[], limite?: int): lista clusters do dia.")
         desc.append("- get_cluster_details(cluster_id: int): detalhes do cluster, incluindo artigos originais.")
         desc.append("- update_cluster_priority(cluster_id: int, nova_prioridade: P1_CRITICO|P2_ESTRATEGICO|P3_MONITORAMENTO|IRRELEVANTE): atualização unitária e segura.")
+        desc.append("- semantic_search(consulta: string, limite?: int=5, modelo?: string=text-embedding-3-small): retorna artigos mais próximos semanticamente à consulta.")
         return "\n".join(desc)
 
     def execute(self, tool_name: str, tool_input: dict):

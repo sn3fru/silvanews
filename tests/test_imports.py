@@ -31,6 +31,11 @@ try:
     print("📦 Testando importação do crud...")
     from backend.crud import create_artigo_bruto
     print("✅ create_artigo_bruto importado com sucesso!")
+
+    print("📦 Testando importação do semantic_search...")
+    import btg_alphafeed.semantic_search as ss
+    assert hasattr(ss, 'semantic_search')
+    print("✅ semantic_search importado com sucesso!")
     
     print("\n🎉 Todas as importações funcionaram!")
     print("✅ O sistema está pronto para uso!")

@@ -380,6 +380,40 @@ class PromptTag(Base):
     )
 
 
+# ========================
+# Busca Semântica (Embeddings dedicados)
+# ========================
+
+class SemanticEmbedding(Base):
+    """
+    Tabela dedicada para armazenar embeddings de busca semântica por artigo.
+    Mantida separada para não impactar o pipeline existente que usa `ArtigoBruto.embedding` (bytes 384d).
+    """
+    __tablename__ = "semantic_embeddings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    artigo_id = Column(Integer, ForeignKey('artigos_brutos.id'), nullable=False, index=True)
+
+    # Vetor armazenado como bytes (float32 array). Dimensão registrada abaixo.
+    vector_bytes = Column(LargeBinary, nullable=False)
+    dimension = Column(Integer, nullable=False)
+
+    # Metadados do provedor/modelo (ex.: provider="openai", model="text-embedding-3-small")
+    provider = Column(String(50), nullable=False)
+    model = Column(String(120), nullable=False, index=True)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relacionamento auxiliar
+    artigo = relationship("ArtigoBruto")
+
+    __table_args__ = (
+        Index('idx_semantic_unique', 'artigo_id', 'model'),
+    )
+
+
 class PromptPrioridadeItem(Base):
     __tablename__ = "prompt_prioridade_itens"
 

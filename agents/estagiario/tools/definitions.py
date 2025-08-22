@@ -13,6 +13,11 @@ try:
 except Exception:
     SessionLocal = None  # type: ignore
 
+try:
+    from btg_alphafeed.semantic_search import get_default_embedder, semantic_search as _semantic_search
+except Exception:
+    get_default_embedder = None  # type: ignore
+    _semantic_search = None  # type: ignore
 
 class QueryClustersInput(BaseModel):
     data: Optional[date] = Field(default=None, description="Data no formato YYYY-MM-DD. Padrão: hoje.")
@@ -90,5 +95,20 @@ def update_cluster_priority(params: UpdateClusterPriorityInput) -> Dict[str, Any
             db.close()
         except Exception:
             pass
+
+
+class SemanticSearchInput(BaseModel):
+    consulta: str
+    limite: int = Field(5, ge=1, le=50)
+    modelo: str = Field("text-embedding-3-small")
+
+
+def semantic_search(params: SemanticSearchInput) -> Dict[str, Any]:
+    if get_default_embedder is None or _semantic_search is None:
+        return {"ok": False, "error": "Semantic search indisponível"}
+    embedder = get_default_embedder()
+    vec = embedder.embed_text(params.consulta)
+    results = _semantic_search(vec, params.modelo, top_k=params.limite)
+    return {"ok": True, "results": results}
 
 

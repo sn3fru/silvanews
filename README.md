@@ -19,6 +19,10 @@ Plataforma de inteligência de mercado que transforma alto volume de notícias e
 - Endurecimento do `PROMPT_EXTRACAO_PERMISSIVO_V8`: lista de rejeição ampliada (crimes comuns, casos pessoais, fofoca/entretenimento, esportes, política partidária, efemérides e programas sociais sem tese) e gating P1/P2/P3 mais duro.
 - Priorização Executiva Final integrada: etapa adicional pós-resumo/pós-agrupamento que reclassifica como P1/P2/P3/IRRELEVANTE com justificativa e ação recomendada (`PROMPT_PRIORIZACAO_EXECUTIVA_V1`).
 - Nova Etapa 4 – Consolidação Final de Clusters: reagrupamento conservador de clusters do dia usando `PROMPT_CONSOLIDACAO_CLUSTERS_V1` com base em títulos, tags e prioridades já atribuídos. A maioria dos clusters permanece inalterada; quando há duplicidade (p.ex. variações de “PGFN arrecadação recorde”), a etapa sugere merges, move artigos para um destino, ajusta título/tag/prioridade quando necessário e arquiva (soft delete) os duplicados.
+ - Robustez: ajustes para evitar truncamento do LLM e JSON quebrado — lotes menores, campos de resumo encurtados e fallback de parsing.
+   - Incremental: lotes de até 100, `titulos_internos` reduzido a 10 por cluster, heurística que impede criação de múltiplos clusters genéricos (ex.: “Notícia sem título”).
+   - Priorização: lotes de até 40, `resumo_final` enviado truncado a ~240 caracteres, `max_output_tokens` 8192 para batched.
+   - Consolidação: lotes de até 50; parsing de sugestões tolerante a erros; fallback determinístico por título/tag.
 
 ### Filtros e visualização (frontend)
 - Seletor de data no topo: alterna entre hoje e datas históricas (tudo GMT-3).
@@ -42,18 +46,18 @@ Plataforma de inteligência de mercado que transforma alto volume de notícias e
    - Salva como artigos brutos (status `pendente`) com `texto_bruto` preservado
 2) Processamento inicial (Etapa 1)
    - `process_articles.py::processar_artigo_sem_cluster`
-   - Valida dados, gera embeddings e pode gerar um resumo curto via `PROMPT_RESUMO_FINAL_V3` (sem clusterização)
+   - Valida dados, aplica heurísticas leves e gera embeddings (sem prompts/LLM)
    - Marca `pronto_agrupar`
 3) Agrupamento (Etapa 2)
    - Lote: `process_articles.py::agrupar_noticias_com_prompt` → `PROMPT_AGRUPAMENTO_V1`
-   - Incremental: `process_articles.py::agrupar_noticias_incremental` → `PROMPT_AGRUPAMENTO_INCREMENTAL_V2`
+   - Incremental: `process_articles.py::agrupar_noticias_incremental` → `PROMPT_AGRUPAMENTO_INCREMENTAL_V2` (lotes ≤ 100; 10 títulos por cluster; heurística anti-duplicação para títulos genéricos)
 4) Classificação e Resumo (Etapa 3)
    - `process_articles.py::classificar_e_resumir_cluster`
    - Classificação/Prioridade/Tag: `PROMPT_EXTRACAO_GATEKEEPER_V13`
    - Resumo do CLUSTER: `PROMPT_RESUMO_FINAL_V3` (salvo em `texto_processado` do cluster)
 5) Priorização e Consolidação (Etapa 4)
-   - Priorização executiva: `process_articles.py::priorizacao_executiva_final` → `PROMPT_PRIORIZACAO_EXECUTIVA_V1` (batched)
-   - Consolidação final: `process_articles.py::consolidacao_final_clusters` → `PROMPT_CONSOLIDACAO_CLUSTERS_V1` + fallback determinístico (Jaccard por título e mesma tag)
+   - Priorização executiva: `process_articles.py::priorizacao_executiva_final` → `PROMPT_PRIORIZACAO_EXECUTIVA_V1` (lotes ≤ 40; `resumo_final` ~240; `max_output_tokens` 8192)
+   - Consolidação final: `process_articles.py::consolidacao_final_clusters` → `PROMPT_CONSOLIDACAO_CLUSTERS_V1` (lotes ≤ 50) + fallback determinístico (Jaccard por título e mesma tag)
 6) Exposição: API `FastAPI` alimenta o frontend; CRUD e endpoints admin.
 
 ```mermaid
@@ -73,12 +77,25 @@ graph TD
 ### LLMs e prompts (o que roda e para quê)
 - Extração de PDFs: `PROMPT_EXTRACAO_PDF_RAW_V1`.
 - Gatekeeper de relevância/priority/tag (clusters): `PROMPT_EXTRACAO_GATEKEEPER_V13`.
-- Agrupamento em lote: `PROMPT_AGRUPAMENTO_V1`.
-- Agrupamento incremental (novas notícias do dia): `PROMPT_AGRUPAMENTO_INCREMENTAL_V2` (contexto enriquecido com `titulos_internos`).
+- Agrupamento em lote: `PROMPT_AGRUPAMENTO_V1` (lotes ≤ 60; `max_output_tokens` 32768).
+- Agrupamento incremental (novas notícias do dia): `PROMPT_AGRUPAMENTO_INCREMENTAL_V2` (lotes ≤ 100; 10 títulos por cluster; `max_output_tokens` 32768).
 - Resumo executivo por prioridade: `PROMPT_RESUMO_FINAL_V3`.
 - Chat com cluster: `PROMPT_CHAT_CLUSTER_V1`.
 - Priorização executiva (pós-pipeline): `PROMPT_PRIORIZACAO_EXECUTIVA_V1`.
 - Consolidação final de clusters (Etapa 4): `PROMPT_CONSOLIDACAO_CLUSTERS_V1`.
+
+### Busca Semântica (novo módulo)
+- Pacote: `btg_alphafeed/semantic_search/` com:
+  - `embedder.py`: geração de embeddings (`text-embedding-3-small` via OpenAI se disponível; fallback determinístico).
+  - `store.py`: persistência em `semantic_embeddings` (tabela dedicada, não interfere no pipeline atual).
+  - `search.py`: busca por similaridade de cosseno em memória (compatível sem pgvector).
+  - `backfill_embeddings.py`: utilitário CLI para gerar embeddings dos artigos existentes.
+- Integração com o agente Estagiário: nova tool `semantic_search(consulta, limite?, modelo?)` para consultas abertas.
+- Como rodar o backfill:
+  ```bash
+  conda activate pymc2
+  python -m btg_alphafeed.semantic_search.backfill_embeddings --limit 1000 --model text-embedding-3-small
+  ```
 
 ### Agente Estagiário: plano → execução (agentic)
 - O agente agora opera com camadas LLM para planejar e executar:
@@ -221,6 +238,19 @@ Passo a passo:
 - Ver estado da API e DB:
   ```bash
   curl http://localhost:8000/health
+  ```
+
+### Reprocessamento seletivo (do dia atual)
+- Reverter clusters problemáticos (move artigos para `pronto_agrupar` e arquiva clusters):
+  ```bash
+  # Seleção automática por títulos genéricos (ex.: "Notícia sem título")
+  python revert_bad_clusters.py
+  # OU por IDs específicos
+  python revert_bad_clusters.py --ids 8349,8350
+  ```
+- Reagrupar apenas os revertidos e concluir Etapas 3 e 4:
+  ```bash
+  python reprocess_incremental_today.py
   ```
 
 ### Novo (Protótipo) – Análise de Feedback para Ajuste de Prompt
