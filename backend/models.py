@@ -112,6 +112,7 @@ class ClusterEventoCreate(BaseModel):
     tag: TagType
     prioridade: PrioridadeType
     embedding_medio: Optional[bytes] = Field(default=None, description="Embedding médio do cluster")
+    tipo_fonte: Optional[str] = Field(default='nacional', description="Tipo de fonte: nacional ou internacional")
 
 
 class FeedResponse(BaseModel):

@@ -47,6 +47,7 @@ let currentClusterId = null; // ID do cluster atual no modal
 let currentChatSession = null; // Sessão de chat atual
 let currentTags = []; // Tags atuais do cluster
 let currentClusterDetails = null; // Detalhes do cluster atualmente aberto no modal
+let tipoFonteAtivo = 'nacional'; // Tipo de fonte ativo: 'nacional' ou 'internacional'
 
 // Helpers de data sem impacto de fuso (tratam 'YYYY-MM-DD' como data local)
 function parseLocalDate(yyyyMmDd) {
@@ -93,6 +94,12 @@ let currentLoadingPhase = ''; // 'P1', 'P2', 'P3'
 const clusterCache = new Map();
 const CACHE_TTL_DAYS = 7; // 7 dias para dias anteriores
 const CACHE_TTL_MINUTES = 5; // 5 minutos para dia atual
+
+// Função para limpar o cache
+function clearCache() {
+    clusterCache.clear();
+    console.log('💨 Cache limpo');
+}
 
 // Estado dos clusters carregados
 let clustersCarregados = [];
@@ -190,7 +197,7 @@ async function fetchTodasPaginasPorPrioridade(date, priority, pageSize = 50, onP
     let metricasPrimeiraPagina = null;
 
     while (temProxima) {
-        const url = `/api/feed?data=${date}&priority=${priority}&page=${page}&page_size=${pageSize}`;
+        const url = `/api/feed?data=${date}&priority=${priority}&page=${page}&page_size=${pageSize}&tipo_fonte=${tipoFonteAtivo}`;
         const resp = await fetch(url);
         if (!resp.ok) break;
         const data = await resp.json();
@@ -235,7 +242,7 @@ async function carregarClustersPorPrioridade(date) {
         } else {
             console.warn('⚠️ Cache não contém métricas, carregando da API');
             // Se o cache não tem métricas, força recarregamento
-            const p1Response = await fetch(`/api/feed?data=${date}&priority=P1_CRITICO&page=1&page_size=50`);
+            const p1Response = await fetch(`/api/feed?data=${date}&priority=P1_CRITICO&page=1&page_size=50&tipo_fonte=${tipoFonteAtivo}`);
             if (p1Response.ok) {
                 const p1Data = await p1Response.json();
                 if (p1Data.metricas) {
@@ -342,6 +349,32 @@ async function carregarClustersPorPrioridade(date) {
 }
 
 
+// Função para configurar as abas de notícias
+function setupNewsTabsListeners() {
+    const tabsBtns = document.querySelectorAll('.news-tab-btn');
+    
+    tabsBtns.forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const novoTipo = e.target.getAttribute('data-tipo');
+            
+            // Se já está na aba ativa, não faz nada
+            if (novoTipo === tipoFonteAtivo) return;
+            
+            // Atualiza a aba ativa
+            tabsBtns.forEach(b => b.classList.remove('ativo'));
+            e.target.classList.add('ativo');
+            
+            // Atualiza o tipo de fonte ativo
+            tipoFonteAtivo = novoTipo;
+            
+            // Limpa o cache para forçar recarregamento
+            clearCache();
+            
+            // Recarrega o feed com o novo tipo
+            await carregarFeed();
+        });
+    });
+}
 
 // =======================================
 // CONFIGURAÇÃO DE EVENT LISTENERS
@@ -356,6 +389,9 @@ function setupEventListeners() {
         atualizarDataTexto();
         carregarFeed();
     });
+
+    // Abas Brasil/Internacional
+    setupNewsTabsListeners();
 
     // Scroll infinito removido - agora usa carregamento progressivo por prioridade
 
@@ -598,7 +634,7 @@ function atualizarDataTexto() {
 // =======================================
 async function carregarMetricas(date) {
     try {
-        const resp = await fetch(`/api/feed?data=${date}&page=1&page_size=1`);
+        const resp = await fetch(`/api/feed?data=${date}&page=1&page_size=1&tipo_fonte=${tipoFonteAtivo}`);
         if (!resp.ok) return;
         const data = await resp.json();
         if (data && data.metricas) {
@@ -2595,18 +2631,18 @@ function inserirCardEstagiario() {
     const card = document.createElement('article');
     card.className = 'card-cluster estagiario-card';
     card.innerHTML = `
-        <div class="card-header">
-            <div class="card-title-area">
-                <h3 class="card-titulo">🤖 Estagiário — Em construção 🚧</h3>
+        <div class="card-header" style="align-items: flex-start;">
+            <div class="card-title-area" style="flex: 1;">
+                <h3 class="card-titulo" style="display: inline;">🤖 Estagiário — Em construção 🚧</h3>
+                <span class="card-resumo" style="display: inline; margin-left: 1rem; font-size: 0.9rem; color: var(--cor-texto-secundario);">Faça uma pergunta sobre as notícias do dia.</span>
             </div>
             <div class="card-contador-fontes" title="Agente de apoio">
                 <span>🗨️</span>
                 <span class="contador">chat</span>
             </div>
         </div>
-        <p class="card-resumo">Faça uma pergunta sobre as notícias do dia. O Estagiário consultará as prioridades/tags e responderá com base nos dados.</p>
-        <div class="estagiario-chat">
-            <div class="estagiario-chat-thread" id="estagiario-thread"></div>
+        <div class="estagiario-chat" style="margin-top: 0.5rem;">
+            <div class="estagiario-chat-thread" id="estagiario-thread" style="max-height: 120px;"></div>
             <div class="estagiario-chat-input">
                 <input type="text" id="estagiario-input" placeholder="Pergunte algo..." />
                 <button class="btn" id="estagiario-send">Enviar</button>

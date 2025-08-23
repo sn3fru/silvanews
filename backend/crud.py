@@ -520,10 +520,30 @@ def agg_estatisticas_gerais(db: Session):
     # Dias diferentes com notícias
     dias_diferentes = db.query(func.count(func.distinct(func.date(ArtigoBruto.created_at)))).scalar() or 0
     
+    # Contagem por tipo_fonte
+    try:
+        total_artigos_nacional = db.query(func.count(ArtigoBruto.id)).filter(ArtigoBruto.tipo_fonte == 'nacional').scalar() or 0
+        total_artigos_internacional = db.query(func.count(ArtigoBruto.id)).filter(ArtigoBruto.tipo_fonte == 'internacional').scalar() or 0
+    except Exception:
+        total_artigos_nacional = 0
+        total_artigos_internacional = 0
+
+    try:
+        from .database import ClusterEvento as _Cluster
+        total_clusters_nacional = db.query(func.count(_Cluster.id)).filter(_Cluster.tipo_fonte == 'nacional').scalar() or 0
+        total_clusters_internacional = db.query(func.count(_Cluster.id)).filter(_Cluster.tipo_fonte == 'internacional').scalar() or 0
+    except Exception:
+        total_clusters_nacional = 0
+        total_clusters_internacional = 0
+
     return {
         "total_artigos": total_artigos,
         "total_clusters": total_clusters,
-        "dias_diferentes": dias_diferentes
+        "dias_diferentes": dias_diferentes,
+        "artigos_nacional": total_artigos_nacional,
+        "artigos_internacional": total_artigos_internacional,
+        "clusters_nacional": total_clusters_nacional,
+        "clusters_internacional": total_clusters_internacional
     }
 
 
@@ -583,7 +603,7 @@ def get_sintese_by_date(db: Session, target_date: datetime.date) -> Optional[Sin
     ).first()
 
 
-def get_clusters_for_feed_by_date(db: Session, target_date: datetime.date, page: int = 1, page_size: int = 20, load_full_text: bool = False, priority: Optional[str] = None) -> Dict[str, Any]:
+def get_clusters_for_feed_by_date(db: Session, target_date: datetime.date, page: int = 1, page_size: int = 20, load_full_text: bool = False, priority: Optional[str] = None, tipo_fonte: Optional[str] = None) -> Dict[str, Any]:
     """
     Busca clusters para o feed de uma data específica com paginação e carregamento lazy.
     Retorna lista formatada para o frontend com opção de carregar texto completo sob demanda.
@@ -610,6 +630,10 @@ def get_clusters_for_feed_by_date(db: Session, target_date: datetime.date, page:
     # Aplica filtro de prioridade se especificado
     if priority:
         clusters_query = clusters_query.filter(ClusterEvento.prioridade == priority)
+    
+    # Aplica filtro de tipo de fonte se especificado
+    if tipo_fonte:
+        clusters_query = clusters_query.filter(ClusterEvento.tipo_fonte == tipo_fonte)
     
     # Ordena por prioridade (P1 primeiro) e depois por data
     clusters_query = clusters_query.order_by(

@@ -50,7 +50,8 @@ from backend.processing import (
     processar_artigo_pipeline, gerar_resumo_cluster, find_or_create_cluster
 )
 from backend.prompts import PROMPT_AGRUPAMENTO_V1, PROMPT_RESUMO_FINAL_V3, TAGS_SPECIAL_SITUATIONS
-from backend.prompts import PROMPT_CONSOLIDACAO_CLUSTERS_V1
+from backend.prompts import PROMPT_CONSOLIDACAO_CLUSTERS_V1, TAGS_SPECIAL_SITUATIONS_INTERNACIONAL
+from backend.prompts import LISTA_RELEVANCIA_HIERARQUICA_INTERNACIONAL
 from backend.utils import get_date_brasil_str, get_datetime_brasil_str, corrigir_tag_invalida, corrigir_prioridade_invalida
 
 # Carrega variáveis de ambiente
@@ -70,6 +71,20 @@ if not api_key:
 genai.configure(api_key=api_key)
 client = genai.GenerativeModel('gemini-2.0-flash')
 print("SUCESSO: Gemini configurado com sucesso!")
+
+# Funções auxiliares para escolher tags/prompts baseado no tipo_fonte
+def get_tags_for_tipo_fonte(tipo_fonte: str) -> dict:
+    """Retorna as tags apropriadas baseado no tipo de fonte."""
+    if tipo_fonte == 'internacional':
+        return TAGS_SPECIAL_SITUATIONS_INTERNACIONAL
+    return TAGS_SPECIAL_SITUATIONS
+
+def get_prioridades_for_tipo_fonte(tipo_fonte: str) -> list:
+    """Retorna as prioridades apropriadas baseado no tipo de fonte."""
+    if tipo_fonte == 'internacional':
+        return LISTA_RELEVANCIA_HIERARQUICA_INTERNACIONAL
+    # Para nacional, retorna None pois usa o sistema atual
+    return None
 
 def extrair_json_da_resposta(resposta: str) -> Any:
     """
@@ -212,45 +227,15 @@ def extrair_json_da_resposta(resposta: str) -> Any:
 
     return None
 
-# ---------------- GATING EXPLÍCITO (REGRAS DETERMINÍSTICAS) -----------------
+# ---------------- GATING REMOVIDO - O V13 JÁ FAZ CLASSIFICAÇÃO SUPERIOR -----------------
 def _aplicar_gating_explicito_cluster(db: Session, cluster_id: int, debug: bool = True) -> None:
     """
-    Aplica regras determinísticas para evitar classificações absurdas:
-    - Conteúdos astrológicos/horóscopo/espiritualidade/autoajuda/psicologia-pop => IRRELEVANTE
-    - Se tag for 'M&A e Transações Corporativas' e não houver gatilhos de M&A no texto, rebaixa prioridade para P3
+    DESATIVADO - O PROMPT_GATEKEEPER_V13 já faz a classificação correta.
+    Mantido apenas para compatibilidade com chamadas existentes.
     """
-    try:
-        cluster = get_cluster_by_id(db, cluster_id)
-        if not cluster:
-            return
-        artigos = get_artigos_by_cluster(db, cluster_id)
-        texto_total = " ".join([
-            (a.titulo_extraido or "") + " " + (a.texto_processado or "") for a in artigos
-        ]) + " " + (cluster.titulo_cluster or "") + " " + (cluster.resumo_cluster or "")
-
-        # 1) Bloqueio de astrologia/horóscopo/espiritualidade/autoajuda
-        padrao_bloqueio = re.compile(r"\b(hor[oó]scopo|astrolog|zod[ií]aco|signo[s]?|mapa\s+astral|tar[oô]|vident|numerolog|mercurio\s+retr[oó]grado)\b", re.IGNORECASE)
-        if padrao_bloqueio.search(texto_total):
-            if debug:
-                print(f"    🚫 GATING: Cluster {cluster_id} marcado IRRELEVANTE (astrologia/horóscopo detectado)")
-            cluster.prioridade = "IRRELEVANTE"
-            cluster.tag = "IRRELEVANTE"
-            cluster.resumo_cluster = "Conteúdo irrelevante (astrologia/horóscopo/espiritualidade) para a mesa de Special Situations"
-            db.commit()
-            return
-
-        # 2) Validação de M&A (necessita gatilhos explícitos)
-        if (cluster.tag or "").strip() == 'M&A e Transações Corporativas':
-            padrao_ma = re.compile(r"\b(aquisi[cç][aã]o|compra|venda\s+de\s+ativo[s]?|divestiture|f(us[aã]o|us[oã])|incorpora[cç][aã]o|opa\b|oferta\s+p(ú|u)blica\s+de\s+aquisi[cç][aã]o|joint\s+venture|desinvestimento|alien[aá]c[aã]o|acordo\s+(vinculante|definitivo|assinado)|memorando\s+de\s+entendimento|negocia[cç][aã]o\s+exclusiva)\b", re.IGNORECASE)
-            if not padrao_ma.search(texto_total):
-                if cluster.prioridade in ("P1_CRITICO", "P2_ESTRATEGICO"):
-                    if debug:
-                        print(f"    ⚖️ GATING: Rebaixando Cluster {cluster_id} (M&A sem gatilho) → P3_MONITORAMENTO")
-                    cluster.prioridade = "P3_MONITORAMENTO"
-                    db.commit()
-    except Exception as _e:
-        if debug:
-            print(f"    ⚠️ GATING: Falha ao aplicar regras para cluster {cluster_id}: {_e}")
+    if debug:
+        print(f"    ℹ️ GATING: Desativado - V13 faz classificação superior")
+    return
 
 
 def _corrigir_tag_deterministica_cluster(db: Session, cluster_id: int, debug: bool = True) -> None:
@@ -662,17 +647,19 @@ def processar_artigos_pendentes(limite: int = 10) -> bool:
     finally:
         db.close()
 
-def mapear_tag_prompt_para_modelo(tag_prompt: str) -> str:
+def mapear_tag_prompt_para_modelo(tag_prompt: str, tipo_fonte: str = 'nacional') -> str:
     """
     Normaliza uma tag retornada pelo LLM para uma tag CANÔNICA presente em TAGS_SPECIAL_SITUATIONS.
     - Faz match case-insensitive com as chaves de TAGS_SPECIAL_SITUATIONS.
     - Se não bater, tenta corrigir via corrigir_tag_invalida.
-    - Fallback seguro: 'Internacional (Economia e Política)'.
+    - Fallback seguro: 'Internacional (Economia e Política)' para nacional, 'Geopolitics and Trade' para internacional.
     """
     try:
-        valid_tags = list(TAGS_SPECIAL_SITUATIONS.keys())
+        tags_dict = get_tags_for_tipo_fonte(tipo_fonte)
+        valid_tags = list(tags_dict.keys())
+        
         if not isinstance(tag_prompt, str) or not tag_prompt.strip():
-            return 'Internacional (Economia e Política)'
+            return 'Geopolitics and Trade' if tipo_fonte == 'internacional' else 'Internacional (Economia e Política)'
 
         tag_limpa = tag_prompt.strip()
 
@@ -693,9 +680,9 @@ def mapear_tag_prompt_para_modelo(tag_prompt: str) -> str:
             return mapa_lower_para_canonica[tag_corrigida.lower()]
 
         # Fallback
-        return 'Internacional (Economia e Política)'
+        return 'Geopolitics and Trade' if tipo_fonte == 'internacional' else 'Internacional (Economia e Política)'
     except Exception:
-        return 'Internacional (Economia e Política)'
+        return 'Geopolitics and Trade' if tipo_fonte == 'internacional' else 'Internacional (Economia e Política)'
 
 def migrar_tag_antiga_para_nova(tag_antiga: str) -> str:
     """
@@ -819,8 +806,11 @@ def classificar_e_resumir_cluster(db: Session, cluster_id: int, client, debug: b
         if prioridade_sugerida == 'IRRELEVANTE':
             return marcar_cluster_irrelevante(db, cluster_id, debug)
 
+        # Detecta tipo de fonte do cluster
+        tipo_fonte_cluster = getattr(cluster, 'tipo_fonte', 'nacional')
+        
         cluster.prioridade = prioridade_sugerida
-        cluster.tag = mapear_tag_prompt_para_modelo(classificacao.get('tag', 'Sem categoria'))
+        cluster.tag = mapear_tag_prompt_para_modelo(classificacao.get('tag', 'Sem categoria'), tipo_fonte_cluster)
         print(f"  => Classificação: {cluster.prioridade} | Tag: {cluster.tag}")
 
         mapa_niveis = {
@@ -950,10 +940,8 @@ def gerar_resumo_unificado(db: Session, cluster_id: int, client, nivel_detalhe: 
 
 def priorizacao_executiva_final(db: Session, client, debug: bool = True) -> bool:
     """
-    Etapa de priorização executiva REMOVIDA. Mantida por compatibilidade, mas não faz nada.
+    REMOVIDA - Mantida apenas por compatibilidade com chamadas existentes.
     """
-    if debug:
-        print("ℹ️ Priorização executiva desativada. Pulando etapa.")
     return True
 
 
@@ -1034,13 +1022,14 @@ def consolidacao_final_clusters(db: Session, client, debug: bool = True) -> bool
                             nova_prioridade = s.get('nova_prioridade')
                             if not destino or not fontes:
                                 continue
+                            # NÃO passa tag/prioridade - deixa a Etapa 3 decidir
                             merge_clusters(
                                 db,
                                 destino_id=int(destino),
                                 fontes_ids=[int(x) for x in fontes if isinstance(x, (int, str))],
                                 novo_titulo=novo_titulo,
-                                nova_tag=nova_tag,
-                                nova_prioridade=corigir_prioridade(nova_prioridade) if nova_prioridade else None,
+                                nova_tag=None,  # Etapa 3 decide
+                                nova_prioridade=None,  # Etapa 3 decide
                                 motivo='consolidação etapa 4'
                             )
                             merges_aplicados_total += 1
@@ -1536,15 +1525,19 @@ def processar_lote_incremental(db: Session, client, artigos_lote: List[ArtigoBru
                             embedding_medio = None
                             if artigo.embedding:
                                 embedding_medio = artigo.embedding
+                            
+                            # Detecta tipo de fonte do artigo
+                            tipo_fonte = getattr(artigo, 'tipo_fonte', 'nacional')
 
                             # Cria cluster
                             from backend.models import ClusterEventoCreate
                             cluster_data = ClusterEventoCreate(
                                 titulo_cluster=tema_principal,
                                 resumo_cluster=None,  # Será preenchido na ETAPA 3
-                                tag="Internacional (Economia e Política)",  # Padrão, será redefinido na ETAPA 3
-                                prioridade="P3_MONITORAMENTO",  # Padrão, será redefinido na ETAPA 3
-                                embedding_medio=embedding_medio
+                                tag="PENDING",  # Será definido na ETAPA 3
+                                prioridade="PENDING",  # Será definido na ETAPA 3
+                                embedding_medio=embedding_medio,
+                                tipo_fonte=tipo_fonte
                             )
 
                             cluster = create_cluster(db, cluster_data)
@@ -1667,15 +1660,19 @@ IMPORTANTE: Retorne APENAS o JSON válido para este lote.
                         if not artigos_do_grupo:
                             continue
                         
-                        # ETAPA 2: SÓ AGRUPA - usa valores padrão, serão redefinidos na ETAPA 3
-                        prioridade_grupo = "P3_MONITORAMENTO"  # Padrão, será redefinido na ETAPA 3
-                        tag_grupo = "Internacional (Economia e Política)"  # Padrão, será redefinido na ETAPA 3
+                        # ETAPA 2: SÓ AGRUPA - valores PENDING, serão definidos na ETAPA 3
+                        prioridade_grupo = "PENDING"  # Será definido na ETAPA 3
+                        tag_grupo = "PENDING"  # Será definido na ETAPA 3
                         
                         # Calcula embedding médio do grupo
                         embeddings = []
+                        tipo_fonte = 'nacional'  # Default
                         for artigo in artigos_do_grupo:
                             if artigo.embedding:
                                 embeddings.append(bytes_to_embedding(artigo.embedding))
+                            # Pega o tipo_fonte do primeiro artigo (todos devem ter o mesmo tipo)
+                            if hasattr(artigo, 'tipo_fonte'):
+                                tipo_fonte = artigo.tipo_fonte
                         
                         embedding_medio = None
                         if embeddings:
@@ -1689,7 +1686,8 @@ IMPORTANTE: Retorne APENAS o JSON válido para este lote.
                             resumo_cluster=None,  # Será preenchido na ETAPA 3
                             tag=tag_grupo,
                             prioridade=prioridade_grupo,
-                            embedding_medio=embedding_medio
+                            embedding_medio=embedding_medio,
+                            tipo_fonte=tipo_fonte
                         )
                         
                         cluster = create_cluster(db, cluster_data)

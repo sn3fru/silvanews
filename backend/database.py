@@ -84,6 +84,9 @@ class ArtigoBruto(Base):
     # fonte_original = Column(String(100), nullable=True)  # Fonte original (ex: "Valor Econômico")
     # tags_originais = Column(JSON, nullable=True)  # Tags originais como array
     
+    # Tipo de fonte: nacional ou internacional
+    tipo_fonte = Column(String(20), default='nacional', nullable=False)  # nacional, internacional
+    
     # Embedding para clusterização
     embedding = Column(LargeBinary, nullable=True)
     
@@ -130,6 +133,9 @@ class ClusterEvento(Base):
     
     # Status do cluster
     status = Column(String(20), default='ativo', nullable=False)  # ativo, arquivado, descartado
+    
+    # Tipo de fonte: nacional ou internacional (herdado dos artigos do cluster)
+    tipo_fonte = Column(String(20), default='nacional', nullable=False)  # nacional, internacional
     
     # Métricas
     total_artigos = Column(Integer, default=0, nullable=False)

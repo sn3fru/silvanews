@@ -309,6 +309,7 @@ async def get_feed(
     page_size: int = 20,
     load_full_text: bool = False,
     priority: Optional[str] = None,
+    tipo_fonte: Optional[str] = 'nacional',
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -348,7 +349,7 @@ async def get_feed(
         
         # Busca clusters da data específica com paginação
         resultado_clusters = get_clusters_for_feed_by_date(
-            db, target_date, page=page, page_size=page_size, load_full_text=load_full_text, priority=priority
+            db, target_date, page=page, page_size=page_size, load_full_text=load_full_text, priority=priority, tipo_fonte=tipo_fonte
         )
         
         # Se não há dados reais, retorna dados vazios

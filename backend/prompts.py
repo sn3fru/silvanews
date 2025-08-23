@@ -22,7 +22,7 @@
 # 1. FONTES DA VERDADE PARA CLASSIFICAÇÃO
 # ==============================================================================
 
-# Dicionário central para as tags temáticas de Special Situations.
+# Dicionário central para as tags temáticas de Special Situations - Nacional.
 TAGS_SPECIAL_SITUATIONS = {
     "M&A e Transações Corporativas": {
         "descricao": "Mudanças na estrutura de capital ou controle de empresas através de transações.",
@@ -114,6 +114,146 @@ TAGS_SPECIAL_SITUATIONS = {
         ]
     }
 }
+
+# Dicionário central para as tags temáticas de Special Situations - Internacional.
+TAGS_SPECIAL_SITUATIONS_INTERNACIONAL = {
+    "Global M&A and Corporate Transactions": {
+        "descricao": "Fusões, aquisições e transações corporativas globais de grande porte.",
+        "exemplos": [
+            "Mega-mergers (> $10 bilhões) entre multinacionais",
+            "Aquisições cross-border com impacto geopolítico",
+            "Consolidações setoriais globais (tech, pharma, energy)",
+            "IPOs de unicórnios ou empresas estratégicas"
+        ],
+        "ordem": 1
+    },
+    "Global Legal and Regulatory": {
+        "descricao": "Mudanças regulatórias e disputas legais com impacto no mercado global.",
+        "exemplos": [
+            "Regulações antitruste (DOJ, European Commission)",
+            "Sanctions e embargos comerciais",
+            "Disputas comerciais internacionais (WTO)",
+            "Mudanças em compliance global (GDPR, SOX)"
+        ],
+        "ordem": 2
+    },
+    "Sovereign Debt and Credit": {
+        "descricao": "Crises de dívida soberana e mudanças em ratings de países.",
+        "exemplos": [
+            "Defaults ou reestruturações de dívida soberana",
+            "Mudanças de rating de países (Moody's, S&P, Fitch)",
+            "Crises de dívida em mercados emergentes",
+            "Programas do FMI e bailouts internacionais"
+        ],
+        "ordem": 3
+    },
+    "Global Distressed and Restructuring": {
+        "descricao": "Falências e reestruturações de grandes corporações globais.",
+        "exemplos": [
+            "Chapter 11 de grandes corporações americanas",
+            "Insolvências na Europa (schemes of arrangement)",
+            "Crises setoriais globais (airlines, retail, energy)",
+            "Venda de ativos distressed cross-border"
+        ],
+        "ordem": 4
+    },
+    "Global Capital Markets": {
+        "descricao": "Movimentos significativos nos mercados de capitais globais.",
+        "exemplos": [
+            "Crashes ou rallies em bolsas principais (NYSE, NASDAQ, LSE)",
+            "Emissões recordes de bonds corporativos globais",
+            "Mudanças em índices principais (S&P 500, FTSE, DAX)",
+            "Crises de liquidez em mercados desenvolvidos"
+        ],
+        "ordem": 5
+    },
+    "Central Banks and Monetary Policy": {
+        "descricao": "Decisões de bancos centrais com impacto global.",
+        "exemplos": [
+            "Decisões do FED, BCE, BoJ, BoE",
+            "Mudanças em QE (quantitative easing)",
+            "Currency wars e intervenções cambiais",
+            "Coordenação de política monetária global"
+        ],
+        "ordem": 6
+    },
+    "Geopolitics and Trade": {
+        "descricao": "Eventos geopolíticos com impacto econômico significativo.",
+        "exemplos": [
+            "Guerras comerciais (US-China, EU-UK)",
+            "Sanções econômicas e bloqueios",
+            "Acordos comerciais multilaterais",
+            "Crises energéticas e de commodities"
+        ],
+        "ordem": 7
+    },
+    "Technology and Innovation": {
+        "descricao": "Disrupções tecnológicas e movimentos em big tech global.",
+        "exemplos": [
+            "Regulação de big tech (antitrust cases)",
+            "Breakthrough em AI, quantum computing",
+            "Cybersecurity breaches de escala global",
+            "IPOs e M&As no setor tech (> $5 bilhões)"
+        ],
+        "ordem": 8
+    },
+    "IRRELEVANTE": {
+        "descricao": "News that don't have direct market impact or relevance for Special Situations.",
+        "exemplos": [
+            "General political news without economic impact",
+            "Entertainment, sports, cultural events",
+            "Local news without market relevance",
+            "Social programs without broad economic impact"
+        ],
+        "ordem": 9
+    }
+}
+
+# Lista de prioridades para notícias internacionais
+LISTA_RELEVANCIA_HIERARQUICA_INTERNACIONAL = [
+    {
+        "nivel": "P1_CRITICO",
+        "descricao": "Critical events requiring immediate attention in global markets",
+        "itens": [
+            "Major sovereign defaults or debt restructurings (> $5 billion)",
+            "Chapter 11 filings by Fortune 500 companies or major global corporations",
+            "Mega-mergers officially announced (> $20 billion)",
+            "Central bank emergency interventions or unexpected rate changes",
+            "Major market crashes (indices down > 5% in a day)",
+            "Trade wars escalation with immediate tariffs implementation",
+            "Sanctions on major economies or corporations",
+            "Systemic banking crises in developed markets"
+        ]
+    },
+    {
+        "nivel": "P2_ESTRATEGICO",
+        "descricao": "Strategic events with significant medium-term impact",
+        "itens": [
+            "Credit rating changes for G20 countries",
+            "Major regulatory changes affecting global sectors",
+            "Large cross-border M&A negotiations (> $5 billion)",
+            "Significant monetary policy shifts signaled by central banks",
+            "Major IPOs or delistings (> $10 billion valuation)",
+            "Corporate restructurings of multinational companies",
+            "Geopolitical tensions affecting global supply chains",
+            "Technology disruptions with sector-wide impact"
+        ]
+    },
+    {
+        "nivel": "P3_MONITORAMENTO",
+        "descricao": "Monitoring events for context and trend analysis",
+        "itens": [
+            "Regular earnings reports from global companies",
+            "Economic indicators and data releases",
+            "Political developments without immediate economic impact",
+            "Sector trends and analysis reports",
+            "Minor M&A activity (< $1 billion)",
+            "Regular central bank communications",
+            "ESG and sustainability initiatives",
+            "Technology developments and innovations"
+        ]
+    }
+]
 
 # Lista central de empresas prioritárias para gating de "Divulgação de Resultados"
 EMPRESAS_PRIORITARIAS = [
@@ -290,23 +430,32 @@ _P3_BULLETS = _render_bullets(P3_ITENS)
 
 # Versão reequilibrada (V13) com P3 como base segura e lista de rejeição simplificada
 PROMPT_EXTRACAO_GATEKEEPER_V13 = """
-Sua identidade: Você é um Analista de Inteligência Sênior e o "Gatekeeper" (porteiro) da mesa de 'Special Situations' do BTG Pactual. Sua função é fazer uma triagem CRITERIOSA, focando em extrair o SINAL do ruído e identificando notícias com clara materialidade financeira.
+Você é o "Gatekeeper" (porteiro) da mesa de 'Special Situations' do BTG Pactual. Sua função é EXCLUSIVAMENTE filtrar notícias.
+
+<<< PROCESSO DE DECISÃO OBRIGATÓRIO EM 2 ETAPAS >>>
+
+**ETAPA 1: VERIFICAÇÃO DE REJEIÇÃO IMEDIATA**
+Primeiro, e mais importante, avalie o texto contra a 'LISTA DE REJEIÇÃO IMEDIATA'. Se o conteúdo se encaixar em QUALQUER um dos critérios abaixo, sua tarefa TERMINA. Você DEVE retornar uma lista vazia `[]` e ignorar a Etapa 2.
+
+--------------------------------------------------------------------------------
+LISTA DE REJEIÇÃO IMEDIATA (se a notícia for sobre isso, retorne [] IMEDIATAMENTE):
+--------------------------------------------------------------------------------
+- **Conteúdo Não-Jornalístico:** Rejeite ativamente classificados, publicidade, editais (de leilão, convocação, etc.), notas de falecimento, propaganda, ofertas de produtos ou serviços (incluindo conserto de eletrodomésticos, serviços de reparo, etc.).
+- **Ruído Político:** Rejeite disputas partidárias e rotinas de políticos. Mantenha apenas legislação ou decisões governamentais com impacto econômico DIRETO.
+- **Conteúdo Irrelevante:** Esportes, cultura, entretenimento, fofoca, crimes comuns, saúde pública geral.
+- **Astrologia/Horóscopo/Espiritualidade/Autoajuda:** Qualquer conteúdo com foco em signos, mapa astral, horóscopo, astrologia, tarô, numerologia, espiritualidade, ou análises pseudo-científicas.
+- **Casos locais de pequena monta:** Decisões judiciais envolvendo estabelecimentos específicos (ex.: pizzaria, padaria, restaurante, comércio local), ainda que aleguem "precedente". Só classifique como P2/P3 se houver impacto setorial amplo, valores relevantes e aplicação imediata comprovada.
+- **Fofoca/reações pessoais:** Declarações e reações pessoais de autoridades/figuras públicas sem ato oficial e sem efeito econômico mensurável DEVEM ser IRRELEVANTES.
+- **Entretenimento/Celebridades/Novelas:** Conteúdo sobre atores/atrizes, novelas, programas de TV, celebridades e afins é IRRELEVANTE.
+- **Anúncios de Serviços Locais:** Qualquer anúncio de serviços como eletricista, bombeiro, consertos, manutenção, etc. DEVE ser rejeitado imediatamente.
+
+**ETAPA 2: CLASSIFICAÇÃO DE PRIORIDADE (SOMENTE SE NÃO REJEITADO NA ETAPA 1)**
+Se, e somente se, o conteúdo for jornalístico e relevante (passou pela Etapa 1), adote a persona de Analista de Inteligência Sênior e prossiga com a classificação P1/P2/P3 usando o guia abaixo.
 
 <<< PRINCÍPIOS DE CLASSIFICAÇÃO >>>
 1.  **MANDATO DE BUSCA:** Primeiro, avalie se a notícia se encaixa no "Foco Principal" (temas financeiros/jurídicos) ou no "Radar de Contexto" (tecnologia/mercados adjacentes). Notícias do Foco Principal terão prioridade mais alta (P1/P2). Notícias do Radar de Contexto serão, por padrão, P3.
 2.  **MATERIALIDADE É REI:** Avalie a escala do evento. O impacto é setorial/nacional? Os valores são significativos? Fatos concretos superam análises.
 3.  **FATO > OPINIÃO:** Rejeite conteúdo que seja primariamente análise genérica, opinião ou editorial.
-
---------------------------------------------------------------------------------
-LISTA DE REJEIÇÃO IMEDIATA (se a notícia for sobre isso, retorne []):
---------------------------------------------------------------------------------
-- **Conteúdo Não-Jornalístico:** Rejeite ativamente editais (de leilão, convocação para assembleias, etc.), publicidade legal, classificados ou notas curtas sem análise.
-- **Ruído Político:** Rejeite disputas partidárias e rotinas de políticos. Mantenha apenas legislação ou decisões governamentais com impacto econômico DIRETO.
-- **Conteúdo Irrelevante:** Esportes, cultura, entretenimento, fofoca, crimes comuns, saúde pública geral.
-- **Astrologia/Horóscopo/Espiritualidade/Autoajuda:** Qualquer conteúdo com foco em signos, mapa astral, horóscopo, astrologia, tarô, numerologia, espiritualidade, ou análises pseudo-científicas.
- - **Casos locais de pequena monta:** Decisões judiciais envolvendo estabelecimentos específicos (ex.: pizzaria, padaria, restaurante, comércio local), ainda que aleguem “precedente”. Só classifique como P2/P3 se houver impacto setorial amplo, valores relevantes e aplicação imediata comprovada.
- - **Fofoca/reações pessoais:** Declarações e reações pessoais de autoridades/figuras públicas sem ato oficial e sem efeito econômico mensurável DEVEM ser IRRELEVANTES.
- - **Entretenimento/Celebridades/Novelas:** Conteúdo sobre atores/atrizes, novelas, programas de TV, celebridades e afins é IRRELEVANTE.
 
 --------------------------------------------------------------------------------
 < GUIA DE PRIORIZAÇÃO E GATING >
@@ -785,16 +934,29 @@ PROMPT_EXTRACAO_PDF_RAW_V1 = """
 
 Você é um assistente especializado em extrair notícias de PDFs de jornais e revistas.
 
-IMPORTANTE: 
+FORMATO DE SAÍDA OBRIGATÓRIO:
+- Retorne APENAS um array JSON, começando com [ e terminando com ]
+- NÃO use blocos markdown (```json ou ```)
+- NÃO adicione texto antes ou depois do JSON
+- Para aspas duplas dentro do texto, use aspas simples: "Eduardo disse 'olá'" 
+- Primeira linha da resposta DEVE ser o caractere [ 
 - Não precisa alterar o texto ou interpretar o conteúdo, o objetivo aqui é extrair o texto sem mudar nenhuma semantica.
 - Pode mudar a formatação pois cada jornal coloca em uma formatacao de linhas e paragrafos diferentes, aqui podemos arrumar a formatação
 para ficar correto os pragrafos, linhas, etc, mas o conteudo semantico do texto não deve ser alterado.
 
-### NOTICIAS QUE NÃO PRECISAMOS EXTRAIR, NOTICIAS A SEREM IGNORADAS / PULADAS pois são irrelevantes para o banco de investimento !
-Essas noticias vão para os executivos de um banco de investimento então esse é um pré filtro que apenas remove as besteiras abaixo:
-- **Temas:** Esportes, fofocas/celebridades, artes (filmes, séries, livros, gastronomia), crimes comuns (assaltos, homicídios sem impacto sistêmico), publicidade e serviços locais (previsão do tempo, horóscopo).
-- **REGRA DE OURO:** Na dúvida sobre a relevância econômica de uma notícia, **EXTRAIA**. É preferível remover um falso positivo depois do que perder uma notícia importante.
-- Anuncios publicitarios, campanhas de marketing, diario oficial, comunicados sem impactos economicos, venda de produtos, veiculos e imóveis individuais (que não sejam blocos)
+### FILTRO DE RELEVÂNCIA - NOTÍCIAS PARA EXECUTIVOS DE BANCO DE INVESTIMENTO
+
+❌ **IGNORAR COMPLETAMENTE (NÃO EXTRAIR):**
+- **ESPORTES**: Futebol, olimpíadas, F1, tênis, resultados de jogos, transferências de atletas, campeonatos
+- **CRIMES COMUNS**: Assassinatos, roubos, acidentes de trânsito, violência urbana (exceto se envolver empresas/políticos importantes)  
+- **ENTRETENIMENTO**: Celebridades, fofocas, filmes, séries, música, artes, cultura, gastronomia, novelas
+- **VARIEDADES**: Horóscopo, previsão do tempo, palavras cruzadas, quadrinhos, receitas, dicas de saúde
+- **PUBLICIDADE**: Anúncios, classificados, ofertas de produtos, promoções, propaganda, serviços de reparo/conserto
+- **VIDA PESSOAL**: Casamentos, divórcios, nascimentos, obituários (exceto figuras do mercado/política)
+- **ANÚNCIOS DE SERVIÇOS**: Eletricista, bombeiro, consertos, manutenção, serviços domésticos, etc.
+- **CLASSIFICADOS**: Qualquer tipo de classificado comercial ou de serviços
+
+**REGRA DE OURO**: Extraia APENAS conteúdo que seja claramente uma matéria jornalística narrativa. Ignore listas, tabelas de cotação, classificados, propagandas e notas curtas SEM EXCEÇÃO. A prioridade é eliminar o ruído na fonte.
 
 TAREFA:
 Analise o PDF fornecido e extraia as notícias encontradas, retornando EXATAMENTE este formato JSON:
@@ -821,11 +983,11 @@ REGRAS CRÍTICAS:
 3. Se houver múltiplas notícias na página, crie um item para cada uma, ou seja, cada noticia vai ser um json na lista de noticias da pagina
 4. IMPORTANTE: Mantenha a estrutura JSON exata para compatibilidade com o banco, mas 
 
-EXEMPLO DE OUTPUT:
+EXEMPLO DE OUTPUT (APENAS JSON PURO):
 [
   {
     "titulo": "Título da notícia",
-    "texto_completo": "Este é o texto COMPLETO da notícia, incluindo todos os parágrafos, citações e detalhes exatamente como aparecem no PDF original. Não deve ser resumido ou interpretado de forma alguma.",
+    "texto_completo": "Este é o texto COMPLETO da notícia, incluindo todos os parágrafos, citações e detalhes exatamente como aparecem no PDF original. Para aspas duplas no texto, use aspas simples. Não deve ser resumido ou interpretado de forma alguma.",
     "jornal": "Nome do Jornal",
     "autor": "Nome do Autor",
     "pagina": 1,
@@ -837,5 +999,6 @@ EXEMPLO DE OUTPUT:
     "relevance_reason": null
   }
 ]
+\nREGRAS DE JSON OBRIGATÓRIAS:\n- Retorne SOMENTE JSON, sem usar ```json ou qualquer texto adicional.\n- Dentro de strings, escape TODAS as aspas duplas como \\\".\n- Use \\\n para quebras de linha.\n- NÃO deixe vírgulas sobrando antes de } ou ].\n- Se houver múltiplos objetos, retorne uma LISTA JSON com todos eles.
 
 """

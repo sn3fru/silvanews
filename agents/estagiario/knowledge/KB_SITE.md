@@ -38,6 +38,13 @@ Este documento descreve como o sistema funciona (dados, prioridades/tags, consul
 - `estagiario_chat_sessions`: `id`, `data_referencia`, timestamps
 - `estagiario_chat_messages`: `id`, `session_id`, `role` (user|assistant|system), `content`, `timestamp`
 
+### 2.6 Sistema de Feedback (likes/dislikes)
+
+- `feedback_noticias`: `id`, `artigo_id`, `feedback` (like|dislike), `processed` (bool), `created_at`
+- Permite coletar feedback dos usuários sobre notícias para ajuste de prompts
+- Cada artigo pode receber múltiplos feedbacks (likes/dislikes)
+- Campo `processed` indica se o feedback já foi analisado para melhorias
+
 ## 3) Prioridades e Tags
 
 - Prioridades: `P1_CRITICO`, `P2_ESTRATEGICO`, `P3_MONITORAMENTO`, `IRRELEVANTE` (fonte no banco via `/api/prompts/prioridades`, com fallback em `backend/prompts.py`).
@@ -148,6 +155,45 @@ WHERE a.cluster_id = :cluster_id
 ORDER BY a.created_at DESC;
 ```
 
+### 4.7 Buscar notícias com feedback positivo (likes) - por intervalo
+
+```sql
+SELECT DISTINCT a.id, a.titulo_extraido, a.jornal, a.created_at, 
+       c.titulo_cluster, c.id as cluster_id, f.created_at as feedback_date
+FROM artigos_brutos a
+JOIN feedback_noticias f ON a.id = f.artigo_id
+LEFT JOIN clusters_eventos c ON a.cluster_id = c.id
+WHERE f.feedback = 'like'
+  AND DATE(a.created_at) >= :start_date
+  AND DATE(a.created_at) <= :end_date
+ORDER BY f.created_at DESC;
+```
+
+### 4.8 Buscar notícias com feedback negativo (dislikes) - por intervalo
+
+```sql
+SELECT DISTINCT a.id, a.titulo_extraido, a.jornal, a.created_at,
+       c.titulo_cluster, c.id as cluster_id, f.created_at as feedback_date
+FROM artigos_brutos a
+JOIN feedback_noticias f ON a.id = f.artigo_id
+LEFT JOIN clusters_eventos c ON a.cluster_id = c.id
+WHERE f.feedback = 'dislike'
+  AND DATE(a.created_at) >= :start_date
+  AND DATE(a.created_at) <= :end_date
+ORDER BY f.created_at DESC;
+```
+
+### 4.9 Contar feedback por tipo (por intervalo)
+
+```sql
+SELECT f.feedback, COUNT(*) as total
+FROM feedback_noticias f
+JOIN artigos_brutos a ON f.artigo_id = a.id
+WHERE DATE(a.created_at) >= :start_date
+  AND DATE(a.created_at) <= :end_date
+GROUP BY f.feedback;
+```
+
 ## 5) Tools do Agente (contratos)
 
 Para economizar tokens, o LLM deve chamar tools com entradas/saídas específicas.
@@ -185,6 +231,24 @@ Para economizar tokens, o LLM deve chamar tools com entradas/saídas específica
 - Saída: `{ "count": N }`
 - Implementa a query precisa da seção 4.1.
 
+### 5.4 Tool: `fetch_feedback_likes`
+
+- Entrada: `{ "start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD" }` (end_date opcional)
+- Saída: `{ "articles": [...] }` (lista de artigos com likes e datas)
+- Implementa a query da seção 4.7.
+
+### 5.5 Tool: `fetch_feedback_dislikes`
+
+- Entrada: `{ "start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD" }` (end_date opcional)
+- Saída: `{ "articles": [...] }` (lista de artigos com dislikes e datas)
+- Implementa a query da seção 4.8.
+
+### 5.6 Tool: `count_feedback`
+
+- Entrada: `{ "start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD" }` (end_date opcional)
+- Saída: `{ "likes": N, "dislikes": M, "period": {...} }`
+- Implementa a query da seção 4.9.
+
 ## 6) Estratégia de Raciocínio do Agente
 
 1. Interpretar a pergunta → extrair INTENÇÃO: ADMIN (tags/prioridades/prompts) vs NOTÍCIAS (clusters/eventos).
@@ -193,8 +257,9 @@ Para economizar tokens, o LLM deve chamar tools com entradas/saídas específica
 4. Estatísticas objetivas → usar tools de contagem/agrupamento (ex.: `count_irrelevantes`).
 5. Listagens por prioridade → `fetch_clusters` por prioridade e/ou `db_query` para filtros de texto.
 6. **Aprofundamento opcional**: se precisar análise detalhada, pode abrir **`texto_bruto`** (conteúdo original completo dos PDFs) dos artigos do cluster.
-7. Resposta concisa em Markdown; incluir amostra e seção de Fontes quando listar itens.
-8. Registrar pergunta/resposta no chat do Estagiário (sessão do dia).
+7. **Análise de feedback opcional**: se a pergunta mencionar "reforço positivo/negativo", "likes/dislikes", "melhorar prompts", usar tools de feedback.
+8. Resposta concisa em Markdown; incluir amostra e seção de Fontes quando listar itens.
+9. Registrar pergunta/resposta no chat do Estagiário (sessão do dia).
 
 ## 7) Exemplos de Uso (para o Agente)
 
@@ -206,3 +271,11 @@ Para economizar tokens, o LLM deve chamar tools com entradas/saídas específica
   - `fetch_clusters` com `priority=P1_CRITICO`, filtrar por palavras (EUA, Rússia, Putin, Kremlin) no título/resumo, sintetizar bullets.
 - "Análise detalhada do cluster 123 sobre inflação?"
   - Acessar detalhes do cluster, e se necessário, carregar o **`texto_bruto`** (conteúdo original completo dos PDFs) dos artigos para análise mais profunda.
+- "Quais notícias receberam reforço positivo hoje?"
+  - Chamar `fetch_feedback_likes` com `start_date=today`, listar títulos dos artigos com likes.
+- "Mostre títulos das notícias com feedback negativo na última semana"
+  - Extrair período "última semana" → chamar `fetch_feedback_dislikes` com intervalo, analisar padrões.
+- "Quantos likes e dislikes tivemos nos últimos 7 dias?"
+  - Extrair período → chamar `count_feedback` com intervalo → retornar contadores e período.
+- "Quais foram todas as notícias com dislike na última semana?"
+  - Detectar "última semana" → buscar dislikes do período com dados de data/feedback.

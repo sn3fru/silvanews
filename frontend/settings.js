@@ -1145,6 +1145,14 @@ async function carregarBIDados() {
                         <div class="stat-number" id="total-clusters">${statsData.total_clusters || 0}</div>
                         <div class="stat-label">Total de Clusters</div>
                     </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${(statsData.artigos_nacional || 0)} / ${(statsData.artigos_internacional || 0)}</div>
+                        <div class="stat-label">Artigos 🇧🇷/🌍</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${(statsData.clusters_nacional || 0)} / ${(statsData.clusters_internacional || 0)}</div>
+                        <div class="stat-label">Clusters 🇧🇷/🌍</div>
+                    </div>
                 </div>
             </div>
             

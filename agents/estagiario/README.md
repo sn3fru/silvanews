@@ -16,6 +16,7 @@ O Estagiário é um agente que responde perguntas sobre TODAS as notícias de um
 - **Casos suportados no agente** (`EstagiarioAgent.answer`):
   - Contagem de itens irrelevantes do dia (consulta precisa por ORM).
   - Promoções de carros (com/sem preço explícito, sem default oculto de valor), com triagem e síntese.
+  - **Análise de feedback (novo)**: consultas sobre notícias com likes/dislikes para ajuste de prompts.
   - Impactos P1/P2/P3 na relação EUA × Rússia com fluxo resiliente (multi-estratégia, ver abaixo).
   - Busca genérica (intent → filtros → ranking → aprofundar → síntese em Markdown) com KB.
   - Busca semântica (novo): ferramenta `semantic_search` para consultas abertas sem keywords explícitas.
@@ -63,6 +64,14 @@ print(ans.text, ans.data)
 
 # Exemplo 2: impactos P1 EUA × Rússia
 ans = agent.answer("Resuma os principais Impactos das noticias de prioridade p1 para a relacao EUA x Russia")
+print(ans.text)
+
+# Exemplo 3: análise de feedback positivo
+ans = agent.answer("Quais notícias receberam reforço positivo hoje?")
+print(ans.text, ans.data)
+
+# Exemplo 4: análise de feedback negativo
+ans = agent.answer("Mostre títulos das notícias com feedback negativo para ajustar prompts")
 print(ans.text)
 ```
 

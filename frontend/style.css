@@ -1397,6 +1397,60 @@ hr { border: none; border-top: 1px solid var(--cor-borda); margin: 1.5rem 0; }
 .estagiario-chat-input { display: flex; gap: .5rem; padding: .5rem; border-top: 1px solid var(--cor-borda); background: white; }
 .estagiario-chat-input input { flex: 1; padding: .5rem .6rem; border: 1px solid var(--cor-borda); border-radius: 6px; }
 
+/* ======================================= */
+/* ABAS BRASIL/INTERNACIONAL               */
+/* ======================================= */
+.news-tabs-container {
+    padding: 0 2rem;
+    margin-top: 1rem;
+}
+
+.news-tabs {
+    display: flex;
+    gap: 0.5rem;
+    border-bottom: 2px solid var(--cor-borda);
+    padding-bottom: 0;
+    width: 100%;
+}
+
+.news-tab-btn {
+    background: transparent;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--cor-texto-secundario);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    flex: 1; /* divide 50/50 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+}
+
+.news-tab-btn:hover {
+    color: var(--cor-destaque-btg);
+    background-color: rgba(0, 82, 155, 0.05);
+}
+
+.news-tab-btn.ativo {
+    color: var(--cor-destaque-btg);
+    border-bottom-color: var(--cor-destaque-btg);
+    background-color: rgba(0, 82, 155, 0.05);
+}
+
+/* Flags */
+.flag.flag-br::before {
+    content: "🇧🇷";
+    display: inline-block;
+}
+.flag.flag-globe {
+    display: inline-block;
+}
+
 /* Charts Section Styles */
 .charts-section {
     margin: 2rem 0;

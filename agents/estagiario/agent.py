@@ -31,6 +31,7 @@ try:
         get_clusters_for_feed_by_date,
         get_cluster_details_by_id,
         get_metricas_by_date,
+        list_feedback,
     )
     from backend.utils import get_date_brasil
     # Opcional: acesso direto ao modelo para contagens precisas
@@ -751,6 +752,528 @@ class EstagiarioAgent:
             print(f"[Estagiario] Falha ao contar irrelevantes precisos: {e}")
             return 0
 
+    def _fetch_feedback_likes(self, db, start_date: datetime.date, end_date: Optional[datetime.date] = None) -> List[Dict[str, Any]]:
+        """Busca artigos com feedback positivo (likes) em um intervalo de datas."""
+        try:
+            from sqlalchemy import func, and_
+            from backend.database import ArtigoBruto, FeedbackNoticia
+            
+            query = db.query(
+                ArtigoBruto.id,
+                ArtigoBruto.titulo_extraido,
+                ArtigoBruto.jornal,
+                ArtigoBruto.created_at,
+                ClusterEvento.titulo_cluster,
+                ClusterEvento.id.label('cluster_id'),
+                FeedbackNoticia.created_at.label('feedback_date')
+            ).join(
+                FeedbackNoticia, ArtigoBruto.id == FeedbackNoticia.artigo_id
+            ).outerjoin(
+                ClusterEvento, ArtigoBruto.cluster_id == ClusterEvento.id
+            ).filter(
+                FeedbackNoticia.feedback == 'like'
+            )
+            
+            # Adiciona filtro de data apenas se end_date não for None (sem filtro de data)
+            if end_date is not None:
+                if end_date == start_date:
+                    query = query.filter(func.date(ArtigoBruto.created_at) == start_date)
+                else:
+                    query = query.filter(
+                        and_(
+                            func.date(ArtigoBruto.created_at) >= start_date,
+                            func.date(ArtigoBruto.created_at) <= end_date
+                        )
+                    )
+            else:
+                # Sem filtro de data - busca tudo desde o start_date
+                query = query.filter(func.date(ArtigoBruto.created_at) >= start_date)
+            
+            results = query.distinct().order_by(FeedbackNoticia.created_at.desc()).all()
+            
+            return [
+                {
+                    "id": r.id,
+                    "titulo_extraido": r.titulo_extraido,
+                    "jornal": r.jornal,
+                    "titulo_cluster": r.titulo_cluster,
+                    "cluster_id": r.cluster_id,
+                    "created_at": r.created_at.strftime('%Y-%m-%d') if r.created_at else None,
+                    "feedback_date": r.feedback_date.strftime('%Y-%m-%d %H:%M') if r.feedback_date else None
+                }
+                for r in results
+            ]
+        except Exception as e:
+            print(f"[Estagiario] Erro fetch_feedback_likes: {e}")
+            return []
+
+    def _fetch_feedback_dislikes(self, db, start_date: datetime.date, end_date: Optional[datetime.date] = None) -> List[Dict[str, Any]]:
+        """Busca artigos com feedback negativo (dislikes) em um intervalo de datas."""
+        try:
+            from sqlalchemy import func, and_
+            from backend.database import ArtigoBruto, FeedbackNoticia
+            
+            query = db.query(
+                ArtigoBruto.id,
+                ArtigoBruto.titulo_extraido,
+                ArtigoBruto.jornal,
+                ArtigoBruto.created_at,
+                ClusterEvento.titulo_cluster,
+                ClusterEvento.id.label('cluster_id'),
+                FeedbackNoticia.created_at.label('feedback_date')
+            ).join(
+                FeedbackNoticia, ArtigoBruto.id == FeedbackNoticia.artigo_id
+            ).outerjoin(
+                ClusterEvento, ArtigoBruto.cluster_id == ClusterEvento.id
+            ).filter(
+                FeedbackNoticia.feedback == 'dislike'
+            )
+            
+            # Adiciona filtro de data apenas se end_date não for None (sem filtro de data)
+            if end_date is not None:
+                if end_date == start_date:
+                    query = query.filter(func.date(ArtigoBruto.created_at) == start_date)
+                else:
+                    query = query.filter(
+                        and_(
+                            func.date(ArtigoBruto.created_at) >= start_date,
+                            func.date(ArtigoBruto.created_at) <= end_date
+                        )
+                    )
+            else:
+                # Sem filtro de data - busca tudo desde o start_date
+                query = query.filter(func.date(ArtigoBruto.created_at) >= start_date)
+            
+            results = query.distinct().order_by(FeedbackNoticia.created_at.desc()).all()
+            
+            return [
+                {
+                    "id": r.id,
+                    "titulo_extraido": r.titulo_extraido,
+                    "jornal": r.jornal,
+                    "titulo_cluster": r.titulo_cluster,
+                    "cluster_id": r.cluster_id,
+                    "created_at": r.created_at.strftime('%Y-%m-%d') if r.created_at else None,
+                    "feedback_date": r.feedback_date.strftime('%Y-%m-%d %H:%M') if r.feedback_date else None
+                }
+                for r in results
+            ]
+        except Exception as e:
+            print(f"[Estagiario] Erro fetch_feedback_dislikes: {e}")
+            return []
+
+    def _count_feedback(self, db, start_date: datetime.date, end_date: Optional[datetime.date] = None) -> Dict[str, int]:
+        """Conta feedback por tipo (likes/dislikes) em um intervalo de datas."""
+        try:
+            from sqlalchemy import func, and_
+            from backend.database import ArtigoBruto, FeedbackNoticia
+            
+            query = db.query(
+                FeedbackNoticia.feedback,
+                func.count(FeedbackNoticia.id).label('total')
+            ).join(
+                ArtigoBruto, FeedbackNoticia.artigo_id == ArtigoBruto.id
+            )
+            
+            # Adiciona filtro de data apenas se end_date não for None (sem filtro de data)
+            if end_date is not None:
+                if end_date == start_date:
+                    query = query.filter(func.date(ArtigoBruto.created_at) == start_date)
+                else:
+                    query = query.filter(
+                        and_(
+                            func.date(ArtigoBruto.created_at) >= start_date,
+                            func.date(ArtigoBruto.created_at) <= end_date
+                        )
+                    )
+            else:
+                # Sem filtro de data - busca tudo desde o start_date
+                query = query.filter(func.date(ArtigoBruto.created_at) >= start_date)
+            
+            results = query.group_by(FeedbackNoticia.feedback).all()
+            
+            counts = {"likes": 0, "dislikes": 0}
+            for r in results:
+                if r.feedback == 'like':
+                    counts["likes"] = r.total
+                elif r.feedback == 'dislike':
+                    counts["dislikes"] = r.total
+            
+            return counts
+        except Exception as e:
+            print(f"[Estagiario] Erro count_feedback: {e}")
+            return {"likes": 0, "dislikes": 0}
+
+    def _classify_intent(self, question: str) -> dict:
+        """
+        Primeira camada: LLM classifica a intenção da pergunta do usuário.
+        Retorna um dicionário com a funcionalidade identificada e parâmetros.
+        """
+        prompt = f"""Você é um classificador de intenção para um agente de notícias.
+
+FUNCIONALIDADES DISPONÍVEIS:
+1. **CONSULTA_FEEDBACK_LIKES**: Buscar notícias que receberam feedback positivo (likes)
+2. **CONSULTA_FEEDBACK_DISLIKES**: Buscar notícias que receberam feedback negativo (dislikes)  
+3. **CONSULTA_FEEDBACK_GERAL**: Buscar todas as notícias com qualquer tipo de feedback (likes + dislikes)
+4. **CONTAGEM_FEEDBACK**: Contar quantidades de likes/dislikes
+5. **EDICAO_TAG**: Alterar/atualizar tag de uma notícia específica
+6. **EDICAO_PRIORIDADE**: Alterar/atualizar prioridade de uma notícia
+7. **BUSCA_NOTICIAS**: Buscar notícias por termo, título, conteúdo
+8. **RESUMO_NOTICIAS**: Resumir/sintetizar notícias encontradas
+9. **CONSULTA_OFERTAS**: Buscar ofertas públicas de ações
+10. **ANALISE_GEOPOLITICA**: Análise de impactos geopolíticos (EUA-Rússia, etc.)
+11. **CONSULTA_PRIORIDADES**: Listar notícias por nível de prioridade
+12. **CONSULTA_GERAL**: Pergunta genérica que precisa de busca e análise
+
+PERGUNTA DO USUÁRIO: "{question}"
+
+Analise a pergunta e retorne um JSON com:
+{{
+  "funcionalidade": "NOME_DA_FUNCIONALIDADE",
+  "confianca": 0.95,
+  "parametros": {{
+    "periodo": "hoje|ultima_semana|ultimo_mes|sem_filtro",
+    "tipo_feedback": "like|dislike|ambos",
+    "termo_busca": "palavra ou frase a buscar",
+    "prioridade": "P1_CRITICO|P2_ESTRATEGICO|P3_MONITORAMENTO",
+    "acao": "listar|contar|alterar|buscar"
+  }}
+}}
+
+IMPORTANTE: 
+- Se mencionar "like" E "dislike" juntos = CONSULTA_FEEDBACK_GERAL
+- Se só "like" ou "feedback positivo" = CONSULTA_FEEDBACK_LIKES  
+- Se só "dislike" ou "feedback negativo" = CONSULTA_FEEDBACK_DISLIKES
+- Se "quantos/quantas" + feedback = CONTAGEM_FEEDBACK
+- Se "altere/mude/atualize" = EDICAO_TAG ou EDICAO_PRIORIDADE
+- Se buscar por termo/palavra = BUSCA_NOTICIAS
+- Palavras como "classificadas", "com feedback" indicam CONSULTA, não EDIÇÃO
+"""
+
+        try:
+            import json
+            response = self.llm.invoke(prompt)
+            result_text = response.content.strip()
+            
+            # Remove markdown se houver
+            if "```json" in result_text:
+                result_text = result_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in result_text:
+                result_text = result_text.split("```")[1].strip()
+            
+            result = json.loads(result_text)
+            return result
+            
+        except Exception as e:
+            print(f"[Estagiario] Erro na classificação de intenção: {e}")
+            # Fallback para classificação simples
+            return {
+                "funcionalidade": "CONSULTA_GERAL",
+                "confianca": 0.5,
+                "parametros": {}
+            }
+
+    def _route_by_intent(self, intent_result: dict, question: str, db, target_date: datetime.date) -> AgentAnswer:
+        """
+        Roteamento baseado na classificação de intenção do LLM.
+        """
+        funcionalidade = intent_result.get("funcionalidade", "CONSULTA_GERAL")
+        parametros = intent_result.get("parametros", {})
+        
+        print(f"[Estagiario] Roteando para: {funcionalidade}")
+        
+        # Extração de período de tempo
+        start_date, end_date = self._extract_time_period(question, target_date)
+        
+        if funcionalidade == "CONSULTA_FEEDBACK_LIKES":
+            return self._handle_feedback_likes(db, start_date, end_date)
+            
+        elif funcionalidade == "CONSULTA_FEEDBACK_DISLIKES":
+            return self._handle_feedback_dislikes(db, start_date, end_date)
+            
+        elif funcionalidade == "CONSULTA_FEEDBACK_GERAL":
+            return self._handle_feedback_general(db, start_date, end_date)
+            
+        elif funcionalidade == "CONTAGEM_FEEDBACK":
+            return self._handle_feedback_count(db, start_date, end_date)
+            
+        elif funcionalidade in ["EDICAO_TAG", "EDICAO_PRIORIDADE"]:
+            return self._handle_edit_operation(question, db, target_date)
+            
+        elif funcionalidade == "BUSCA_NOTICIAS":
+            return self._handle_news_search(question, db, target_date)
+            
+        elif funcionalidade == "CONSULTA_OFERTAS":
+            return self._handle_ofertas_search(question, db, target_date)
+            
+        elif funcionalidade == "ANALISE_GEOPOLITICA":
+            return self._handle_geopolitical_analysis(question, db, target_date)
+            
+        elif funcionalidade == "CONSULTA_PRIORIDADES":
+            return self._handle_priority_query(question, db, target_date)
+            
+        else:  # CONSULTA_GERAL ou fallback
+            return self._handle_general_query(question, db, target_date)
+
+    # ====== HANDLERS ESPECÍFICOS PARA CADA FUNCIONALIDADE ======
+    
+    def _handle_feedback_likes(self, db, start_date: datetime.date, end_date: Optional[datetime.date]) -> AgentAnswer:
+        """Handler para consultas de feedback positivo (likes)"""
+        print("[Estagiario] Caso: notícias com feedback positivo")
+        likes = self._fetch_feedback_likes(db, start_date, end_date)
+        
+        if not likes:
+            if end_date is None:
+                period_str = "TODO O HISTÓRICO"
+            else:
+                period_str = f"{start_date.strftime('%d/%m/%Y')}" if start_date == end_date else f"{start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}"
+            return AgentAnswer(True, f"Nenhuma notícia com feedback positivo encontrada no período {period_str}.")
+        
+        # Monta resposta em Markdown
+        if end_date is None:
+            period_str = "TODO O HISTÓRICO"
+        else:
+            period_str = f"{start_date.strftime('%d/%m/%Y')}" if start_date == end_date else f"{start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}"
+        texto = f"## Notícias com Reforço Positivo (Likes) - {period_str}\n\n"
+        texto += f"**Total de notícias com likes: {len(likes)}**\n\n"
+        
+        for i, item in enumerate(likes[:30], 1):
+            cluster_info = f" (Cluster: {item['cluster_id']} - {item['titulo_cluster']})" if item['cluster_id'] else ""
+            jornal_info = f" - {item['jornal']}" if item['jornal'] else ""
+            date_info = f" [{item['created_at']}]" if item['created_at'] else ""
+            feedback_info = f" (Feedback: {item['feedback_date']})" if item['feedback_date'] else ""
+            texto += f"{i}. [{item['id']}] {item['titulo_extraido']}{jornal_info}{date_info}{cluster_info}{feedback_info}\n"
+        
+        if len(likes) > 30:
+            texto += f"\n... e mais {len(likes) - 30} notícias com likes.\n"
+            
+        texto += "\n### Análise\n"
+        texto += "Estas notícias receberam feedback positivo dos usuários. "
+        texto += "Padrões identificados podem ser usados para melhorar a qualidade da classificação e resumos.\n"
+        
+        return AgentAnswer(True, texto, {"likes": likes, "period": {"start": start_date.isoformat(), "end": end_date.isoformat() if end_date else None}})
+
+    def _handle_feedback_dislikes(self, db, start_date: datetime.date, end_date: Optional[datetime.date]) -> AgentAnswer:
+        """Handler para consultas de feedback negativo (dislikes)"""
+        print("[Estagiario] Caso: notícias com feedback negativo")
+        dislikes = self._fetch_feedback_dislikes(db, start_date, end_date)
+        
+        if not dislikes:
+            if end_date is None:
+                period_str = "TODO O HISTÓRICO"
+            else:
+                period_str = f"{start_date.strftime('%d/%m/%Y')}" if start_date == end_date else f"{start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}"
+            return AgentAnswer(True, f"Nenhuma notícia com feedback negativo encontrada no período {period_str}.")
+        
+        # Monta resposta em Markdown
+        if end_date is None:
+            period_str = "TODO O HISTÓRICO"
+        else:
+            period_str = f"{start_date.strftime('%d/%m/%Y')}" if start_date == end_date else f"{start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}"
+        texto = f"## Notícias com Reforço Negativo (Dislikes) - {period_str}\n\n"
+        texto += f"**Total de notícias com dislikes: {len(dislikes)}**\n\n"
+        
+        for i, item in enumerate(dislikes[:30], 1):
+            cluster_info = f" (Cluster: {item['cluster_id']} - {item['titulo_cluster']})" if item['cluster_id'] else ""
+            jornal_info = f" - {item['jornal']}" if item['jornal'] else ""
+            date_info = f" [{item['created_at']}]" if item['created_at'] else ""
+            feedback_info = f" (Feedback: {item['feedback_date']})" if item['feedback_date'] else ""
+            texto += f"{i}. [{item['id']}] {item['titulo_extraido']}{jornal_info}{date_info}{cluster_info}{feedback_info}\n"
+        
+        if len(dislikes) > 30:
+            texto += f"\n... e mais {len(dislikes) - 30} notícias com dislikes.\n"
+            
+        texto += "\n### Análise\n"
+        texto += "Estas notícias receberam feedback negativo dos usuários. "
+        texto += "Podem indicar problemas na classificação, resumos inadequados ou conteúdo irrelevante.\n"
+        
+        return AgentAnswer(True, texto, {"dislikes": dislikes, "period": {"start": start_date.isoformat(), "end": end_date.isoformat() if end_date else None}})
+
+    def _handle_feedback_general(self, db, start_date: datetime.date, end_date: Optional[datetime.date]) -> AgentAnswer:
+        """Handler para consultas gerais de feedback (likes + dislikes)"""
+        print("[Estagiario] Caso: consulta geral de feedback (likes + dislikes)")
+        
+        # Busca ambos
+        likes = self._fetch_feedback_likes(db, start_date, end_date)
+        dislikes = self._fetch_feedback_dislikes(db, start_date, end_date)
+        
+        if not likes and not dislikes:
+            if end_date is None:
+                period_str = "TODO O HISTÓRICO"
+            else:
+                period_str = f"{start_date.strftime('%d/%m/%Y')}" if start_date == end_date else f"{start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}"
+            return AgentAnswer(True, f"Nenhuma notícia com feedback encontrada no período {period_str}.")
+        
+        # Monta resposta combinada
+        if end_date is None:
+            period_str = "TODO O HISTÓRICO"
+        else:
+            period_str = f"{start_date.strftime('%d/%m/%Y')}" if start_date == end_date else f"{start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}"
+        
+        texto = f"## Notícias com Feedback (Likes + Dislikes) - {period_str}\n\n"
+        texto += f"**Total: {len(likes)} likes + {len(dislikes)} dislikes = {len(likes) + len(dislikes)} notícias**\n\n"
+        
+        if likes:
+            texto += f"### ✅ Notícias com Likes ({len(likes)})\n\n"
+            for i, item in enumerate(likes[:15], 1):
+                cluster_info = f" (Cluster: {item['cluster_id']} - {item['titulo_cluster']})" if item['cluster_id'] else ""
+                jornal_info = f" - {item['jornal']}" if item['jornal'] else ""
+                date_info = f" [{item['created_at']}]" if item['created_at'] else ""
+                texto += f"{i}. [{item['id']}] {item['titulo_extraido']}{jornal_info}{date_info}{cluster_info}\n"
+            if len(likes) > 15:
+                texto += f"... e mais {len(likes) - 15} notícias com likes.\n"
+            texto += "\n"
+        
+        if dislikes:
+            texto += f"### ❌ Notícias com Dislikes ({len(dislikes)})\n\n"
+            for i, item in enumerate(dislikes[:15], 1):
+                cluster_info = f" (Cluster: {item['cluster_id']} - {item['titulo_cluster']})" if item['cluster_id'] else ""
+                jornal_info = f" - {item['jornal']}" if item['jornal'] else ""
+                date_info = f" [{item['created_at']}]" if item['created_at'] else ""
+                texto += f"{i}. [{item['id']}] {item['titulo_extraido']}{jornal_info}{date_info}{cluster_info}\n"
+            if len(dislikes) > 15:
+                texto += f"... e mais {len(dislikes) - 15} notícias com dislikes.\n"
+        
+        return AgentAnswer(True, texto, {"likes": likes, "dislikes": dislikes, "period": {"start": start_date.isoformat(), "end": end_date.isoformat() if end_date else None}})
+
+    def _handle_feedback_count(self, db, start_date: datetime.date, end_date: Optional[datetime.date]) -> AgentAnswer:
+        """Handler para contagem de feedback"""
+        print("[Estagiario] Caso: contagem de feedback")
+        counts = self._count_feedback(db, start_date, end_date)
+        
+        if end_date is None:
+            period_str = "TODO O HISTÓRICO"
+        else:
+            period_str = f"{start_date.strftime('%d/%m/%Y')}" if start_date == end_date else f"{start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}"
+        texto = f"## Resumo de Feedback - {period_str}\n\n"
+        texto += f"- **Likes (reforço positivo):** {counts['likes']}\n"
+        texto += f"- **Dislikes (reforço negativo):** {counts['dislikes']}\n"
+        total = counts['likes'] + counts['dislikes']
+        if total > 0:
+            pct_positivo = (counts['likes'] / total) * 100
+            texto += f"- **Total de feedback:** {total}\n"
+            texto += f"- **Taxa de aprovação:** {pct_positivo:.1f}%\n"
+        else:
+            texto += "- **Total de feedback:** 0\n"
+        
+        counts["period"] = {"start": start_date.isoformat(), "end": end_date.isoformat() if end_date else None}
+        return AgentAnswer(True, texto, counts)
+
+    def _handle_edit_operation(self, question: str, db, target_date: datetime.date) -> AgentAnswer:
+        """Handler para operações de edição (delegando ao código legado)"""
+        print("[Estagiario] Delegando para código legado de edição...")
+        # Delega para o sistema existente (abaixo será chamado o fallback)
+        return self._fallback_to_legacy_system(question, db, target_date)
+
+    def _handle_news_search(self, question: str, db, target_date: datetime.date) -> AgentAnswer:
+        """Handler para busca de notícias"""
+        print("[Estagiario] Delegando para busca de notícias...")
+        return self._fallback_to_legacy_system(question, db, target_date)
+
+    def _handle_ofertas_search(self, question: str, db, target_date: datetime.date) -> AgentAnswer:
+        """Handler para busca de ofertas"""
+        print("[Estagiario] Delegando para busca de ofertas...")
+        return self._fallback_to_legacy_system(question, db, target_date)
+
+    def _handle_geopolitical_analysis(self, question: str, db, target_date: datetime.date) -> AgentAnswer:
+        """Handler para análise geopolítica"""
+        print("[Estagiario] Delegando para análise geopolítica...")
+        return self._fallback_to_legacy_system(question, db, target_date)
+
+    def _handle_priority_query(self, question: str, db, target_date: datetime.date) -> AgentAnswer:
+        """Handler para consultas por prioridade"""
+        print("[Estagiario] Delegando para consultas por prioridade...")
+        return self._fallback_to_legacy_system(question, db, target_date)
+
+    def _handle_general_query(self, question: str, db, target_date: datetime.date) -> AgentAnswer:
+        """Handler para consultas gerais"""
+        print("[Estagiario] Delegando para consulta geral...")
+        return self._fallback_to_legacy_system(question, db, target_date)
+
+    def _fallback_to_legacy_system(self, question: str, db, target_date: datetime.date) -> AgentAnswer:
+        """Fallback para o sistema de heurísticas legado"""
+        print("[Estagiario] Usando sistema legado como fallback...")
+        # Para o fallback, vamos direto para busca básica
+        q = question.lower().strip()
+        
+        # Busca simples por termo
+        try:
+            clusters = self._fetch_clusters(db, target_date)
+            if not clusters:
+                return AgentAnswer(True, "Nenhuma notícia encontrada para hoje.")
+            
+            # LLM para responder com base nos clusters encontrados
+            llm_txt = self._llm_answer(question, clusters[:20], "")
+            if llm_txt:
+                return AgentAnswer(True, llm_txt, {"clusters": clusters[:10]})
+            
+            return AgentAnswer(True, f"Encontradas {len(clusters)} notícias para análise.", {"clusters": clusters[:10]})
+            
+        except Exception as e:
+            print(f"[Estagiario] Erro no fallback: {e}")
+            return AgentAnswer(False, "Erro ao processar a consulta.")
+
+    def _extract_time_period(self, question: str, default_date: datetime.date) -> tuple[datetime.date, Optional[datetime.date]]:
+        """Extrai período de tempo da pergunta ou retorna data padrão. Retorna (start_date, end_date) onde None indica sem filtro."""
+        import re
+        from datetime import timedelta
+        
+        q = question.lower().strip()
+        today = default_date
+        
+        # Detecta "sem filtro", "tudo", "todos", "todas", "histórico completo"
+        if any(phrase in q for phrase in [
+            "sem filtro de data", "sem filtro", "traga tudo", "tudo", "todos", "todas",
+            "histórico completo", "historico completo", "todo o histórico", "todo o historico",
+            "completo", "desde sempre", "sem limite de data"
+        ]):
+            print(f"[Estagiario] Período extraído: SEM FILTRO DE DATA (todos os registros)")
+            return datetime.date(2020, 1, 1), None  # start_date muito antiga, end_date = None indica sem limite
+        
+        # Detecta "última semana" / "ultimos 7 dias"
+        if ("última semana" in q or "ultima semana" in q or "últimos 7 dias" in q or 
+            "ultimos 7 dias" in q or "last week" in q or "past week" in q):
+            end_date = today
+            start_date = today - timedelta(days=7)
+            print(f"[Estagiario] Período extraído: última semana ({start_date} a {end_date})")
+            return start_date, end_date
+            
+        # Detecta "últimos X dias"
+        match = re.search(r"últimos?\s+(\d+)\s+dias?|ultimos?\s+(\d+)\s+dias?|last\s+(\d+)\s+days?", q)
+        if match:
+            days = int(match.group(1) or match.group(2) or match.group(3))
+            end_date = today
+            start_date = today - timedelta(days=days)
+            print(f"[Estagiario] Período extraído: últimos {days} dias ({start_date} a {end_date})")
+            return start_date, end_date
+            
+        # Detecta "último mês" / "últimos 30 dias"
+        if ("último mês" in q or "ultimo mes" in q or "últimos 30 dias" in q or 
+            "ultimos 30 dias" in q or "last month" in q or "past month" in q):
+            end_date = today
+            start_date = today - timedelta(days=30)
+            print(f"[Estagiario] Período extraído: último mês ({start_date} a {end_date})")
+            return start_date, end_date
+            
+        # Detecta "ontem"
+        if ("ontem" in q or "yesterday" in q):
+            yesterday = today - timedelta(days=1)
+            print(f"[Estagiario] Período extraído: ontem ({yesterday})")
+            return yesterday, yesterday
+            
+        # Detecta "esta semana" / "semana atual"
+        if ("esta semana" in q or "semana atual" in q or "this week" in q or "current week" in q):
+            # Encontra segunda-feira da semana atual
+            days_since_monday = today.weekday()
+            start_date = today - timedelta(days=days_since_monday)
+            end_date = today
+            print(f"[Estagiario] Período extraído: esta semana ({start_date} a {end_date})")
+            return start_date, end_date
+            
+        # Default: apenas hoje
+        print(f"[Estagiario] Período padrão: hoje ({today})")
+        return today, today
+
     def _handle_edit_command(self, db, question: str, q: str, target_date: datetime.date) -> AgentAnswer:
         """
         Processa comandos de edição com lógica inteligente:
@@ -1171,11 +1694,177 @@ class EstagiarioAgent:
                     print(f"[Estagiario] Falha executor ReAct: {e}")
                     # cai para heurística abaixo
 
-            # ROTEAMENTO DE INTENÇÃO: Detecta comandos de edição/alteração
-            edit_triggers = ["atualize", "troque", "mude", "altere", "corrija", "modifique", "merge", "unir", "unifica", "classificada", "foi classificada", "tag errada", "prioridade errada"]
+            # ====== NOVA ARQUITETURA: CLASSIFICAÇÃO DE INTENÇÃO VIA LLM ======
+            print("[Estagiario] Classificando intenção da pergunta via LLM...")
+            intent_result = self._classify_intent(question)
+            print(f"[Estagiario] Intenção detectada: {intent_result}")
+            
+            # Roteamento baseado na classificação LLM
+            return self._route_by_intent(intent_result, question, db, target_date)
+
+            # ====== CÓDIGO LEGADO (MANTIDO COMO FALLBACK) ======
+            # PRIORIDADE 1: Casos de Feedback - detectar ANTES de comandos de edição
+            # Primeiro, detecta especificamente dislikes para evitar conflito com "like" em "dislike"
+            is_dislike_query = ("reforço negativo" in q or "reforco negativo" in q or 
+                               "dislikes" in q or "dislike" in q or "feedback negativo" in q)
+            is_like_query = ("reforço positivo" in q or "reforco positivo" in q or 
+                            "likes" in q or ("like" in q and "dislike" not in q) or "feedback positivo" in q)
+            
+            # Caso 2.2: notícias com feedback negativo (dislikes) - processar primeiro para evitar conflitos
+            if is_dislike_query and ("notícias" in q or "noticias" in q or "títulos" in q or "titulos" in q):
+                print("[Estagiario] Caso: notícias com feedback negativo")
+                start_date, end_date = self._extract_time_period(question, target_date)
+                dislikes = self._fetch_feedback_dislikes(db, start_date, end_date)
+                
+                if not dislikes:
+                    if end_date is None:
+                        period_str = "TODO O HISTÓRICO"
+                    else:
+                        period_str = f"{start_date.strftime('%d/%m/%Y')}" if start_date == end_date else f"{start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}"
+                    return AgentAnswer(True, f"Nenhuma notícia com feedback negativo encontrada no período {period_str}.")
+                
+                # Monta resposta em Markdown
+                if end_date is None:
+                    period_str = "TODO O HISTÓRICO"
+                else:
+                    period_str = f"{start_date.strftime('%d/%m/%Y')}" if start_date == end_date else f"{start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}"
+                texto = f"## Notícias com Reforço Negativo (Dislikes) - {period_str}\n\n"
+                texto += f"**Total de notícias com dislikes: {len(dislikes)}**\n\n"
+                
+                for i, item in enumerate(dislikes[:30], 1):  # Aumenta limite para períodos maiores
+                    cluster_info = f" (Cluster: {item['cluster_id']} - {item['titulo_cluster']})" if item['cluster_id'] else ""
+                    jornal_info = f" - {item['jornal']}" if item['jornal'] else ""
+                    date_info = f" [{item['created_at']}]" if item['created_at'] else ""
+                    feedback_info = f" (Feedback: {item['feedback_date']})" if item['feedback_date'] else ""
+                    texto += f"{i}. [{item['id']}] {item['titulo_extraido']}{jornal_info}{date_info}{cluster_info}{feedback_info}\n"
+                
+                if len(dislikes) > 30:
+                    texto += f"\n... e mais {len(dislikes) - 30} notícias com dislikes.\n"
+                    
+                texto += "\n### Análise\n"
+                texto += "Estas notícias receberam feedback negativo dos usuários. "
+                texto += "Podem indicar problemas na classificação, resumos inadequados ou conteúdo irrelevante.\n"
+                
+                return AgentAnswer(True, texto, {"dislikes": dislikes, "period": {"start": start_date.isoformat(), "end": end_date.isoformat() if end_date else None}})
+
+            # Caso 2.1: notícias com feedback positivo (likes)
+            if is_like_query and ("notícias" in q or "noticias" in q or "títulos" in q or "titulos" in q):
+                print("[Estagiario] Caso: notícias com feedback positivo")
+                start_date, end_date = self._extract_time_period(question, target_date)
+                likes = self._fetch_feedback_likes(db, start_date, end_date)
+                
+                if not likes:
+                    if end_date is None:
+                        period_str = "TODO O HISTÓRICO"
+                    else:
+                        period_str = f"{start_date.strftime('%d/%m/%Y')}" if start_date == end_date else f"{start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}"
+                    return AgentAnswer(True, f"Nenhuma notícia com feedback positivo encontrada no período {period_str}.")
+                
+                # Monta resposta em Markdown
+                if end_date is None:
+                    period_str = "TODO O HISTÓRICO"
+                else:
+                    period_str = f"{start_date.strftime('%d/%m/%Y')}" if start_date == end_date else f"{start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}"
+                texto = f"## Notícias com Reforço Positivo (Likes) - {period_str}\n\n"
+                texto += f"**Total de notícias com likes: {len(likes)}**\n\n"
+                
+                for i, item in enumerate(likes[:30], 1):  # Aumenta limite para períodos maiores
+                    cluster_info = f" (Cluster: {item['cluster_id']} - {item['titulo_cluster']})" if item['cluster_id'] else ""
+                    jornal_info = f" - {item['jornal']}" if item['jornal'] else ""
+                    date_info = f" [{item['created_at']}]" if item['created_at'] else ""
+                    feedback_info = f" (Feedback: {item['feedback_date']})" if item['feedback_date'] else ""
+                    texto += f"{i}. [{item['id']}] {item['titulo_extraido']}{jornal_info}{date_info}{cluster_info}{feedback_info}\n"
+                
+                if len(likes) > 30:
+                    texto += f"\n... e mais {len(likes) - 30} notícias com likes.\n"
+                    
+                texto += "\n### Análise\n"
+                texto += "Estas notícias receberam feedback positivo dos usuários. "
+                texto += "Padrões identificados podem ser usados para melhorar a qualidade da classificação e resumos.\n"
+                
+                return AgentAnswer(True, texto, {"likes": likes, "period": {"start": start_date.isoformat(), "end": end_date.isoformat() if end_date else None}})
+
+            # Caso 2.3: consulta geral de feedback (like E dislike juntos)
+            if (("like" in q and "dislike" in q) or "feedback" in q) and ("notícias" in q or "noticias" in q or "títulos" in q or "titulos" in q or "classificadas" in q):
+                print("[Estagiario] Caso: consulta geral de feedback (likes + dislikes)")
+                start_date, end_date = self._extract_time_period(question, target_date)
+                
+                # Busca ambos
+                likes = self._fetch_feedback_likes(db, start_date, end_date)
+                dislikes = self._fetch_feedback_dislikes(db, start_date, end_date)
+                
+                if not likes and not dislikes:
+                    if end_date is None:
+                        period_str = "TODO O HISTÓRICO"
+                    else:
+                        period_str = f"{start_date.strftime('%d/%m/%Y')}" if start_date == end_date else f"{start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}"
+                    return AgentAnswer(True, f"Nenhuma notícia com feedback encontrada no período {period_str}.")
+                
+                # Monta resposta combinada
+                if end_date is None:
+                    period_str = "TODO O HISTÓRICO"
+                else:
+                    period_str = f"{start_date.strftime('%d/%m/%Y')}" if start_date == end_date else f"{start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}"
+                
+                texto = f"## Notícias com Feedback (Likes + Dislikes) - {period_str}\n\n"
+                texto += f"**Total: {len(likes)} likes + {len(dislikes)} dislikes = {len(likes) + len(dislikes)} notícias**\n\n"
+                
+                if likes:
+                    texto += f"### ✅ Notícias com Likes ({len(likes)})\n\n"
+                    for i, item in enumerate(likes[:15], 1):
+                        cluster_info = f" (Cluster: {item['cluster_id']} - {item['titulo_cluster']})" if item['cluster_id'] else ""
+                        jornal_info = f" - {item['jornal']}" if item['jornal'] else ""
+                        date_info = f" [{item['created_at']}]" if item['created_at'] else ""
+                        texto += f"{i}. [{item['id']}] {item['titulo_extraido']}{jornal_info}{date_info}{cluster_info}\n"
+                    if len(likes) > 15:
+                        texto += f"... e mais {len(likes) - 15} notícias com likes.\n"
+                    texto += "\n"
+                
+                if dislikes:
+                    texto += f"### ❌ Notícias com Dislikes ({len(dislikes)})\n\n"
+                    for i, item in enumerate(dislikes[:15], 1):
+                        cluster_info = f" (Cluster: {item['cluster_id']} - {item['titulo_cluster']})" if item['cluster_id'] else ""
+                        jornal_info = f" - {item['jornal']}" if item['jornal'] else ""
+                        date_info = f" [{item['created_at']}]" if item['created_at'] else ""
+                        texto += f"{i}. [{item['id']}] {item['titulo_extraido']}{jornal_info}{date_info}{cluster_info}\n"
+                    if len(dislikes) > 15:
+                        texto += f"... e mais {len(dislikes) - 15} notícias com dislikes.\n"
+                
+                return AgentAnswer(True, texto, {"likes": likes, "dislikes": dislikes, "period": {"start": start_date.isoformat(), "end": end_date.isoformat() if end_date else None}})
+
+            # Caso 2.4: contagem de feedback
+            if ("quantos" in q or "quantas" in q) and ("likes" in q or "dislikes" in q or "feedback" in q):
+                print("[Estagiario] Caso: contagem de feedback")
+                start_date, end_date = self._extract_time_period(question, target_date)
+                counts = self._count_feedback(db, start_date, end_date)
+                
+                if end_date is None:
+                    period_str = "TODO O HISTÓRICO"
+                else:
+                    period_str = f"{start_date.strftime('%d/%m/%Y')}" if start_date == end_date else f"{start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}"
+                texto = f"## Resumo de Feedback - {period_str}\n\n"
+                texto += f"- **Likes (reforço positivo):** {counts['likes']}\n"
+                texto += f"- **Dislikes (reforço negativo):** {counts['dislikes']}\n"
+                total = counts['likes'] + counts['dislikes']
+                if total > 0:
+                    pct_positivo = (counts['likes'] / total) * 100
+                    texto += f"- **Total de feedback:** {total}\n"
+                    texto += f"- **Taxa de aprovação:** {pct_positivo:.1f}%\n"
+                else:
+                    texto += "- **Total de feedback:** 0\n"
+                
+                counts["period"] = {"start": start_date.isoformat(), "end": end_date.isoformat() if end_date else None}
+                return AgentAnswer(True, texto, counts)
+
+            # PRIORIDADE 2: Detecta comandos de edição/alteração (APÓS verificação de feedback)
+            edit_triggers = ["atualize", "troque", "mude", "altere", "corrija", "modifique", "merge", "unir", "unifica", "foi classificada", "tag errada", "prioridade errada"]
             is_edit_command = any(trigger in q for trigger in edit_triggers)
             
-            if is_edit_command:
+            # SAFEGUARD: Se a pergunta contém termos de consulta/busca, NÃO é comando de edição
+            query_indicators = ["quais", "quantas", "quantos", "mostre", "liste", "busque", "encontre", "procure", "veja", "ver", "consulte"]
+            is_query = any(indicator in q for indicator in query_indicators)
+            
+            if is_edit_command and not is_query:
                 print("[Estagiario] Detectado: comando de edição/alteração")
                 # Primeiro tenta entender via LLM a operação desejada (camada agentica)
                 spec = self._llm_understand_edit(question)
@@ -1421,6 +2110,8 @@ class EstagiarioAgent:
                 if llm_txt:
                     return AgentAnswer(True, llm_txt, {"itens": achados[:10]})
                 return AgentAnswer(True, f"{len(achados)} ofertas encontradas.", {"itens": achados[:10]})
+
+
 
             # Caso 3: impactos por prioridade (P1/P2/P3) na relação EUA x Rússia — resiliente e multi-stratégia
             if ("eua" in q and ("russia" in q or "rússia" in q)) and ("p1" in q or "prioridade p1" in q or "p2" in q or "prioridade p2" in q or "p3" in q or "prioridade p3" in q):
