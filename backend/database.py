@@ -377,12 +377,14 @@ class PromptTag(Base):
     descricao = Column(Text, nullable=False)
     exemplos = Column(JSON, default=list)  # lista de strings
     ordem = Column(Integer, default=0, nullable=False)
+    tipo_fonte = Column(String(20), default='nacional', nullable=False, index=True)  # nacional|internacional
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     __table_args__ = (
         Index('idx_prompt_tags_ordem', 'ordem'),
+        Index('idx_prompt_tags_tipo_fonte', 'tipo_fonte'),
     )
 
 
@@ -427,12 +429,14 @@ class PromptPrioridadeItem(Base):
     nivel = Column(String(20), nullable=False, index=True)  # P1_CRITICO, P2_ESTRATEGICO, P3_MONITORAMENTO
     texto = Column(Text, nullable=False)
     ordem = Column(Integer, default=0, nullable=False)
+    tipo_fonte = Column(String(20), default='nacional', nullable=False, index=True)  # nacional|internacional
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     __table_args__ = (
         Index('idx_prompt_prioridade_nivel_ordem', 'nivel', 'ordem'),
+        Index('idx_prompt_prioridade_tipo_fonte', 'tipo_fonte'),
     )
 
 

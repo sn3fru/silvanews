@@ -15,13 +15,13 @@ Este documento descreve como o sistema funciona (dados, prioridades/tags, consul
 
 ### 2.1 `artigos_brutos`
 
-- Campos-chave: `id`, **`texto_bruto`** (conteúdo original completo dos PDFs, **NUNCA alterado**), `titulo_extraido`, **`texto_processado`** (resumos dos clusters, não das notícias individuais), `jornal`, `data_publicacao`, `status` (pendente|processado|irrelevante|erro), `tag`, `prioridade`, `embedding`, `cluster_id`, `created_at`, `processed_at`.
+- Campos-chave: `id`, **`texto_bruto`** (conteúdo original completo dos PDFs, **NUNCA alterado**), `titulo_extraido`, **`texto_processado`** (resumos dos clusters, não das notícias individuais), `jornal`, `data_publicacao`, `status` (pendente|processado|irrelevante|erro), `tag`, `prioridade`, `embedding`, `cluster_id`, `created_at`, `processed_at`, **`tipo_fonte`** (nacional|internacional).
 - Significado: artigo "raw" e/ou processado. Quando associados a um cluster, apontam para `clusters_eventos.id`.
 - **IMPORTANTE**: `texto_bruto` contém o conteúdo original completo dos PDFs e é preservado durante todo o processamento.
 
 ### 2.2 `clusters_eventos`
 
-- Campos-chave: `id`, `titulo_cluster`, **`resumo_cluster`** (resumo do cluster de eventos, não de notícias individuais), `tag`, `prioridade`, `embedding_medio`, `status` (ativo), `total_artigos`, `created_at`, `updated_at`.
+- Campos-chave: `id`, `titulo_cluster`, **`resumo_cluster`** (resumo do cluster de eventos, não de notícias individuais), `tag`, `prioridade`, `embedding_medio`, `status` (ativo), `total_artigos`, `created_at`, `updated_at`, **`tipo_fonte`** (nacional|internacional).
 - Significado: evento/agregado de notícias (fato gerador). É o que aparece no feed.
 - **IMPORTANTE**: Um cluster com apenas uma notícia pode ser considerado como "notícia resumida", mas tecnicamente é um cluster de evento.
 
@@ -47,8 +47,9 @@ Este documento descreve como o sistema funciona (dados, prioridades/tags, consul
 
 ## 3) Prioridades e Tags
 
-- Prioridades: `P1_CRITICO`, `P2_ESTRATEGICO`, `P3_MONITORAMENTO`, `IRRELEVANTE` (fonte no banco via `/api/prompts/prioridades`, com fallback em `backend/prompts.py`).
-- Tags: catálogo no banco via `/api/prompts/tags` (fonte da verdade). O fallback é `backend/prompts.py::TAGS_SPECIAL_SITUATIONS`.
+- Prioridades: `P1_CRITICO`, `P2_ESTRATEGICO`, `P3_MONITORAMENTO`, `IRRELEVANTE` (fonte no banco via `/api/prompts/prioridades`, com fallback em `backend/prompts.py`). Para internacionais, há critérios adicionais (ex.: defaults soberanos > $5B, mega‑mergers > $20B, Chapter 11 de Fortune 500).
+- Tags: catálogo no banco via `/api/prompts/tags` (fonte da verdade). Fallback: `backend/prompts.py::TAGS_SPECIAL_SITUATIONS` (nacional) e `TAGS_SPECIAL_SITUATIONS_INTERNACIONAL` (internacional).
+- Resumos SEMPRE em português (inclusive para notícias internacionais).
 - Regras: P1/P2/P3 são definidas por gatilhos objetivos; P3 é a base (contexto), P1 é acionável agora.
 
 ## 3.1) Consultas administrativas (tags/prioridades)
@@ -105,6 +106,7 @@ FROM clusters_eventos
 WHERE DATE(created_at) = :data
   AND status = 'ativo'
   AND prioridade = :prioridade -- 'P1_CRITICO' | 'P2_ESTRATEGICO' | 'P3_MONITORAMENTO'
+  AND tipo_fonte = :tipo_fonte -- 'nacional' | 'internacional'
 ORDER BY created_at DESC
 LIMIT :limit OFFSET :offset;
 ```
@@ -116,6 +118,7 @@ SELECT id, titulo_cluster, resumo_cluster, tag, prioridade
 FROM clusters_eventos
 WHERE DATE(created_at) = :data
   AND status = 'ativo'
+  AND tipo_fonte = :tipo_fonte -- 'nacional' | 'internacional'
   AND (
     LOWER(titulo_cluster) LIKE :kw OR LOWER(resumo_cluster) LIKE :kw
   )
@@ -132,6 +135,7 @@ SELECT prioridade, COUNT(*)
 FROM clusters_eventos
 WHERE DATE(created_at) = :data
   AND status = 'ativo'
+  AND tipo_fonte = :tipo_fonte -- opcional
 GROUP BY prioridade;
 ```
 
@@ -143,6 +147,7 @@ FROM clusters_eventos
 WHERE DATE(created_at) = :data
   AND status = 'ativo'
   AND tag = :tag
+  AND tipo_fonte = :tipo_fonte -- opcional
 ORDER BY created_at DESC;
 ```
 
@@ -152,6 +157,7 @@ ORDER BY created_at DESC;
 SELECT a.id, a.titulo_extraido, a.jornal, a.url
 FROM artigos_brutos a
 WHERE a.cluster_id = :cluster_id
+  AND a.tipo_fonte = :tipo_fonte -- opcional (herdado do cluster)
 ORDER BY a.created_at DESC;
 ```
 
@@ -191,6 +197,7 @@ FROM feedback_noticias f
 JOIN artigos_brutos a ON f.artigo_id = a.id
 WHERE DATE(a.created_at) >= :start_date
   AND DATE(a.created_at) <= :end_date
+  AND a.tipo_fonte = :tipo_fonte -- opcional
 GROUP BY f.feedback;
 ```
 
@@ -219,7 +226,7 @@ Para economizar tokens, o LLM deve chamar tools com entradas/saídas específica
 - Entrada:
 
 ```json
-{"date": "YYYY-MM-DD", "priority": "P1_CRITICO|P2_ESTRATEGICO|P3_MONITORAMENTO|null", "page": 1, "page_size": 50}
+{"date": "YYYY-MM-DD", "priority": "P1_CRITICO|P2_ESTRATEGICO|P3_MONITORAMENTO|null", "page": 1, "page_size": 50, "tipo_fonte": "nacional|internacional"}
 ```
 
 - Saída: `{ "clusters": [...], "paginacao": {...} }` (idêntico a `/api/feed?data=...&priority=...`)
@@ -233,7 +240,7 @@ Para economizar tokens, o LLM deve chamar tools com entradas/saídas específica
 
 ### 5.4 Tool: `fetch_feedback_likes`
 
-- Entrada: `{ "start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD" }` (end_date opcional)
+- Entrada: `{ "start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD", "tipo_fonte": "nacional|internacional" }` (end_date opcional)
 - Saída: `{ "articles": [...] }` (lista de artigos com likes e datas)
 - Implementa a query da seção 4.7.
 

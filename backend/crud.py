@@ -1203,8 +1203,11 @@ def get_all_cluster_alteracoes(db: Session, limit: int = 100) -> List['ClusterAl
 # PROMPTS CONFIGURÁVEIS: TAGS, PRIORIDADES, TEMPLATES
 # ==============================================================================
 
-def list_prompt_tags(db: Session) -> List[Dict[str, Any]]:
-    rows = db.query(PromptTag).order_by(PromptTag.ordem.asc(), PromptTag.nome.asc()).all()
+def list_prompt_tags(db: Session, tipo_fonte: Optional[str] = None) -> List[Dict[str, Any]]:
+    q = db.query(PromptTag)
+    if tipo_fonte:
+        q = q.filter(PromptTag.tipo_fonte == tipo_fonte)
+    rows = q.order_by(PromptTag.ordem.asc(), PromptTag.nome.asc()).all()
     return [
         {
             "id": r.id,
@@ -1227,11 +1230,11 @@ def get_prompt_tag_by_name(db: Session, nome: str) -> Optional[PromptTag]:
     return db.query(PromptTag).filter(PromptTag.nome == nome).first()
 
 
-def create_prompt_tag(db: Session, nome: str, descricao: str, exemplos: Optional[List[str]] = None, ordem: int = 0) -> int:
+def create_prompt_tag(db: Session, nome: str, descricao: str, exemplos: Optional[List[str]] = None, ordem: int = 0, tipo_fonte: str = 'nacional') -> int:
     existing = get_prompt_tag_by_name(db, nome)
     if existing:
         return existing.id
-    row = PromptTag(nome=nome, descricao=descricao, exemplos=exemplos or [], ordem=ordem)
+    row = PromptTag(nome=nome, descricao=descricao, exemplos=exemplos or [], ordem=ordem, tipo_fonte=tipo_fonte)
     db.add(row)
     db.commit()
     db.refresh(row)
@@ -1258,8 +1261,11 @@ def delete_prompt_tag(db: Session, tag_id: int) -> bool:
     return True
 
 
-def list_prompt_prioridade_itens_grouped(db: Session) -> Dict[str, List[Dict[str, Any]]]:
-    rows = db.query(PromptPrioridadeItem).order_by(PromptPrioridadeItem.nivel.asc(), PromptPrioridadeItem.ordem.asc(), PromptPrioridadeItem.id.asc()).all()
+def list_prompt_prioridade_itens_grouped(db: Session, tipo_fonte: Optional[str] = None) -> Dict[str, List[Dict[str, Any]]]:
+    q = db.query(PromptPrioridadeItem)
+    if tipo_fonte:
+        q = q.filter(PromptPrioridadeItem.tipo_fonte == tipo_fonte)
+    rows = q.order_by(PromptPrioridadeItem.nivel.asc(), PromptPrioridadeItem.ordem.asc(), PromptPrioridadeItem.id.asc()).all()
     grouped: Dict[str, List[Dict[str, Any]]] = {"P1": [], "P2": [], "P3": []}
     for r in rows:
         key = (r.nivel or '').upper()
@@ -1274,11 +1280,11 @@ def list_prompt_prioridade_itens_grouped(db: Session) -> Dict[str, List[Dict[str
     return grouped
 
 
-def create_prompt_prioridade_item(db: Session, nivel: str, texto: str, ordem: int = 0) -> int:
+def create_prompt_prioridade_item(db: Session, nivel: str, texto: str, ordem: int = 0, tipo_fonte: str = 'nacional') -> int:
     nivel_up = (nivel or '').upper()
     if nivel_up not in ("P1", "P2", "P3"):
         nivel_up = "P3"
-    row = PromptPrioridadeItem(nivel=nivel_up, texto=texto, ordem=ordem)
+    row = PromptPrioridadeItem(nivel=nivel_up, texto=texto, ordem=ordem, tipo_fonte=tipo_fonte)
     db.add(row)
     db.commit()
     db.refresh(row)

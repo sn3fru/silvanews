@@ -879,8 +879,10 @@
         <div id="prompts" class="tab-content">
             <div class="prompts-container">
                 <div class="prompts-tabs">
-                    <button class="prompt-tab-btn ativo" data-tab="tab-tags">Tags</button>
-                    <button class="prompt-tab-btn" data-tab="tab-prioridades">Prioridades</button>
+                    <button class="prompt-tab-btn ativo" data-tab="tab-tags">Tags (Brasil)</button>
+                    <button class="prompt-tab-btn" data-tab="tab-prioridades">Prioridades (Brasil)</button>
+                    <button class="prompt-tab-btn" data-tab="tab-tags-int">Tags (Int.)</button>
+                    <button class="prompt-tab-btn" data-tab="tab-prioridades-int">Prioridades (Int.)</button>
                     <button class="prompt-tab-btn" data-tab="tab-prompt">Resumo/Clusterizador</button>
                     <button class="prompt-tab-btn" data-tab="tab-outros">Outros Prompts</button>
                 </div>
@@ -903,6 +905,21 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Tab Tags Internacionais -->
+                <div id="tab-tags-int" class="prompt-tab-content">
+                    <div class="prompt-header">
+                        <h3>🏷️ Tags Temáticas - Internacional</h3>
+                        <p>Configure o catálogo de tags para notícias internacionais.</p>
+                        <button class="btn btn-primary" onclick="showAddTagModal(true)">➕ Adicionar Nova Tag (Int.)</button>
+                    </div>
+                    <div class="prompt-content">
+                        <div id="tags-int-loading" class="loading">Carregando tags...</div>
+                        <div id="tags-int-error" class="error" style="display: none;"></div>
+                        <div id="tags-int-success" class="success" style="display: none;"></div>
+                        <div id="tags-int-list" class="prompt-items-list" style="display: none;"></div>
+                    </div>
+                </div>
                 
                 <!-- Tab Prioridades -->
                 <div id="tab-prioridades" class="prompt-tab-content">
@@ -920,6 +937,21 @@
                         <div id="prioridades-list" class="prompt-items-list" style="display: none;">
                             <!-- Prioridades serão carregadas aqui dinamicamente -->
                         </div>
+                    </div>
+                </div>
+
+                <!-- Tab Prioridades Internacionais -->
+                <div id="tab-prioridades-int" class="prompt-tab-content">
+                    <div class="prompt-header">
+                        <h3>🎯 Itens de Prioridade - Internacional</h3>
+                        <p>Configure os critérios P1/P2/P3 para fontes internacionais.</p>
+                        <button class="btn btn-primary" onclick="showAddPrioridadeModal(true)">➕ Adicionar Novo Item (Int.)</button>
+                    </div>
+                    <div class="prompt-content">
+                        <div id="prioridades-int-loading" class="loading">Carregando prioridades...</div>
+                        <div id="prioridades-int-error" class="error" style="display: none;"></div>
+                        <div id="prioridades-int-success" class="success" style="display: none;"></div>
+                        <div id="prioridades-int-list" class="prompt-items-list" style="display: none;"></div>
                     </div>
                 </div>
                 
@@ -1050,6 +1082,14 @@
             </div>
             <div class="upload-section">
                 <h3>🗂️ Itens de Feedback</h3>
+                <div class="form-group" style="margin-bottom: 10px; display: flex; gap: 10px; align-items: center;">
+                    <label for="fb-filter-tipo" style="margin: 0;">Filtrar por tipo:</label>
+                    <select id="fb-filter-tipo" style="max-width: 200px;">
+                        <option value="">Todos</option>
+                        <option value="like">like</option>
+                        <option value="dislike">dislike</option>
+                    </select>
+                </div>
                 <table class="data-table" id="fb-table">
                     <thead><tr><th>ID</th><th>Artigo</th><th>Feedback</th><th>Processado</th><th>Quando</th><th>Ações</th></tr></thead>
                     <tbody></tbody>

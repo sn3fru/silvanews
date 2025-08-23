@@ -1443,13 +1443,7 @@ hr { border: none; border-top: 1px solid var(--cor-borda); margin: 1.5rem 0; }
 }
 
 /* Flags */
-.flag.flag-br::before {
-    content: "🇧🇷";
-    display: inline-block;
-}
-.flag.flag-globe {
-    display: inline-block;
-}
+.flag-svg { width: 22px; height: 16px; display: inline-block; border-radius: 2px; box-shadow: 0 0 0 1px rgba(0,0,0,.05); }
 
 /* Charts Section Styles */
 .charts-section {

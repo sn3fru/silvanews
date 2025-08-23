@@ -1454,15 +1454,43 @@ async function enviarFeedback() {
 
 async function carregarFeedback() {
     try {
+        const filtroTipo = document.getElementById('fb-filter-tipo')?.value || '';
         const resp = await fetch(`${API_BASE}/feedback`);
         const data = await resp.json();
         const tbody = document.querySelector('#fb-table tbody');
         tbody.innerHTML = '';
-        (data.itens || []).forEach(fb => {
+        // Aplica filtro por tipo (like/dislike) no cliente por enquanto
+        const itens = (data.itens || []).filter(it => !filtroTipo || String(it.feedback) === filtroTipo);
+        // Cache simples de artigos para evitar múltiplos fetches do mesmo id
+        const artigoCache = new Map();
+
+        const getArtigoTitulo = async (artigoId) => {
+            if (!artigoId) return null;
+            if (artigoCache.has(artigoId)) return artigoCache.get(artigoId);
+            try {
+                const r = await fetch(`${API_BASE}/settings/artigos/${artigoId}`);
+                const artigo = await r.json();
+                const titulo = artigo?.titulo_extraido || (artigo?.texto_bruto ? String(artigo.texto_bruto).substring(0, 80) + '…' : null);
+                artigoCache.set(artigoId, { artigo, titulo });
+                return { artigo, titulo };
+            } catch (_) {
+                artigoCache.set(artigoId, { artigo: null, titulo: null });
+                return { artigo: null, titulo: null };
+            }
+        };
+
+        // Render assíncrono preservando ordem
+        const renderPromises = itens.map(async (fb) => {
             const tr = document.createElement('tr');
+            let tituloHtml = `${fb.artigo_id}`;
+            const dados = await getArtigoTitulo(fb.artigo_id);
+            if (dados && (dados.titulo || dados.artigo)) {
+                const titulo = dados.titulo || `Artigo ${fb.artigo_id}`;
+                tituloHtml = `<a href="#" onclick="event.preventDefault(); editArtigo(${fb.artigo_id});" title="Abrir artigo">${escapeHtml(titulo)}</a>`;
+            }
             tr.innerHTML = `
                 <td>${fb.id}</td>
-                <td>${fb.artigo_id}</td>
+                <td>${tituloHtml}</td>
                 <td>${fb.feedback}</td>
                 <td>${fb.processed ? 'Sim' : 'Não'}</td>
                 <td>${fb.created_at}</td>
@@ -1470,6 +1498,7 @@ async function carregarFeedback() {
             `;
             tbody.appendChild(tr);
         });
+        await Promise.all(renderPromises);
     } catch (e) {
         console.error('Erro ao carregar feedback', e);
     }
@@ -1560,6 +1589,17 @@ function formatDate(dateString) {
     return date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
+// Escapa HTML básico para evitar injeção em títulos
+function escapeHtml(str) {
+    if (str == null) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 // ==============================================================================
 // HANDLER DO FORMULÁRIO
 // ==============================================================================
@@ -1619,6 +1659,14 @@ window.onclick = function(event) {
         closeModal();
     }
 }
+
+// Listener para filtro de feedback (like/dislike)
+document.addEventListener('DOMContentLoaded', function() {
+    const fbFilter = document.getElementById('fb-filter-tipo');
+    if (fbFilter) {
+        fbFilter.addEventListener('change', carregarFeedback);
+    }
+});
 
 // ==============================================================================
 // UPLOAD FUNCTIONALITY

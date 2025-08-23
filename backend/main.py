@@ -165,18 +165,18 @@ class PromptTagPayload(BaseModel):
 
 
 @app.get("/api/prompts/tags")
-async def api_list_prompt_tags(db: Session = Depends(get_db)) -> Dict[str, Any]:
+async def api_list_prompt_tags(tipo_fonte: Optional[str] = None, db: Session = Depends(get_db)) -> Dict[str, Any]:
     try:
-        return {"tags": list_prompt_tags(db)}
+        return {"tags": list_prompt_tags(db, tipo_fonte=tipo_fonte)}
     except Exception as e:
         create_log(db, "ERROR", "api", f"Erro em /api/prompts/tags: {e}")
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
 @app.post("/api/prompts/tags")
-async def api_create_prompt_tag(payload: PromptTagPayload, db: Session = Depends(get_db)) -> Dict[str, Any]:
+async def api_create_prompt_tag(payload: PromptTagPayload, tipo_fonte: Optional[str] = None, db: Session = Depends(get_db)) -> Dict[str, Any]:
     try:
-        tag_id = create_prompt_tag(db, payload.nome, payload.descricao, payload.exemplos or [], payload.ordem or 0)
+        tag_id = create_prompt_tag(db, payload.nome, payload.descricao, payload.exemplos or [], payload.ordem or 0, tipo_fonte or 'nacional')
         return {"ok": True, "id": tag_id}
     except Exception as e:
         create_log(db, "ERROR", "api", f"Erro em POST /api/prompts/tags: {e}")
@@ -218,18 +218,18 @@ class PriorItemPayload(BaseModel):
 
 
 @app.get("/api/prompts/prioridades")
-async def api_list_prompt_prioridades(db: Session = Depends(get_db)) -> Dict[str, Any]:
+async def api_list_prompt_prioridades(tipo_fonte: Optional[str] = None, db: Session = Depends(get_db)) -> Dict[str, Any]:
     try:
-        return {"prioridades": list_prompt_prioridade_itens_grouped(db)}
+        return {"prioridades": list_prompt_prioridade_itens_grouped(db, tipo_fonte=tipo_fonte)}
     except Exception as e:
         create_log(db, "ERROR", "api", f"Erro em /api/prompts/prioridades: {e}")
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
 @app.post("/api/prompts/prioridades")
-async def api_create_prompt_prioridade_item(payload: PriorItemPayload, db: Session = Depends(get_db)) -> Dict[str, Any]:
+async def api_create_prompt_prioridade_item(payload: PriorItemPayload, tipo_fonte: Optional[str] = None, db: Session = Depends(get_db)) -> Dict[str, Any]:
     try:
-        item_id = create_prompt_prioridade_item(db, payload.nivel, payload.texto, payload.ordem or 0)
+        item_id = create_prompt_prioridade_item(db, payload.nivel, payload.texto, payload.ordem or 0, tipo_fonte or 'nacional')
         return {"ok": True, "id": item_id}
     except Exception as e:
         create_log(db, "ERROR", "api", f"Erro em POST /api/prompts/prioridades: {e}")

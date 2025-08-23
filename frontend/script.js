@@ -89,6 +89,22 @@ let isHistoricalView = false; // Se está visualizando dados históricos
 let isLoading = false;
 let loadingProgress = 0; // 0-100%
 let currentLoadingPhase = ''; // 'P1', 'P2', 'P3'
+// Token de carregamento para evitar race entre abas Brasil/Internacional
+let feedLoadToken = 0;
+// Abort control para cancelar fetches em andamento
+let activeControllers = new Set();
+function abortActiveFetches() {
+    try {
+        activeControllers.forEach(ctrl => { try { ctrl.abort(); } catch (_) {} });
+    } finally {
+        activeControllers.clear();
+    }
+}
+function makeController() {
+    const c = new AbortController();
+    activeControllers.add(c);
+    return c;
+}
 
 // Cache inteligente
 const clusterCache = new Map();
@@ -221,7 +237,7 @@ async function fetchTodasPaginasPorPrioridade(date, priority, pageSize = 50, onP
     return { itens: acumulado, metricas: metricasPrimeiraPagina };
 }
 
-async function carregarClustersPorPrioridade(date) {
+async function carregarClustersPorPrioridade(date, token) {
     console.log('🚀 Iniciando carregamento progressivo para:', date);
     
     // Verifica cache primeiro
@@ -229,28 +245,35 @@ async function carregarClustersPorPrioridade(date) {
     const cachedData = getFromCache(date);
     
     if (cachedData && isCacheValid(getCacheKey(date), isCurrentDay)) {
+        if (token !== feedLoadToken) return; // stale
         console.log('✅ Usando dados do cache para data:', date);
         clustersCarregados = cachedData.clusters;
         clustersP1 = cachedData.p1;
         clustersP2 = cachedData.p2;
         clustersP3 = cachedData.p3;
         
+        if (token !== feedLoadToken) return;
         renderizarClusters();
         if (cachedData.metricas) {
             console.log('📊 Atualizando métricas do cache:', cachedData.metricas);
+            if (token !== feedLoadToken) return;
             atualizarMetricas(cachedData.metricas);
         } else {
             console.warn('⚠️ Cache não contém métricas, carregando da API');
             // Se o cache não tem métricas, força recarregamento
-            const p1Response = await fetch(`/api/feed?data=${date}&priority=P1_CRITICO&page=1&page_size=50&tipo_fonte=${tipoFonteAtivo}`);
+            const ctrlM = makeController();
+            const p1Response = await fetch(`/api/feed?data=${date}&priority=P1_CRITICO&page=1&page_size=50&tipo_fonte=${tipoFonteAtivo}`, { signal: ctrlM.signal });
             if (p1Response.ok) {
                 const p1Data = await p1Response.json();
                 if (p1Data.metricas) {
                     console.log('📊 Métricas carregadas da API:', p1Data.metricas);
+                    if (token !== feedLoadToken) return;
                     atualizarMetricas(p1Data.metricas);
                 }
             }
+            activeControllers.delete(ctrlM);
         }
+        if (token !== feedLoadToken) return;
         await carregarTagsDisponiveis();
         return;
     }
@@ -274,12 +297,15 @@ async function carregarClustersPorPrioridade(date) {
             50,
             ({ page, carregados }) => updateLoadingProgress(`P1 (pág. ${page})`, Math.min(10 + page * 5, 35))
         );
+        if (token !== feedLoadToken) return;
         clustersP1 = p1.itens;
         clustersCarregados = [...clustersP1];
         if (p1.metricas) {
             metricas = p1.metricas;
+            if (token !== feedLoadToken) return;
             atualizarMetricas(metricas);
         }
+        if (token !== feedLoadToken) return;
         renderizarClusters();
         updateLoadingProgress('P1 (Crítico)', 35);
         console.log(`✅ P1 carregado (total): ${clustersP1.length} clusters`);
@@ -293,8 +319,10 @@ async function carregarClustersPorPrioridade(date) {
             50,
             ({ page }) => updateLoadingProgress(`P2 (pág. ${page})`, Math.min(40 + page * 5, 70))
         );
+        if (token !== feedLoadToken) return;
         clustersP2 = p2.itens;
         clustersCarregados = [...clustersP1, ...clustersP2];
+        if (token !== feedLoadToken) return;
         renderizarClusters();
         updateLoadingProgress('P2 (Estratégico)', 70);
         console.log(`✅ P2 carregado (total): ${clustersP2.length} clusters`);
@@ -308,8 +336,10 @@ async function carregarClustersPorPrioridade(date) {
             50,
             ({ page }) => updateLoadingProgress(`P3 (pág. ${page})`, Math.min(75 + page * 5, 95))
         );
+        if (token !== feedLoadToken) return;
         clustersP3 = p3.itens;
         clustersCarregados = [...clustersP1, ...clustersP2, ...clustersP3];
+        if (token !== feedLoadToken) return;
         renderizarClusters();
         updateLoadingProgress('P3 (Monitoramento)', 95);
         console.log(`✅ P3 carregado (total): ${clustersP3.length} clusters`);
@@ -318,6 +348,7 @@ async function carregarClustersPorPrioridade(date) {
         updateLoadingProgress('Finalizando', 100);
 
         // Carrega tags e atualiza contadores
+        if (token !== feedLoadToken) return;
         await carregarTagsDisponiveis();
 
         // Salva no cache
@@ -328,6 +359,7 @@ async function carregarClustersPorPrioridade(date) {
             p3: clustersP3,
             metricas: metricas
         };
+        if (token !== feedLoadToken) return;
         saveToCache(date, cacheData);
         console.log('💾 Cache salvo para data:', date, 'com métricas:', metricas);
 
@@ -337,6 +369,7 @@ async function carregarClustersPorPrioridade(date) {
         if (!metricas || Object.keys(metricas).length === 0) {
             console.warn('⚠️ Métricas vazias, definindo valores padrão');
             metricas = { coletadas: 0, eventos: 0, fontes: 0 };
+            if (token !== feedLoadToken) return;
             atualizarMetricas(metricas);
         }
 
@@ -344,7 +377,9 @@ async function carregarClustersPorPrioridade(date) {
         console.error('❌ Erro no carregamento progressivo:', error);
         updateLoadingProgress('Erro', 0);
     } finally {
-        isLoading = false;
+        if (token === feedLoadToken) {
+            isLoading = false;
+        }
     }
 }
 
@@ -646,14 +681,19 @@ async function carregarMetricas(date) {
 }
 
 async function carregarFeed() {
-    if (isLoading) return;
-    
+    // Cancela qualquer carregamento em andamento para troca imediata de aba
+    abortActiveFetches();
+    if (isLoading) isLoading = false;
+    // Gera token para esta rodada de carregamento
+    feedLoadToken += 1;
+    const myToken = feedLoadToken;
+
     try {
         console.log('🚀 carregarFeed chamado para data:', currentDate);
         // Atualiza métricas específicas da data
         await carregarMetricas(currentDate);
         // Usa o novo sistema de carregamento progressivo
-        await carregarClustersPorPrioridade(currentDate);
+        await carregarClustersPorPrioridade(currentDate, myToken);
         
     } catch (error) {
         console.error('❌ Erro ao carregar feed:', error);
