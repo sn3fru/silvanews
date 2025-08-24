@@ -387,6 +387,89 @@ def sanitizar_html(texto: str) -> str:
     return texto_limpo.strip()
 
 
+def gerar_titulo_fallback_curto(texto: Optional[str], max_palavras: int = 10) -> str:
+    """
+    Gera um título curto e determinístico a partir do texto completo quando o título está ausente.
+    - Usa a primeira sentença não vazia; se indisponível, usa as primeiras N palavras
+    - Normaliza espaços e remove URLs
+    - Retorna "Sem título" apenas como último recurso
+    """
+    try:
+        if not isinstance(texto, str):
+            return "Sem título"
+        conteudo = (texto or "").strip()
+        if not conteudo:
+            return "Sem título"
+        # Remove URLs e excesso de espaços
+        conteudo = re.sub(r"https?://\S+", " ", conteudo)
+        conteudo = re.sub(r"\s+", " ", conteudo).strip()
+        # Tenta primeira sentença
+        sentencas = re.split(r"(?<=[\.!?])\s+", conteudo)
+        primeira = next((s for s in sentencas if s and len(s.strip()) > 0), conteudo)
+        # Se muito longa, reduz para N palavras
+        palavras = primeira.split()
+        if len(palavras) > max_palavras:
+            primeira = " ".join(palavras[:max_palavras])
+        # Sanitiza trailing pontuação pesada
+        primeira = primeira.strip(" -—:;,")
+        return primeira if primeira else "Sem título"
+    except Exception:
+        return "Sem título"
+
+
+def titulo_e_generico(titulo: Optional[str]) -> bool:
+    """
+    Detecta títulos genéricos que não devem ser usados para agrupar/mesclar (ex.: "Sem título").
+    """
+    if not isinstance(titulo, str):
+        return True
+    t = titulo.strip().lower()
+    if not t:
+        return True
+    padroes = [
+        "sem título", "sem titulo", "notícia sem título", "noticias sem titulo",
+        "novo cluster", "grupo lote",
+    ]
+    return any(t.startswith(p) for p in padroes)
+
+
+def inferir_tipo_fonte_por_jornal(nome_jornal: Optional[str]) -> str:
+    """
+    Inferência heurística de tipo de fonte ('nacional' ou 'internacional') a partir do nome do jornal.
+    - Usa listas ampliadas de substrings; tolera siglas e nomes parciais (ex.: 'FT', 'WSJ').
+    - Default: 'nacional'.
+    """
+    try:
+        if not isinstance(nome_jornal, str) or not nome_jornal.strip():
+            return 'nacional'
+        s = nome_jornal.strip().lower()
+        # Normaliza separadores incomuns (underscores, hífens, múltiplos espaços)
+        try:
+            import re as _re
+            s_norm = _re.sub(r"[^a-z0-9]+", " ", s)
+            s_norm = _re.sub(r"\s+", " ", s_norm).strip()
+        except Exception:
+            s_norm = s
+        internacionais = [
+            'financial times', 'ft ', ' ft', 'ft.com', 'ft weekend', 'ftweekend',
+            'bloomberg', 'reuters', 'associated press', 'ap ', 'ap news',
+            'wall street journal', 'wsj',
+            'new york times', 'nyt', 'washington post', 'wapo',
+            'the guardian', 'guardian', 'bbc', 'cnn', 'cnbc', 'the economist',
+            'forbes', 'marketwatch', 'barron', "barron's", 'the telegraph',
+            'the times', 'usa today', 'los angeles times', 'la times',
+            'chicago tribune', 'axios', 'politico', 'the hill',
+            'nikkei', 'japan times', 'south china morning post', 'scmp',
+            'al jazeera', 'sky news', 'the hindu', 'times of india',
+        ]
+        # Checa contra ambas as versões (original e normalizada)
+        if any((k in s) or (k in s_norm) for k in internacionais):
+            return 'internacional'
+        return 'nacional'
+    except Exception:
+        return 'nacional'
+
+
 def truncar_texto(texto: str, max_length: int = 500, sufixo: str = "...") -> str:
     """
     Trunca um texto para um comprimento máximo.

@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 """
-Reprocessa APENAS o dia de hoje com os prompts atuais.
+Reprocessa um DIA específico (ou hoje por padrão) com os prompts atuais.
 
 Passos:
 - Mantém os dados brutos (texto_bruto, metadados)
-- Reseta artigos de hoje para status 'pendente' e limpa campos processados
-- Desassocia artigos dos clusters de hoje
-- Remove clusters gerados hoje (e artefatos relacionados: chat, alterações, sínteses)
+- Reseta artigos da data para status 'pendente' e limpa campos processados
+- Desassocia artigos dos clusters da data
+- Remove clusters da data (e artefatos relacionados: chat, alterações, sínteses)
 - Executa o pipeline completo de reprocessamento (processar → agrupar → classificar → priorizar)
 
 Uso (Windows CMD):
-  python reprocess_today.py
+  python reprocess_today.py                    # Reprocessa hoje
+  python reprocess_today.py --day 2025-08-24  # Reprocessa data específica
 """
 
+import argparse
 from datetime import datetime
 from typing import Optional
 
@@ -33,12 +35,17 @@ from backend.utils import get_date_brasil_str
 from process_articles import processar_artigos_pendentes, priorizacao_executiva_final, consolidacao_final_clusters, client
 
 
-def resetar_artigos_hoje(db) -> int:
-    """Reseta artigos criados hoje para 'pendente' e limpa campos processados, mantendo texto_bruto/metadados."""
-    hoje_str = get_date_brasil_str()
+def parse_args():
+    ap = argparse.ArgumentParser(description="Reprocessa um dia específico ou hoje")
+    ap.add_argument("--day", help="Data no formato YYYY-MM-DD (padrão: hoje)")
+    return ap.parse_args()
+
+
+def resetar_artigos_da_data(db, day_str: str) -> int:
+    """Reseta artigos da data para 'pendente' e limpa campos processados, mantendo texto_bruto/metadados."""
     artigos = (
         db.query(ArtigoBruto)
-        .filter(func.date(ArtigoBruto.created_at) == hoje_str)
+        .filter(func.date(ArtigoBruto.created_at) == day_str)
         .all()
     )
 
@@ -66,18 +73,16 @@ def resetar_artigos_hoje(db) -> int:
     return count
 
 
-def remover_clusters_hoje(db) -> int:
-    """Remove clusters criados hoje e objetos dependentes (chat, alterações, sínteses)."""
-    hoje_str = get_date_brasil_str()
-
+def remover_clusters_da_data(db, day_str: str) -> int:
+    """Remove clusters da data e objetos dependentes (chat, alterações, sínteses)."""
     # Sinteses do dia (se existir)
     db.query(SinteseExecutiva).filter(
-        func.date(SinteseExecutiva.data_sintese) == hoje_str
+        func.date(SinteseExecutiva.data_sintese) == day_str
     ).delete(synchronize_session=False)
 
     clusters = (
         db.query(ClusterEvento)
-        .filter(func.date(ClusterEvento.created_at) == hoje_str)
+        .filter(func.date(ClusterEvento.created_at) == day_str)
         .all()
     )
 
@@ -110,25 +115,25 @@ def remover_clusters_hoje(db) -> int:
     return removidos
 
 
-def reprocessar_hoje() -> None:
+def reprocessar_data(day_str: Optional[str] = None) -> None:
     db = SessionLocal()
     try:
-        hoje_str = get_date_brasil_str()
+        target_day = day_str or get_date_brasil_str()
         print("=" * 60)
-        print(f"🔄 Reprocessamento do dia: {hoje_str}")
+        print(f"🔄 Reprocessamento do dia: {target_day}")
         print("=" * 60)
 
-        # 1) Resetar artigos do dia
-        qtd_resets = resetar_artigos_hoje(db)
-        print(f"🧹 Artigos do dia resetados para 'pendente': {qtd_resets}")
+        # 1) Resetar artigos da data
+        qtd_resets = resetar_artigos_da_data(db, target_day)
+        print(f"🧹 Artigos da data resetados para 'pendente': {qtd_resets}")
 
-        # 2) Remover clusters do dia
-        qtd_clusters = remover_clusters_hoje(db)
-        print(f"🗑️  Clusters removidos do dia: {qtd_clusters}")
+        # 2) Remover clusters da data
+        qtd_clusters = remover_clusters_da_data(db, target_day)
+        print(f"🗑️  Clusters removidos da data: {qtd_clusters}")
 
         # 3) Rodar pipeline completo com prompts atuais (Etapas 1–3)
         print("🚀 Iniciando reprocessamento (Etapas 1–3)...")
-        sucesso = processar_artigos_pendentes(limite=999)
+        sucesso = processar_artigos_pendentes(limite=999, day_str=target_day)
         if not sucesso:
             print("❌ Reprocessamento falhou nas Etapas 1–3. Verifique os logs.")
             return
@@ -143,7 +148,7 @@ def reprocessar_hoje() -> None:
 
         db5 = SessionLocal()
         try:
-            ok_cons = consolidacao_final_clusters(db5, client)
+            ok_cons = consolidacao_final_clusters(db5, client, day_str=target_day)
         finally:
             db5.close()
 
@@ -156,5 +161,10 @@ def reprocessar_hoje() -> None:
         db.close()
 
 
+def main():
+    args = parse_args()
+    reprocessar_data(args.day)
+
+
 if __name__ == "__main__":
-    reprocessar_hoje()
+    main()

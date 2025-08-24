@@ -213,7 +213,15 @@ async function fetchTodasPaginasPorPrioridade(date, priority, pageSize = 50, onP
     let metricasPrimeiraPagina = null;
 
     while (temProxima) {
-        const url = `/api/feed?data=${date}&priority=${priority}&page=${page}&page_size=${pageSize}&tipo_fonte=${tipoFonteAtivo}`;
+        // CORREÇÃO: Primeira página SEM tipo_fonte para obter métricas totais do dia
+        // Páginas subsequentes COM tipo_fonte para filtrar clusters
+        let url;
+        if (page === 1) {
+            url = `/api/feed?data=${date}&priority=${priority}&page=${page}&page_size=${pageSize}`;
+        } else {
+            url = `/api/feed?data=${date}&priority=${priority}&page=${page}&page_size=${pageSize}&tipo_fonte=${tipoFonteAtivo}`;
+        }
+        
         const resp = await fetch(url);
         if (!resp.ok) break;
         const data = await resp.json();
@@ -261,12 +269,13 @@ async function carregarClustersPorPrioridade(date, token) {
         } else {
             console.warn('⚠️ Cache não contém métricas, carregando da API');
             // Se o cache não tem métricas, força recarregamento
+            // CORREÇÃO: Carrega métricas SEM tipo_fonte para obter total do dia
             const ctrlM = makeController();
-            const p1Response = await fetch(`/api/feed?data=${date}&priority=P1_CRITICO&page=1&page_size=50&tipo_fonte=${tipoFonteAtivo}`, { signal: ctrlM.signal });
+            const p1Response = await fetch(`/api/feed?data=${date}&priority=P1_CRITICO&page=1&page_size=50`, { signal: ctrlM.signal });
             if (p1Response.ok) {
                 const p1Data = await p1Response.json();
                 if (p1Data.metricas) {
-                    console.log('📊 Métricas carregadas da API:', p1Data.metricas);
+                    console.log('📊 Métricas carregadas da API (total do dia):', p1Data.metricas);
                     if (token !== feedLoadToken) return;
                     atualizarMetricas(p1Data.metricas);
                 }
@@ -669,7 +678,9 @@ function atualizarDataTexto() {
 // =======================================
 async function carregarMetricas(date) {
     try {
-        const resp = await fetch(`/api/feed?data=${date}&page=1&page_size=1&tipo_fonte=${tipoFonteAtivo}`);
+        // CORREÇÃO: Carrega métricas SEM tipo_fonte para obter total do dia
+        // As métricas são as mesmas independente da aba (Brasil/Internacional)
+        const resp = await fetch(`/api/feed?data=${date}&page=1&page_size=1`);
         if (!resp.ok) return;
         const data = await resp.json();
         if (data && data.metricas) {

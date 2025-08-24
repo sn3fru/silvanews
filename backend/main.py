@@ -529,6 +529,27 @@ async def criar_novo_artigo(
         # Cria novo artigo (apenas carga bruta; processamento é etapa posterior)
         novo_artigo = create_artigo_bruto(db, artigo_data)
         
+        # Define tipo_fonte imediatamente com base no jornal/metadados
+        try:
+            from .utils import inferir_tipo_fonte_por_jornal as _infer_tf  # type: ignore
+        except Exception:
+            from backend.utils import inferir_tipo_fonte_por_jornal as _infer_tf  # type: ignore
+
+        try:
+            jornal = None
+            # tenta campo estruturado e metadados
+            if hasattr(novo_artigo, 'jornal') and novo_artigo.jornal:
+                jornal = novo_artigo.jornal
+            if not jornal and isinstance(novo_artigo.metadados, dict):
+                jornal = (novo_artigo.metadados or {}).get('jornal') or (novo_artigo.metadados or {}).get('fonte_original')
+            tf = _infer_tf(jornal) if jornal else 'nacional'
+            if hasattr(novo_artigo, 'tipo_fonte'):
+                novo_artigo.tipo_fonte = 'internacional' if tf == 'internacional' else 'nacional'
+            db.commit()
+            db.refresh(novo_artigo)
+        except Exception:
+            pass
+        
         create_log(db, "INFO", "api", 
                   f"Novo artigo criado: {novo_artigo.id}",
                   {"fonte": artigo_data.fonte_coleta})

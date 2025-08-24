@@ -19,7 +19,7 @@ Plataforma de inteligência de mercado que transforma alto volume de notícias e
 ### Novidades recentes (pipeline mais rigoroso)
 
 - **Suporte a notícias internacionais**: Sistema de abas Brasil/Internacional no frontend com:
-  - Detecção automática do tipo de fonte (nacional/internacional) baseada no jornal
+  - Detecção automática do tipo de fonte (nacional/internacional) baseada no jornal (com heurística ampliada para FT/WSJ/NYT/Bloomberg etc.)
   - Tags específicas para contexto internacional (ex: "Global M&A", "Central Banks and Monetary Policy")
   - Critérios de priorização adaptados para mercado global (valores em dólares, empresas Fortune 500)
   - Filtros independentes por tipo de fonte na API
@@ -29,7 +29,7 @@ Plataforma de inteligência de mercado que transforma alto volume de notícias e
 - Priorização Executiva Final integrada: etapa adicional pós-resumo/pós-agrupamento que reclassifica como P1/P2/P3/IRRELEVANTE com justificativa e ação recomendada (`PROMPT_PRIORIZACAO_EXECUTIVA_V1`).
 - Nova Etapa 4 – Consolidação Final de Clusters: reagrupamento conservador de clusters do dia usando `PROMPT_CONSOLIDACAO_CLUSTERS_V1` com base em títulos, tags e prioridades já atribuídos. A maioria dos clusters permanece inalterada; quando há duplicidade (p.ex. variações de "PGFN arrecadação recorde"), a etapa sugere merges, move artigos para um destino, ajusta título/tag/prioridade quando necessário e arquiva (soft delete) os duplicados.
 - Robustez: ajustes para evitar truncamento do LLM e JSON quebrado — lotes menores, campos de resumo encurtados e fallback de parsing.
-  - Incremental: lotes de até 100, `titulos_internos` reduzido a 10 por cluster, heurística que impede criação de múltiplos clusters genéricos (ex.: "Notícia sem título").
+  - Incremental: lotes de até 100, `titulos_internos` reduzido a 10 por cluster, heurística que impede criação de múltiplos clusters genéricos (ex.: "Notícia sem título"). Processamento incremental e em lote agora separam por tipo_fonte (NACIONAL/INTERNACIONAL) — nunca se misturam no mesmo prompt.
   - Priorização: lotes de até 40, `resumo_final` enviado truncado a ~240 caracteres, `max_output_tokens` 8192 para batched.
   - Consolidação: lotes de até 50; parsing de sugestões tolerante a erros; fallback determinístico por título/tag.
 
@@ -63,8 +63,8 @@ Plataforma de inteligência de mercado que transforma alto volume de notícias e
    - Valida dados, aplica heurísticas leves e gera embeddings (sem prompts/LLM)
    - Marca `pronto_agrupar`
 3) Agrupamento (Etapa 2)
-   - Lote: `process_articles.py::agrupar_noticias_com_prompt` → `PROMPT_AGRUPAMENTO_V1`
-   - Incremental: `process_articles.py::agrupar_noticias_incremental` → `PROMPT_AGRUPAMENTO_INCREMENTAL_V2` (lotes ≤ 100; 10 títulos por cluster; heurística anti-duplicação para títulos genéricos)
+   - Lote: `process_articles.py::agrupar_noticias_com_prompt` → `PROMPT_AGRUPAMENTO_V1` (processa lotes NACIONAL e INTERNACIONAL separadamente; usa trecho curto por item e `max_output_tokens` alto para respostas longas)
+   - Incremental: `process_articles.py::agrupar_noticias_incremental` → `PROMPT_AGRUPAMENTO_INCREMENTAL_V2` (lotes ≤ 100; 10 títulos por cluster; `max_output_tokens` alto). Isolado por tipo_fonte e impede anexação entre tipos diferentes.
 4) Classificação e Resumo (Etapa 3)
    - `process_articles.py::classificar_e_resumir_cluster`
    - Classificação/Prioridade/Tag: `PROMPT_EXTRACAO_GATEKEEPER_V13`

@@ -391,6 +391,19 @@ body {
 .btn-terciario { background-color: transparent; border: 1px solid var(--cor-borda); color: var(--cor-texto-principal); }
 .btn-terciario:hover { background-color: var(--cor-fundo); border-color: var(--cor-texto-secundario); }
 
+/* Estado desativado para botões (cinza e não clicáveis) */
+.btn[disabled],
+button[disabled],
+.btn:disabled,
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    filter: grayscale(100%);
+}
+
+/* Tooltip simples em hover mostrando "Desativado" - via title já funciona nativo.
+   Para garantir feedback visual, manter o cursor not-allowed acima. */
+
 /* ======================================= */
 /* MODAL DEEP DIVE                         */
 /* ======================================= */

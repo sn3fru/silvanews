@@ -26,7 +26,7 @@ try:
     from ..models import ArtigoBrutoCreate
     from ..crud import create_artigo_bruto, get_artigo_by_hash, create_log
     from ..prompts import PROMPT_EXTRACAO_PDF_RAW_V1
-    from ..utils import get_datetime_brasil_str, get_date_brasil_str
+    from ..utils import get_datetime_brasil_str, get_date_brasil_str, gerar_titulo_fallback_curto, titulo_e_generico, inferir_tipo_fonte_por_jornal
 except ImportError:
     # Fallback para execução direta
     try:
@@ -34,7 +34,7 @@ except ImportError:
         from models import ArtigoBrutoCreate
         from crud import create_artigo_bruto, get_artigo_by_hash, create_log
         from prompts import PROMPT_EXTRACAO_PDF_RAW_V1
-        from utils import get_datetime_brasil_str, get_date_brasil_str
+        from utils import get_datetime_brasil_str, get_date_brasil_str, gerar_titulo_fallback_curto, titulo_e_generico, inferir_tipo_fonte_por_jornal
     except ImportError as e:
         print(f"❌ ERRO: Não foi possível importar módulos do backend: {e}")
         print(f"   Verifique se está executando a partir do diretório correto")
@@ -608,18 +608,22 @@ class FileLoader:
 
             # Converte a saída do LLM para o formato esperado pelo banco de dados
             for noticia in noticias_extraidas:
-                if isinstance(noticia, dict) and noticia.get('titulo') and noticia.get('texto_completo'):
+                if isinstance(noticia, dict) and noticia.get('texto_completo'):
                     # Determina jornal (prioriza extraído pela IA; fallback: nome do arquivo)
                     jornal_extraido = noticia.get('jornal') or nome_arquivo_original.replace('.pdf', '')
                     # Determina página (prioriza extraído; fallback: número da página processada)
                     pagina_extraida = noticia.get('pagina') if noticia.get('pagina') not in [None, '', 'N/A'] else numero_pagina
                     # Determina URL quando disponível
                     url_detectada = noticia.get('url') or noticia.get('link')
+                    # Gera título robusto quando ausente/genérico
+                    titulo_extraido = (noticia.get('titulo') or '').strip()
+                    if titulo_e_generico(titulo_extraido):
+                        titulo_extraido = gerar_titulo_fallback_curto(noticia.get('texto_completo'))
                     artigos_formatados.append({
                         'texto_bruto': noticia['texto_completo'],
                         'url_original': url_detectada,
                         'metadados': {
-                            'titulo': noticia.get('titulo') or '',
+                            'titulo': titulo_extraido or gerar_titulo_fallback_curto(noticia.get('texto_completo')),
                             'subtitulo': '',
                             # Fonte original deve refletir o jornal para alinhar com o fluxo dos JSONs
                             'fonte_original': jornal_extraido,
@@ -654,12 +658,14 @@ class FileLoader:
                             texto_pagina = (temp_doc.load_page(0).get_text() or '').strip()
                     if texto_pagina:
                         primeira_linha = texto_pagina.split('\n', 1)[0].strip()
+                        if titulo_e_generico(primeira_linha):
+                            primeira_linha = gerar_titulo_fallback_curto(texto_pagina)
                         jornal_fallback = nome_arquivo_original.replace('.pdf', '')
                         artigos_formatados.append({
                             'texto_bruto': texto_pagina,
                             'url_original': None,
                             'metadados': {
-                                'titulo': primeira_linha or f"{jornal_fallback} - Página {numero_pagina or ''}",
+                                'titulo': (primeira_linha or gerar_titulo_fallback_curto(texto_pagina)) or f"{jornal_fallback} - Página {numero_pagina or ''}",
                                 'subtitulo': '',
                                 'fonte_original': jornal_fallback,
                                 'arquivo_origem': nome_arquivo_original,
@@ -985,8 +991,11 @@ class FileLoader:
                 return True
             
             # Detecta tipo de fonte baseado no jornal
-            jornal = artigo_data.get('metadados', {}).get('fonte_original', '')
+            jornal = artigo_data.get('metadados', {}).get('jornal') or artigo_data.get('metadados', {}).get('fonte_original', '')
+            # Heurística ampliada: tenta inferir por nome quando lista interna não captar
             tipo_fonte = self.detectar_tipo_fonte(jornal)
+            if not tipo_fonte or tipo_fonte not in ('nacional', 'internacional'):
+                tipo_fonte = inferir_tipo_fonte_por_jornal(jornal)
             
             # Cria novo artigo
             dados_artigo = ArtigoBrutoCreate(
@@ -1012,6 +1021,9 @@ class FileLoader:
                     novo_artigo.tags_originais = metadados.get('tags_originais')
                 if hasattr(novo_artigo, 'id_hash_original'):
                     novo_artigo.id_hash_original = metadados.get('id_hash_original')
+                # Se 'jornal' processado vier vazio, preenche com 'fonte_original'
+                if hasattr(novo_artigo, 'jornal') and not novo_artigo.jornal:
+                    novo_artigo.jornal = metadados.get('jornal') or metadados.get('fonte_original')
                 
                 # Converte datas se presentes
                 if metadados.get('data_publicacao'):

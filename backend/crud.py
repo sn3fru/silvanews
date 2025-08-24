@@ -130,6 +130,15 @@ def update_artigo_dados_sem_status(
     artigo.relevance_score = dados_processados.get('relevance_score')
     artigo.relevance_reason = dados_processados.get('relevance_reason')
     
+    # IMPORTANTE: Preserva o tipo_fonte que foi definido durante o carregamento
+    # NÃO sobrescreve o tipo_fonte com dados_processados.get('tipo_fonte')
+    # CORREÇÃO: Se o artigo não tem tipo_fonte definido, usa o valor dos dados processados
+    if not hasattr(artigo, 'tipo_fonte') or artigo.tipo_fonte is None:
+        tipo_fonte_dados = dados_processados.get('tipo_fonte')
+        if tipo_fonte_dados and tipo_fonte_dados in ('nacional', 'internacional'):
+            artigo.tipo_fonte = tipo_fonte_dados
+            print(f"    🔍 DEBUG: Artigo {id_artigo} recebe tipo_fonte='{tipo_fonte_dados}' dos dados processados")
+    
     if embedding:
         artigo.embedding = embedding
     
@@ -154,11 +163,15 @@ def update_artigo_status(db: Session, id_artigo: int, status: str) -> bool:
     return True
 
 
-def get_artigos_pendentes(db: Session, limite: int = 100) -> List[ArtigoBruto]:
+def get_artigos_pendentes(db: Session, limite: int = 100, day_str: Optional[str] = None) -> List[ArtigoBruto]:
     """Busca artigos com status 'pendente' para processamento."""
-    return db.query(ArtigoBruto).filter(
-        ArtigoBruto.status == 'pendente'
-    ).order_by(ArtigoBruto.created_at.asc()).limit(limite).all()
+    query = db.query(ArtigoBruto).filter(ArtigoBruto.status == 'pendente')
+    
+    # Se uma data específica for fornecida, filtra por ela
+    if day_str:
+        query = query.filter(func.date(ArtigoBruto.created_at) == day_str)
+    
+    return query.order_by(ArtigoBruto.created_at.asc()).limit(limite).all()
 
 
 def get_artigos_by_cluster(db: Session, cluster_id: int) -> List[ArtigoBruto]:
@@ -214,12 +227,24 @@ def create_cluster(db: Session, cluster_data: ClusterEventoCreate) -> ClusterEve
 
     prioridade_normalizada = corrigir_prioridade_invalida(cluster_data.prioridade if cluster_data.prioridade else None)
 
+    # Normaliza tipo_fonte
+    tipo_fonte_normalizado = None
+    try:
+        tf = getattr(cluster_data, 'tipo_fonte', None)
+        if isinstance(tf, str):
+            tf = tf.strip().lower()
+            if tf in ('nacional', 'internacional'):
+                tipo_fonte_normalizado = tf
+    except Exception:
+        pass
+
     db_cluster = ClusterEvento(
         titulo_cluster=_truncate(cluster_data.titulo_cluster, 500),
         resumo_cluster=cluster_data.resumo_cluster,
         tag=_truncate(cluster_data.tag, 50),
         prioridade=_truncate(prioridade_normalizada, 20),
-        embedding_medio=cluster_data.embedding_medio
+        embedding_medio=cluster_data.embedding_medio,
+        tipo_fonte=tipo_fonte_normalizado or 'nacional'
     )
     db.add(db_cluster)
     db.commit()
@@ -247,6 +272,14 @@ def associate_artigo_to_cluster(db: Session, id_artigo: int, id_cluster: int) ->
         cluster_anterior = db.query(ClusterEvento).filter(ClusterEvento.id == artigo.cluster_id).first()
         if cluster_anterior:
             cluster_anterior.total_artigos = max(0, cluster_anterior.total_artigos - 1)
+    
+    # CORREÇÃO: Verifica compatibilidade de tipo_fonte entre artigo e cluster
+    tipo_fonte_artigo = getattr(artigo, 'tipo_fonte', 'nacional')
+    tipo_fonte_cluster = getattr(cluster, 'tipo_fonte', 'nacional')
+    
+    if tipo_fonte_artigo != tipo_fonte_cluster:
+        print(f"⚠️ AVISO: Incompatibilidade de tipo_fonte - artigo={tipo_fonte_artigo}, cluster={tipo_fonte_cluster}")
+        # Não impede a associação, mas registra o aviso
     
     # Associa o artigo ao cluster
     artigo.cluster_id = id_cluster
@@ -631,8 +664,8 @@ def get_clusters_for_feed_by_date(db: Session, target_date: datetime.date, page:
     if priority:
         clusters_query = clusters_query.filter(ClusterEvento.prioridade == priority)
     
-    # Aplica filtro de tipo de fonte se especificado
-    if tipo_fonte:
+    # Aplica filtro de tipo de fonte se especificado (nacional | internacional)
+    if tipo_fonte in ('nacional', 'internacional'):
         clusters_query = clusters_query.filter(ClusterEvento.tipo_fonte == tipo_fonte)
     
     # Ordena por prioridade (P1 primeiro) e depois por data
