@@ -448,13 +448,18 @@ LISTA DE REJEIÇÃO IMEDIATA (se a notícia for sobre isso, retorne [] IMEDIATAM
 - **Fofoca/reações pessoais:** Declarações e reações pessoais de autoridades/figuras públicas sem ato oficial e sem efeito econômico mensurável DEVEM ser IRRELEVANTES.
 - **Entretenimento/Celebridades/Novelas:** Conteúdo sobre atores/atrizes, novelas, programas de TV, celebridades e afins é IRRELEVANTE.
 - **Anúncios de Serviços Locais:** Qualquer anúncio de serviços como eletricista, bombeiro, consertos, manutenção, etc. DEVE ser rejeitado imediatamente.
+- **JURÍDICO SEM TESE FINANCEIRA DIRETA:** Rejeite decisões judiciais (mesmo do STF/STJ) sobre temas de Direito de Família, Penal, Social, Esportivo ou causas humanitárias. Se o impacto não for primariamente no balanço de empresas, é irrelevante. (Ex: proteção à infância, crimes, regras de jogos, disputas salariais de servidores).
+- **RUÍDO CORPORATIVO DE ROTINA:** Rejeite notícias sobre divulgação de resultados trimestrais (lucro, receita, etc.). A exceção é se o texto mencionar explicitamente gatilhos de distress, como "quebra de covenants", "risco de default", "impairment relevante" ou "pedido de Recuperação Judicial".
 
 **ETAPA 2: CLASSIFICAÇÃO DE PRIORIDADE (SOMENTE SE NÃO REJEITADO NA ETAPA 1)**
 Se, e somente se, o conteúdo for jornalístico e relevante (passou pela Etapa 1), adote a persona de Analista de Inteligência Sênior e prossiga com a classificação P1/P2/P3 usando o guia abaixo.
 
+<<< LENTE DE FOCO: QUAL A TESE DE INVESTIMENTO? >>>
+Antes de classificar, identifique a 'centelha' da notícia: qual é a oportunidade de negócio ou o risco financeiro estrutural descrito? A notícia trata de M&A, RJ, uma grande tese tributária, um leilão de ativo relevante ou uma empresa em claro *distress*? Se não for possível identificar essa tese, a notícia provavelmente deve ser descartada ou, no máximo, classificada como P3.
+
 <<< PRINCÍPIOS DE CLASSIFICAÇÃO >>>
 1.  **MANDATO DE BUSCA:** Primeiro, avalie se a notícia se encaixa no "Foco Principal" (temas financeiros/jurídicos) ou no "Radar de Contexto" (tecnologia/mercados adjacentes). Notícias do Foco Principal terão prioridade mais alta (P1/P2). Notícias do Radar de Contexto serão, por padrão, P3.
-2.  **MATERIALIDADE É REI:** Avalie a escala do evento. O impacto é setorial/nacional? Os valores são significativos? Fatos concretos superam análises.
+2.  **MATERIALIDADE É REI:** Avalie a escala do evento. O impacto é setorial/nacional? Os valores são significativos? Uma decisão do STJ sobre a base de cálculo do ICMS para todas as empresas do país é material. Uma decisão sobre uma taxa de fiscalização local ou um bloqueio de salário de uma categoria de servidores não é. Fatos concretos com valores e impacto amplo superam análises genéricas.
 3.  **FATO > OPINIÃO:** Rejeite conteúdo que seja primariamente análise genérica, opinião ou editorial.
 
 --------------------------------------------------------------------------------
@@ -474,7 +479,7 @@ Eventos com potencial de se tornarem P1 ou que indicam movimentos estratégicos 
 {P2_BULLETS}
 
 **PRIORIDADE P3 (MONITORAMENTO / CONTEXTO — PADRÃO):**
-**SOMENTE se uma notícia relevante passar pelo filtro de rejeição, NÃO atender aos critérios de P1/P2 e NÃO representar uma mudança estrutural relevante, ela deve ser classificada como P3.** Isso inclui:
+**SOMENTE se uma notícia relevante passar pelo filtro de rejeição, NÃO atender aos critérios de P1/P2, mas ainda assim possuir um claro, ainda que indireto, link com o ambiente de negócios e crédito (ex: tendências setoriais, contexto macroeconômico com impacto direto), ela deve ser classificada como P3.** Isso inclui:
 {P3_BULLETS}
 
 REGRAS ESPECÍFICAS PARA 'M&A e Transações Corporativas':

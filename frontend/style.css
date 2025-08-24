@@ -419,6 +419,21 @@ body {
     height: 90vh; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1);
     display: flex; flex-direction: column; position: relative;
 }
+.modal-overlay > .modal-content {
+    /* Fallback para modais antigos que usam .modal-content */
+    background-color: var(--cor-container);
+    width: 90%;
+    max-width: 900px;
+    height: 90vh;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+.modal-content .modal-header { padding: 1.5rem 2rem; border-bottom: 1px solid var(--cor-borda); }
+.modal-content .modal-body { padding: 0 2rem 2rem 2rem; overflow-y: auto; display: flex; flex-direction: column; }
+.modal-content .modal-close { position: absolute; top: 1rem; right: 1.5rem; background: none; border: none; color: var(--cor-texto-secundario); font-size: 2rem; cursor: pointer; }
 .modal-close-btn { position: absolute; top: 1rem; right: 1.5rem; background: none; border: none; color: var(--cor-texto-secundario); font-size: 2rem; cursor: pointer; }
 .modal-header { padding: 1.5rem 2rem; border-bottom: 1px solid var(--cor-borda); }
 .modal-header h2 { font-size: 1.5rem; }

@@ -645,6 +645,28 @@ async def post_feedback(artigo_id: int, feedback: str, db: Session = Depends(get
         raise HTTPException(status_code=400, detail="feedback deve ser 'like' ou 'dislike'")
     try:
         fb_id = create_feedback(db, artigo_id, feedback)
+        # Se for dislike, marca o artigo como IRRELEVANTE para não aparecer no frontend
+        if feedback == "dislike":
+            try:
+                artigo = get_artigo_by_id(db, artigo_id)
+                if artigo:
+                    artigo.tag = "IRRELEVANTE"
+                    # Também marca o cluster como IRRELEVANTE para sumir do feed
+                    try:
+                        if artigo.cluster_id:
+                            cluster = get_cluster_by_id(db, artigo.cluster_id)
+                            if cluster:
+                                cluster.tag = "IRRELEVANTE"
+                    except Exception:
+                        pass
+                    db.commit()
+                    try:
+                        create_log(db, "INFO", "api", f"Artigo {artigo_id} marcado como IRRELEVANTE por dislike")
+                    except Exception:
+                        pass
+            except Exception:
+                # Não bloqueia o retorno do feedback se a atualização de tag falhar
+                pass
         return {"status": "ok", "id": fb_id}
     except Exception as e:
         create_log(db, "ERROR", "api", f"Erro em POST /api/feedback: {e}")

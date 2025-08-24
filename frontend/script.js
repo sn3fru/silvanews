@@ -1096,6 +1096,16 @@ async function registrarFeedbackCluster(clusterId, tipo, btnEl) {
             setTimeout(() => btnEl.classList.remove('active'), 1200);
         }
         showNotification(`Feedback '${tipo}' registrado`, 'success');
+
+        // Se foi dislike, remove o cluster imediatamente do feed (sumirá nas próximas cargas por tag IRRELEVANTE)
+        if (tipo === 'dislike') {
+            try {
+                const card = document.querySelector(`.card-cluster[data-cluster-id="${clusterId}"]`);
+                if (card && card.parentNode) {
+                    card.parentNode.removeChild(card);
+                }
+            } catch (_) {}
+        }
     } catch (e) {
         showErrorMessage('Falha ao registrar feedback');
         console.error(e);
@@ -3027,14 +3037,14 @@ async function verArtigoBruto(clusterId, fonteNome) {
         
         const data = await response.json();
         
-        // Cria modal para mostrar artigos brutos
+        // Cria modal para mostrar artigos brutos (usa classes padrão de modal)
         const modal = document.createElement('div');
         modal.className = 'modal-overlay';
         modal.innerHTML = `
-            <div class="modal-content modal-large">
+            <div class="modal-container modal-large">
+                <button class="modal-close-btn" onclick="this.closest('.modal-overlay').remove()">&times;</button>
                 <div class="modal-header">
                     <h3>📰 Artigos Brutos - ${fonteNome}</h3>
-                    <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">&times;</button>
                 </div>
                 <div class="modal-body">
                     <div class="artigos-brutos-container">
