@@ -504,7 +504,7 @@ def get_gemini_model():
     
     genai.configure(api_key=api_key)
     # Usa o modelo Pro (mais capaz) especificamente para o chat do modal
-    return genai.GenerativeModel('gemini-2.5-flash')
+    return genai.GenerativeModel('gemini-2.0-flash')
 
 # ==============================================================================
 # UTILITÁRIOS DE DATA E FUSO HORÁRIO (GMT-3)
