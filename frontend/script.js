@@ -931,9 +931,9 @@ function criarCardCluster(cluster) {
             <div class="card-footer-right">
                 <button class="btn btn-secundario btn-copy" data-cluster-id="${cluster.id}">📋 Copiar</button>
                 <button class="btn btn-deep-dive" onclick="openModal(${cluster.id})">
-                    💬 Conversar com a notícia
+                    💬 Detalhes
                 </button>
-                <button class="btn btn-secundario btn-expand-summary" data-cluster-id="${cluster.id}">⤴︎ Expandir Resumo</button>
+                <button class="btn btn-secundario btn-expand-summary" data-cluster-id="${cluster.id}">⤴︎ Expandir</button>
             </div>
         </div>
     `;
@@ -1296,7 +1296,7 @@ async function expandirResumo(clusterId, summaryElement, buttonElement) {
         showErrorMessage('Não foi possível expandir o resumo agora');
         if (buttonElement) {
             buttonElement.disabled = false;
-            buttonElement.textContent = 'Expandir Resumo';
+            buttonElement.textContent = 'Expandir';
         }
     }
 }
