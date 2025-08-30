@@ -46,16 +46,17 @@ try:
         associate_artigo_to_existing_cluster, create_cluster_for_artigo,
         agg_noticias_por_dia, agg_noticias_por_fonte, agg_noticias_por_autor,
         agg_estatisticas_gerais, agg_noticias_por_tag, agg_noticias_por_prioridade,
-        create_feedback, list_feedback, mark_feedback_processed,
+        create_feedback, list_feedback, mark_feedback_processed, get_textos_brutos_por_cluster_id,
         create_deep_research_job, update_deep_research_job, get_deep_research_job, list_deep_research_jobs_by_cluster,
         create_social_research_job, update_social_research_job, get_social_research_job, list_social_research_jobs_by_cluster,
         create_estagiario_session, add_estagiario_message, list_estagiario_messages,
         list_prompt_tags, create_prompt_tag, update_prompt_tag, delete_prompt_tag,
         list_prompt_prioridade_itens_grouped, create_prompt_prioridade_item, update_prompt_prioridade_item, delete_prompt_prioridade_item,
-        list_prompt_templates, upsert_prompt_template, delete_prompt_template, get_prompts_compilados
+        list_prompt_templates, upsert_prompt_template, delete_prompt_template, get_prompts_compilados,
+        get_cluster_counts_by_date_and_tipo_fonte
     )
     from .processing import processar_artigo_pipeline, gerar_resumo_cluster, inicializar_processamento
-    from .utils import gerar_hash_unico, formatar_timestamp_relativo, get_date_brasil, parse_date_brasil
+    from .utils import gerar_hash_unico, formatar_timestamp_relativo, get_date_brasil, parse_date_brasil, extrair_json_da_resposta, get_gemini_model
 except ImportError:
     # Fallback para import absoluto quando executado fora do pacote
     from backend.database import get_db, init_database, ArtigoBruto, ClusterEvento, SinteseExecutiva, SessionLocal
@@ -75,9 +76,11 @@ except ImportError:
         create_estagiario_session, add_estagiario_message, list_estagiario_messages,
         list_prompt_tags, create_prompt_tag, update_prompt_tag, delete_prompt_tag,
         list_prompt_prioridade_itens_grouped, create_prompt_prioridade_item, update_prompt_prioridade_item, delete_prompt_prioridade_item,
-        list_prompt_templates, upsert_prompt_template, delete_prompt_template, get_prompts_compilados
+        list_prompt_templates, upsert_prompt_template, delete_prompt_template, get_prompts_compilados, get_textos_brutos_por_cluster_id,
+        get_cluster_counts_by_date_and_tipo_fonte
     )
     from backend.processing import processar_artigo_pipeline, gerar_resumo_cluster, inicializar_processamento
+    from backend.utils import gerar_hash_unico, formatar_timestamp_relativo, get_date_brasil, parse_date_brasil, extrair_json_da_resposta, get_gemini_model
     from backend.utils import gerar_hash_unico, formatar_timestamp_relativo, get_date_brasil, parse_date_brasil
 
 
@@ -415,6 +418,31 @@ async def get_cluster_details(
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
+@app.get("/api/contadores_abas")
+async def get_contadores_abas(
+    data: Optional[str] = None,
+    db: Session = Depends(get_db)
+) -> Dict[str, int]:
+    """
+    Retorna contagem de clusters exibíveis por tipo_fonte (nacional/internacional)
+    para a data informada (YYYY-MM-DD). Se não informada, usa data do Brasil (hoje).
+    """
+    try:
+        if data:
+            try:
+                target_date = parse_date_brasil(data)
+            except Exception:
+                # Fallback para formato ISO
+                target_date = datetime.fromisoformat(data).date()
+        else:
+            target_date = get_date_brasil()
+
+        counts = get_cluster_counts_by_date_and_tipo_fonte(db, target_date)
+        return counts
+    except Exception as e:
+        create_log(db, "ERROR", "api", f"Erro em /api/contadores_abas: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
 @app.get("/api/cluster/{cluster_id}/artigos")
 async def get_cluster_artigos(
     cluster_id: int,
@@ -471,6 +499,49 @@ async def get_cluster_artigos(
 # ==============================================================================
 # ENDPOINTS INTERNOS (PARA COLETORES)
 # ==============================================================================
+
+@app.post("/api/clusters/{cluster_id}/expandir-resumo")
+async def expandir_resumo_cluster(cluster_id: int, db: Session = Depends(get_db)) -> Dict[str, str]:
+    """
+    Gera um resumo expandido (2-3 parágrafos) a partir dos textos brutos do cluster e
+    atualiza o campo `resumo_cluster` do cluster.
+    """
+    try:
+        textos_originais = get_textos_brutos_por_cluster_id(db, cluster_id)
+        if not textos_originais:
+            raise HTTPException(status_code=404, detail="Cluster não encontrado ou sem artigos.")
+
+        try:
+            from .prompts import PROMPT_RESUMO_EXPANDIDO_V1 as _PROMPT
+        except Exception:
+            from backend.prompts import PROMPT_RESUMO_EXPANDIDO_V1 as _PROMPT
+
+        payload_text = json.dumps(textos_originais, ensure_ascii=False, indent=2)
+        prompt_text = _PROMPT.format(TEXTOS_ORIGINAIS_DO_CLUSTER=payload_text)
+
+        model = get_gemini_model()
+        response = model.generate_content(prompt_text)
+        resposta_texto = getattr(response, 'text', None) or ""
+
+        dados = extrair_json_da_resposta(resposta_texto) or {}
+        resumo_novo = dados.get('resumo_expandido') if isinstance(dados, dict) else None
+        if not resumo_novo:
+            raise HTTPException(status_code=500, detail="Falha ao gerar resumo expandido a partir da resposta do LLM.")
+
+        cluster = get_cluster_by_id(db, cluster_id)
+        if not cluster:
+            raise HTTPException(status_code=404, detail="Cluster não encontrado")
+        cluster.resumo_cluster = resumo_novo
+        cluster.updated_at = datetime.utcnow()
+        db.commit()
+
+        return {"resumo_expandido": resumo_novo}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        create_log(db, "ERROR", "api", f"Erro em expandir-resumo: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro na geração do resumo expandido: {str(e)}")
 
 @app.post("/internal/processar-artigo")
 async def processar_artigo_endpoint(
@@ -976,6 +1047,7 @@ async def upload_progress_endpoint(file_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
+@app.get("/admin/processing-status")
 @app.get("/api/admin/processing-status")
 async def processing_status_endpoint(db: Session = Depends(get_db)) -> StatusResponse:
     """
@@ -1766,6 +1838,8 @@ async def processar_artigos_via_script():
         # Atualiza mensagem de status
         try:
             processing_state["message"] = "Executando pipeline do process_articles.py..."
+            processing_state["status"] = "processing"
+            processing_state["start_time"] = time.time()
         except Exception:
             pass
 
@@ -1784,6 +1858,7 @@ async def processar_artigos_via_script():
         try:
             processing_state["status"] = "completed" if sucesso else "error"
             processing_state["message"] = "Processamento concluído com sucesso" if sucesso else "Falha no processamento"
+            processing_state["processed"] = processing_state.get("total", 0)  # Marca como 100% processado
         except Exception:
             pass
     except Exception as e:

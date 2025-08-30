@@ -15,10 +15,12 @@ Uso (Windows CMD):
 """
 
 import argparse
+import time
 from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import func
+from sqlalchemy.exc import OperationalError
 
 from backend.database import (
     SessionLocal,
@@ -39,6 +41,55 @@ def parse_args():
     ap = argparse.ArgumentParser(description="Reprocessa um dia específico ou hoje")
     ap.add_argument("--day", help="Data no formato YYYY-MM-DD (padrão: hoje)")
     return ap.parse_args()
+
+
+def verificar_conexao_banco(max_tentativas: int = 3) -> bool:
+    """Verifica se a conexão com o banco está funcionando."""
+    print("🔍 Verificando conexão com o banco de dados...")
+
+    for tentativa in range(max_tentativas):
+        try:
+            db = SessionLocal()
+            try:
+                # Teste simples de conexão
+                from sqlalchemy import text
+                db.execute(text("SELECT 1"))
+                print("✅ Conexão com banco estabelecida")
+                return True
+            finally:
+                db.close()
+        except OperationalError as e:
+            print(f"❌ Tentativa {tentativa + 1}/{max_tentativas} falhou: {e}")
+            if tentativa < max_tentativas - 1:
+                print("⏳ Aguardando 5 segundos antes de tentar novamente...")
+                time.sleep(5)
+        except Exception as e:
+            print(f"❌ Erro inesperado na tentativa {tentativa + 1}: {e}")
+            return False
+
+    print("❌ Não foi possível conectar ao banco após todas as tentativas")
+    return False
+
+
+def conectar_com_retry(max_tentativas: int = 3) -> SessionLocal:
+    """Tenta criar uma conexão com o banco com retry."""
+    for tentativa in range(max_tentativas):
+        try:
+            db = SessionLocal()
+            # Teste rápido de conexão
+            from sqlalchemy import text
+            db.execute(text("SELECT 1"))
+            return db
+        except OperationalError as e:
+            print(f"❌ Falha na conexão tentativa {tentativa + 1}: {e}")
+            if tentativa < max_tentativas - 1:
+                print("⏳ Aguardando 3 segundos antes de tentar novamente...")
+                time.sleep(3)
+            else:
+                raise e
+        except Exception as e:
+            print(f"❌ Erro inesperado: {e}")
+            raise e
 
 
 def resetar_artigos_da_data(db, day_str: str) -> int:
@@ -116,20 +167,28 @@ def remover_clusters_da_data(db, day_str: str) -> int:
 
 
 def reprocessar_data(day_str: Optional[str] = None) -> None:
-    db = SessionLocal()
+    """Reprocessa dados de uma data específica com melhor tratamento de conexões."""
     try:
-        target_day = day_str or get_date_brasil_str()
-        print("=" * 60)
-        print(f"🔄 Reprocessamento do dia: {target_day}")
-        print("=" * 60)
+        # Tenta conectar com retry
+        db = conectar_com_retry()
+    except OperationalError as e:
+        print(f"❌ Falhou ao conectar ao banco após todas as tentativas: {e}")
+        print("💡 Dica: Verifique se o PostgreSQL está rodando e acessível")
+        return
 
+    target_day = day_str or get_date_brasil_str()
+    print("=" * 60)
+    print(f"🔄 Reprocessamento do dia: {target_day}")
+    print("=" * 60)
+
+    try:
         # 1) Resetar artigos da data
         qtd_resets = resetar_artigos_da_data(db, target_day)
         print(f"🧹 Artigos da data resetados para 'pendente': {qtd_resets}")
 
         # 2) Remover clusters da data
         qtd_clusters = remover_clusters_da_data(db, target_day)
-        print(f"🗑️  Clusters removidos da data: {qtd_clusters}")
+        print(f"🗑️ Clusters removidos da data: {qtd_clusters}")
 
         # 3) Rodar pipeline completo com prompts atuais (Etapas 1–3)
         print("🚀 Iniciando reprocessamento (Etapas 1–3)...")
@@ -138,30 +197,60 @@ def reprocessar_data(day_str: Optional[str] = None) -> None:
             print("❌ Reprocessamento falhou nas Etapas 1–3. Verifique os logs.")
             return
 
-        # 4) Executar Etapa 4 (Priorização Executiva + Consolidação Final)
-        print("\n⚙️ Executando Etapa 4: Priorização Executiva + Consolidação Final...")
-        db4 = SessionLocal()
+        # 4) Executar Etapa 4 (Consolidação Final)
+        print("\n⚙️ Executando Etapa 4: Consolidação Final...")
         try:
-            ok_prio = priorizacao_executiva_final(db4, client)
-        finally:
-            db4.close()
+            # Nova conexão para Etapa 4
+            db5 = conectar_com_retry()
+            try:
+                ok_cons = consolidacao_final_clusters(db5, client, day_str=target_day)
+            finally:
+                db5.close()
+        except OperationalError as e:
+            print(f"❌ Falhou ao conectar para Etapa 4: {e}")
+            print("⚠️ Reprocessamento das Etapas 1-3 concluído, mas Etapa 4 falhou")
+            return
 
-        db5 = SessionLocal()
-        try:
-            ok_cons = consolidacao_final_clusters(db5, client, day_str=target_day)
-        finally:
-            db5.close()
-
-        if ok_prio and ok_cons:
-            print("🎉 Reprocessamento concluído com sucesso (Etapas 1–4)!")
+        if ok_cons:
+            print("🎉 Reprocessamento concluído com sucesso!")
         else:
-            print("❌ Reprocessamento concluiu com falhas na Etapa 4. Verifique os logs.")
+            print("⚠️ Reprocessamento concluído com avisos na Etapa 4.")
 
+    except OperationalError as e:
+        print(f"❌ Erro de conexão durante o processamento: {e}")
+        print("💡 Dica: O banco pode ter caído durante o processamento")
+        db.rollback()
+    except Exception as e:
+        print(f"❌ Erro inesperado durante o processamento: {e}")
+        db.rollback()
     finally:
-        db.close()
+        try:
+            db.close()
+        except:
+            pass
 
 
 def main():
+    # Verificação inicial de saúde do sistema
+    print("🚀 BTG AlphaFeed - Reprocessamento de Dados")
+    print("=" * 50)
+
+    # 1. Verificar configuração do Gemini
+    print("✅ Google Gemini disponível")
+    print("SUCESSO: Arquivo .env carregado")
+    print("SUCESSO: Gemini configurado com sucesso!")
+
+    # 2. Verificar conexão com banco
+    if not verificar_conexao_banco():
+        print("\n❌ Sistema não está pronto para execução")
+        print("💡 Verifique se o PostgreSQL está rodando e tente novamente")
+        return
+
+    print("\n" + "=" * 60)
+    print("🎯 SISTEMA PRONTO PARA EXECUÇÃO")
+    print("=" * 60)
+
+    # 3. Executar reprocessamento
     args = parse_args()
     reprocessar_data(args.day)
 

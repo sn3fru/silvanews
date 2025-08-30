@@ -141,7 +141,10 @@
                 <span class="card-timestamp"></span>
                 <div class="card-tags"></div>
             </div>
-            <button class="btn btn-deep-dive">Conversar com a Notícia →</button>
+            <div class="card-actions" style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.5rem;">
+                <button class="btn btn-deep-dive">Conversar com a Notícia →</button>
+                <button class="btn btn-secundario btn-expand-summary">Expandir Resumo</button>
+            </div>
         </article>
     </template>
 
@@ -150,7 +153,12 @@
             <button id="modal-close-btn" class="modal-close-btn">&times;</button>
             <header class="modal-header">
                 <h2 id="modal-titulo"></h2>
-                <button id="modal-copy-btn" class="btn btn-secundario" style="margin-left:auto">📋 Copiar</button>
+                <div style="margin-left:auto;display:flex;gap:.5rem;align-items:center;">
+                    <button id="modal-copy-btn" class="btn btn-secundario">📋 Copiar</button>
+                    <button id="modal-expand-summary-btn" class="btn btn-secundario">⤴︎ Expandir Resumo</button>
+                    <button id="modal-like-btn" class="btn btn-secundario" title="Gostei (like)">👍</button>
+                    <button id="modal-dislike-btn" class="btn btn-secundario" title="Não gostei (dislike)">👎</button>
+                </div>
             </header>
             <div class="modal-body">
                 <!-- Resumo e Fontes (sempre visível) -->

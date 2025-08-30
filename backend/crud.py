@@ -181,6 +181,25 @@ def get_artigos_by_cluster(db: Session, cluster_id: int) -> List[ArtigoBruto]:
     ).all()
 
 
+def get_textos_brutos_por_cluster_id(db: Session, cluster_id: int) -> List[Dict[str, Any]]:
+    """
+    Busca os textos brutos originais e metadados essenciais de todos os artigos
+    associados a um determinado ID de cluster. Não retorna resumos processados.
+    """
+    artigos = db.query(ArtigoBruto).filter(ArtigoBruto.cluster_id == cluster_id).all()
+    if not artigos:
+        return []
+    textos_brutos: List[Dict[str, Any]] = []
+    for artigo in artigos:
+        textos_brutos.append({
+            "id": artigo.id,
+            "titulo": (artigo.titulo_extraido or "Sem título"),
+            "fonte": (artigo.jornal or "Fonte desconhecida"),
+            "texto_bruto": (artigo.texto_bruto or artigo.texto_processado or "")
+        })
+    return textos_brutos
+
+
 # ==============================================================================
 # OPERAÇÕES CRUD - CLUSTERS DE EVENTOS
 # ==============================================================================
@@ -262,12 +281,12 @@ def associate_artigo_to_cluster(db: Session, id_artigo: int, id_cluster: int) ->
     
     # Verifica se o artigo já está associado a este cluster
     if artigo.cluster_id == id_cluster:
-        print(f"⚠️ Artigo {id_artigo} já está associado ao cluster {id_cluster}")
         return True
-    
+
     # Verifica se o artigo está associado a outro cluster
     if artigo.cluster_id:
-        print(f"⚠️ Artigo {id_artigo} já está associado ao cluster {artigo.cluster_id}, removendo associação anterior")
+        # Remove associação anterior silenciosamente
+        pass
         # Remove associação anterior
         cluster_anterior = db.query(ClusterEvento).filter(ClusterEvento.id == artigo.cluster_id).first()
         if cluster_anterior:
@@ -852,7 +871,8 @@ def get_cluster_details_by_id(db: Session, cluster_id: int) -> Optional[Dict[str
             "tipo": "web" if artigo.url_original else "pdf",
             "url": artigo.url_original,
             "autor": artigo.autor or "N/A",
-            "pagina": artigo.pagina
+            "pagina": artigo.pagina,
+            "titulo_original": artigo.titulo_extraido or "Título não disponível"
         }
         fontes.append(fonte)
     
@@ -1230,6 +1250,37 @@ def get_all_cluster_alteracoes(db: Session, limit: int = 100) -> List['ClusterAl
     return db.query(ClusterAlteracao).order_by(
         ClusterAlteracao.timestamp.desc()
     ).limit(limit).all()
+
+
+# ==============================================================================
+# CONTADORES POR ABA (NACIONAL/INTERNACIONAL) POR DATA
+# ==============================================================================
+def get_cluster_counts_by_date_and_tipo_fonte(db: Session, target_date: datetime.date) -> Dict[str, int]:
+    """
+    Retorna a contagem de clusters exibíveis (status ativo, não irrelevantes) por tipo_fonte
+    para uma data específica.
+    """
+    filtros_base = [
+        func.date(ClusterEvento.created_at) == target_date,
+        ClusterEvento.status == 'ativo',
+        ClusterEvento.prioridade != 'IRRELEVANTE',
+        ClusterEvento.tag != 'IRRELEVANTE',
+    ]
+
+    nacional = db.query(func.count(ClusterEvento.id)).filter(
+        *filtros_base,
+        ClusterEvento.tipo_fonte == 'nacional'
+    ).scalar() or 0
+
+    internacional = db.query(func.count(ClusterEvento.id)).filter(
+        *filtros_base,
+        ClusterEvento.tipo_fonte == 'internacional'
+    ).scalar() or 0
+
+    return {
+        "nacional": int(nacional),
+        "internacional": int(internacional)
+    }
 
 
 # ==============================================================================

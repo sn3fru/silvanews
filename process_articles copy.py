@@ -49,8 +49,7 @@ from backend.processing import (
     gerar_embedding, bytes_to_embedding, calcular_similaridade_cosseno,
     processar_artigo_pipeline, gerar_resumo_cluster, find_or_create_cluster
 )
-from backend.prompts import PROMPT_AGRUPAMENTO_V1, PROMPT_ANALISE_E_SINTESE_CLUSTER_V1, TAGS_SPECIAL_SITUATIONS
-from backend.prompts import _P1_BULLETS, _P2_BULLETS, _P3_BULLETS, GUIA_TAGS_FORMATADO
+from backend.prompts import PROMPT_AGRUPAMENTO_V1, PROMPT_RESUMO_FINAL_V3, TAGS_SPECIAL_SITUATIONS
 from backend.prompts import PROMPT_CONSOLIDACAO_CLUSTERS_V1, TAGS_SPECIAL_SITUATIONS_INTERNACIONAL
 from backend.prompts import LISTA_RELEVANCIA_HIERARQUICA_INTERNACIONAL
 from backend.utils import (
@@ -97,129 +96,160 @@ def get_prioridades_for_tipo_fonte(tipo_fonte: str) -> list:
     # Para nacional, retorna None pois usa o sistema atual
     return None
 
-def extrair_json_da_resposta(resposta: str):
+def extrair_json_da_resposta(resposta: str) -> Any:
     """
-    Extrai e repara JSON, retornando (status, dados).
-    Status possíveis: SUCESSO, SUCESSO_REPARO, SUCESSO_TRUNCAMENTO,
-    RESPOSTA_VAZIA, FALHA_SEM_JSON, FALHA_PARSING_TOTAL.
+    Extrai e repara JSON de forma robusta a partir da resposta do LLM.
+    Inclui sanitização de strings (aspas, quebras de linha) e fechamento
+    balanceado de colchetes/chaves quando possível. Mantém fallback por regex.
     """
-    import json as _json
-    import re as _re
+    import json
+    import re
 
-    def _extrair_bloco_json_local(texto: str) -> str:
-        m = _re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', texto, _re.DOTALL)
-        if m:
-            return m.group(1).strip()
+    def _extrair_bloco_json(texto: str) -> str:
+        match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', texto, re.DOTALL)
+        if match:
+            return match.group(1).strip()
+        # Sem bloco: pega a partir de '[' ou '{'
         start_pos = texto.find('[')
         if start_pos == -1:
             start_pos = texto.find('{')
         return texto[start_pos:].strip() if start_pos != -1 else ""
 
-    def _sanitizar_json_like_local(json_like: str) -> str:
-        s = json_like.replace('```', '')
-        s = _re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', s)
-        s = _re.sub(r',\s*([}\]])', r'\1', s)
-        def _bal(tx, a, f):
-            dif = tx.count(a) - tx.count(f)
+    def _print_json_error_details(stage: str, text: str, err: Exception) -> None:
+        try:
+            import json as _json
+            if isinstance(err, _json.JSONDecodeError):
+                print(f"🧩 {stage}: {err.msg} (linha {err.lineno}, coluna {err.colno}, pos {err.pos})")
+                pos = err.pos
+                start = max(pos - 120, 0)
+                end = min(pos + 120, len(text))
+                trecho = text[start:end]
+                print("--- Trecho próximo ao erro ---")
+                print(trecho)
+                caret_pos = pos - start
+                if 0 <= caret_pos <= len(trecho):
+                    print(" " * max(caret_pos, 0) + "^")
+                if 0 <= pos < len(text):
+                    ch = text[pos]
+                    print(f"Caractere no erro: '{ch}' (ord={ord(ch)})")
+                print("------------------------------")
+        except Exception as _:
+            pass
+
+    def _sanitizar_json_like(json_like: str) -> str:
+        # Remove backticks residuais e caracteres de controle invisíveis
+        json_like = json_like.replace('```', '')
+        json_like = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', json_like)
+
+        # Passo estado: escapa quebras de linha CR/LF dentro de strings
+        resultado = []
+        in_str = False
+        backslash_run = 0
+        for ch in json_like:
+            if in_str:
+                if ch == '"' and backslash_run % 2 == 0:
+                    in_str = False
+                    resultado.append(ch)
+                    backslash_run = 0
+                    continue
+                if ch == '\n':
+                    # já é escape literal
+                    resultado.append(ch)
+                elif ch == '\r':
+                    resultado.append('\\r')
+                elif ch == '\n':
+                    resultado.append('\\n')
+                elif ch in ['\n', '\r']:
+                    # segurança extra (ambiente pode entregar real newline)
+                    if ch == '\n':
+                        resultado.append('\\n')
+                    else:
+                        resultado.append('\\r')
+                else:
+                    # Acumula o char
+                    resultado.append(ch)
+                backslash_run = backslash_run + 1 if ch == '\\' else 0
+            else:
+                if ch == '"' and backslash_run % 2 == 0:
+                    in_str = True
+                if ch not in ['\x00', '\x0b', '\x0c']:
+                    resultado.append(ch)
+                backslash_run = backslash_run + 1 if ch == '\\' else 0
+        sanitizado = ''.join(resultado)
+
+        # Remove vírgulas finais antes de ']' ou '}'
+        sanitizado = re.sub(r',\s*([}\]])', r'\1', sanitizado)
+
+        # Balanceamento simples de colchetes/chaves
+        def _balancear(s: str, abre: str, fecha: str) -> str:
+            dif = s.count(abre) - s.count(fecha)
             if dif > 0:
-                tx += f * dif
-            return tx
-        s = _bal(s, '[', ']')
-        s = _bal(s, '{', '}')
-        return s
+                s += fecha * dif
+            return s
+        sanitizado = _balancear(sanitizado, '[', ']')
+        sanitizado = _balancear(sanitizado, '{', '}')
+        return sanitizado
 
     if not isinstance(resposta, str) or not resposta.strip():
-        return ('RESPOSTA_VAZIA', None)
+        print("❌ ERRO: Resposta da API está vazia.")
+        return None
 
-    bruto = _extrair_bloco_json_local(resposta)
+    # Só mostra em modo debug detalhado
+    if len(resposta) > 5000:  # Só mostra para respostas muito grandes
+        print(f"📊 Processando resposta grande: {len(resposta)} caracteres")
+
+    bruto = _extrair_bloco_json(resposta)
     if not bruto:
-        return ('FALHA_SEM_JSON', None)
+        print("❌ ERRO: Nenhum marcador de início de JSON ('[' ou '{') encontrado na resposta.")
+        return None
 
+    # 1) Parse direto
     try:
-        return ('SUCESSO', _json.loads(bruto))
-    except _json.JSONDecodeError:
-        pass
+        return json.loads(bruto)
+    except json.JSONDecodeError as e:
+        _print_json_error_details("Falha na Tentativa 1 (Parse Direto)", bruto, e)
 
-    reparado = _sanitizar_json_like_local(bruto)
+    # 2) Sanitização agressiva
+    reparado = _sanitizar_json_like(bruto)
     try:
-        return ('SUCESSO_REPARO', _json.loads(reparado))
-    except _json.JSONDecodeError:
-        pass
+        return json.loads(reparado)
+    except json.JSONDecodeError as e:
+        _print_json_error_details("Falha após sanitização", reparado, e)
 
+    # 3) Corte no último fechamento válido
     try:
         last_close = max(reparado.rfind('}'), reparado.rfind(']'))
         if last_close != -1:
             truncado = reparado[:last_close + 1]
+            # Fecha array se foi iniciado como array
             if truncado.strip().startswith('[') and truncado.strip().count('[') > truncado.strip().count(']'):
                 truncado += ']'
-            return ('SUCESSO_TRUNCAMENTO', _json.loads(truncado))
-    except _json.JSONDecodeError:
-        pass
+            return json.loads(truncado)
+    except json.JSONDecodeError as e:
+        _print_json_error_details("Falha no parse truncado", truncado if 'truncado' in locals() else reparado, e)
 
-    return ('FALHA_PARSING_TOTAL', None)
-
-def extrair_json_da_resposta_com_status(resposta: str):
-    """
-    Extrai e repara JSON, retornando (status, dados).
-    Status possíveis: SUCESSO, SUCESSO_REPARO, SUCESSO_TRUNCAMENTO,
-    RESPOSTA_VAZIA, FALHA_SEM_JSON, FALHA_PARSING_TOTAL.
-    """
-    import json as _json
-    import re as _re
-
-    def _extrair_bloco_json_local(texto: str) -> str:
-        m = _re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', texto, _re.DOTALL)
-        if m:
-            return m.group(1).strip()
-        start_pos = texto.find('[')
-        if start_pos == -1:
-            start_pos = texto.find('{')
-        return texto[start_pos:].strip() if start_pos != -1 else ""
-
-    def _sanitizar_json_like_local(json_like: str) -> str:
-        s = json_like.replace('```', '')
-        s = _re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', s)
-        # remove vírgulas finais
-        s = _re.sub(r',\s*([}\]])', r'\1', s)
-        # balanceia colchetes/chaves
-        def _bal(tx, a, f):
-            dif = tx.count(a) - tx.count(f)
-            if dif > 0:
-                tx += f * dif
-            return tx
-        s = _bal(s, '[', ']')
-        s = _bal(s, '{', '}')
-        return s
-
-    if not isinstance(resposta, str) or not resposta.strip():
-        return ('RESPOSTA_VAZIA', None)
-
-    bruto = _extrair_bloco_json_local(resposta)
-    if not bruto:
-        return ('FALHA_SEM_JSON', None)
-
+    # CORREÇÃO: Tentativa adicional para strings muito truncadas
     try:
-        return ('SUCESSO', _json.loads(bruto))
-    except _json.JSONDecodeError:
+        # Procura por objetos JSON completos no início da resposta
+        obj_pattern = re.compile(r'\{[^{}]*\}')
+        matches = obj_pattern.findall(reparado)
+        if matches:
+            # Tenta criar um array com os objetos encontrados
+            array_json = '[' + ','.join(matches) + ']'
+            return json.loads(array_json)
+    except Exception:
         pass
 
-    reparado = _sanitizar_json_like_local(bruto)
-    try:
-        return ('SUCESSO_REPARO', _json.loads(reparado))
-    except _json.JSONDecodeError:
-        pass
+    print("❌ ERRO FINAL: Todas as tentativas de extrair um JSON válido falharam.")
+    print(f"📋 Primeiros 500 caracteres da resposta problemática: {resposta[:500]}...")
 
-    try:
-        last_close = max(reparado.rfind('}'), reparado.rfind(']'))
-        if last_close != -1:
-            truncado = reparado[:last_close + 1]
-            if truncado.strip().startswith('[') and truncado.strip().count('[') > truncado.strip().count(']'):
-                truncado += ']'
-            return ('SUCESSO_TRUNCAMENTO', _json.loads(truncado))
-    except _json.JSONDecodeError:
-        pass
+    # 4) Fallback mínimo por regex (prioridade/tag)
+    fallback = extrair_campos_minimos_por_regex(resposta)
+    if fallback is not None:
+        print("🔁 Fallback: Extração mínima via regex aplicada com sucesso.")
+        return fallback
 
-    return ('FALHA_PARSING_TOTAL', None)
+    return None
 
 # ---------------- GATING REMOVIDO - O V13 JÁ FAZ CLASSIFICAÇÃO SUPERIOR -----------------
 def _aplicar_gating_explicito_cluster(db: Session, cluster_id: int, debug: bool = True) -> None:
@@ -372,8 +402,8 @@ def extrair_grupos_agrupamento_seguro(resposta: str) -> Optional[List[Dict[str, 
     Retorna lista de objetos {"tema_principal": str, "ids_originais": [int, ...]} ou None.
     """
     try:
-        status, bruto = extrair_json_da_resposta(resposta)
-        if status.startswith('SUCESSO') and isinstance(bruto, list):
+        bruto = extrair_json_da_resposta(resposta)
+        if isinstance(bruto, list):
             return bruto
 
         import re
@@ -462,8 +492,8 @@ def extrair_classificacoes_incremental_seguro(resposta: str) -> Optional[List[Di
     2) Fallback: captura blocos com "tipo" usando regex e extrai campos essenciais.
     """
     try:
-        status, bruto = extrair_json_da_resposta(resposta)
-        if status.startswith('SUCESSO') and isinstance(bruto, list):
+        bruto = extrair_json_da_resposta(resposta)
+        if isinstance(bruto, list):
             return bruto
 
         import re
@@ -650,44 +680,53 @@ def processar_artigos_pendentes(limite: int = 10, day_str: Optional[str] = None)
             return False
         print("✅ ETAPA 2 concluída: Agrupamento realizado com sucesso")
 
-        # ETAPA 3 — paralela (Análise e Síntese Unificada)
+        # ETAPA 3 — paralela
         clusters_hoje = db.query(ClusterEvento).filter(
             ClusterEvento.status == 'ativo',
             func.date(ClusterEvento.created_at) == target_day,
             ClusterEvento.resumo_cluster.is_(None)
         ).all()
 
-        print(f"\n🔄 ETAPA 3: Análise e Síntese Unificada - {len(clusters_hoje)} clusters pendentes")
-        print(f"📝 Usando prompt: PROMPT_ANALISE_E_SINTESE_CLUSTER_V1")
+        print(f"\n🔄 ETAPA 3: classificar_e_resumir_cluster - {len(clusters_hoje)} clusters pendentes")
+        print(f"📝 Classificação: PROMPT_EXTRACAO_GATEKEEPER_V13 | Resumo: PROMPT_RESUMO_FINAL_V3")
 
-        def _worker_classificar_unificado(cid: int) -> bool:
+        def _worker_classificar(cid: int) -> bool:
             _db = SessionLocal()
             try:
-                # Stats locais por worker não compartilhados (evita race conditions)
-                _stats_local = {}
-                ok = classificar_e_resumir_cluster(_db, cid, client, _stats_local)
-                return bool(ok)
+                ok = classificar_e_resumir_cluster(_db, cid, client, debug=False)
+                if not ok:
+                    return False
+                # Conta apenas se um resumo foi realmente persistido
+                try:
+                    c = get_cluster_by_id(_db, cid)
+                    return bool(c and c.resumo_cluster)
+                except Exception:
+                    return False
             finally:
                 _db.close()
 
-        resultados_etapa3 = {'sucesso': 0, 'falha': 0}
+        resumos_gerados = 0
         if clusters_hoje:
             with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as ex:
-                futures = {ex.submit(_worker_classificar_unificado, c.id): c.id for c in clusters_hoje}
+                futures = {ex.submit(_worker_classificar, c.id): c.id for c in clusters_hoje}
                 for fut in concurrent.futures.as_completed(futures):
                     try:
                         if fut.result():
-                            resultados_etapa3['sucesso'] += 1
-                        else:
-                            resultados_etapa3['falha'] += 1
+                            resumos_gerados += 1
                     except Exception:
-                        resultados_etapa3['falha'] += 1
+                        pass
+            # Reconta com base no que de fato foi persistido para os clusters desta etapa
+            try:
+                ids_trabalhados = [c.id for c in clusters_hoje]
+                persistidos = db.query(ClusterEvento).filter(
+                    ClusterEvento.id.in_(ids_trabalhados),
+                    ClusterEvento.resumo_cluster.isnot(None)
+                ).count()
+                resumos_gerados = persistidos
+            except Exception:
+                pass
 
-        print(f"✅ ETAPA 3 concluída: Processados {len(clusters_hoje)} clusters.")
-        print(f"  - Sucessos: {resultados_etapa3['sucesso']}")
-        print(f"  - Falhas: {resultados_etapa3['falha']}")
-        if resultados_etapa3['falha'] > 0:
-            print("  - Detalhes das falhas foram salvos em 'erros_llm_etapa3.log'")
+        print(f"✅ ETAPA 3 concluída: {resumos_gerados} resumos gerados de {len(clusters_hoje)} clusters")
 
         # Estatísticas dos clusters criados
         if clusters_hoje:
@@ -730,19 +769,9 @@ def processar_artigos_pendentes(limite: int = 10, day_str: Optional[str] = None)
         if pendentes:
             print(f"🔄 Re-sumariando {len(pendentes)} clusters pendentes após consolidação...")
             with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as ex:
-                futures = {ex.submit(_worker_classificar_unificado, c.id): c.id for c in pendentes}
+                futures = {ex.submit(_worker_classificar, c.id): c.id for c in pendentes}
                 for _ in concurrent.futures.as_completed(futures):
                     pass
-
-        # Reconta resumos do dia para estatística final
-        try:
-            resumos_gerados = db.query(ClusterEvento).filter(
-                ClusterEvento.status == 'ativo',
-                func.date(ClusterEvento.created_at) == target_day,
-                ClusterEvento.resumo_cluster.isnot(None)
-            ).count()
-        except Exception:
-            resumos_gerados = 0
 
         print(f"\n🎉 PROCESSAMENTO CONCLUÍDO:")
         print(f"   📈 Artigos processados: {sucessos}")
@@ -833,89 +862,121 @@ def marcar_cluster_irrelevante(db: Session, cluster_id: int, debug: bool = True)
         print(f"❌ ERRO: Falha ao marcar cluster {cluster_id} como irrelevante: {e}")
         return False
 
-def classificar_e_resumir_cluster(db: Session, cluster_id: int, client, stats: dict) -> bool:
+def classificar_e_resumir_cluster(db: Session, cluster_id: int, client, debug: bool = True) -> bool:
     """
-    Função unificada que classifica, saneia e resume um cluster em uma única chamada de LLM,
-    e atualiza o dicionário de estatísticas.
+    Classifica e resume um cluster com lógica de retentativa robusta:
+    - Tentativa 1: artigo âncora + títulos
+    - Tentativa 2: apenas títulos (super leve)
+    - Falha geral: marca como P3_REVISAR (erro controlado)
     """
     try:
+        from backend.prompts import PROMPT_EXTRACAO_GATEKEEPER_V13 as _PROMPT
+
         cluster = get_cluster_by_id(db, cluster_id)
         artigos = get_artigos_by_cluster(db, cluster_id)
         if not cluster or not artigos:
-            stats['etapa3_erros_db'] = stats.get('etapa3_erros_db', 0) + 1
+            if debug:
+                print(f"❌ Cluster {cluster_id}: não encontrado ou sem artigos")
             return False
 
-        # 1. Montar o payload com o texto completo de TODOS os artigos
-        noticias_payload = []
-        for art in artigos:
-            noticias_payload.append({
-                "id": art.id,
-                "titulo": art.titulo_extraido or "Sem título",
-                "texto_completo": art.texto_processado or art.texto_bruto or ""
-            })
+        # Preparos (sem prints verbosos)
+        artigo_ancora = max(artigos, key=lambda a: len(a.texto_processado or ""))
+        outros_titulos = [f"- {a.titulo_extraido or 'N/A'} (Fonte: {a.jornal or 'N/A'})" for a in artigos if a.id != artigo_ancora.id]
 
-        # 2. Chamar o novo "Super-Prompt" UMA ÚNICA VEZ (com placeholders formais)
-        prompt_completo = PROMPT_ANALISE_E_SINTESE_CLUSTER_V1.format(
-            NOTICIAS_DO_CLUSTER=json.dumps(noticias_payload, ensure_ascii=False, indent=2),
-            P1_BULLETS=_P1_BULLETS,
-            P2_BULLETS=_P2_BULLETS,
-            P3_BULLETS=_P3_BULLETS,
-            GUIA_TAGS_FORMATADO=GUIA_TAGS_FORMATADO
-        )
+        def _chamar(prompt: str, max_tokens: int = 2048):
+            return client.generate_content(prompt, generation_config={'temperature': 0.1, 'top_p': 0.9, 'max_output_tokens': max_tokens})
 
-        response = client.generate_content(prompt_completo, generation_config={'temperature': 0.1, 'top_p': 0.9, 'max_output_tokens': 4096})
+        # Tentativa 1: âncora + títulos
+        try:
+            texto_anchor = (artigo_ancora.texto_processado or "")
+            bloco = f"ARTIGO PRINCIPAL:\nTítulo: {artigo_ancora.titulo_extraido or 'N/A'}\nFonte: {artigo_ancora.jornal or 'N/A'}\nTexto: {texto_anchor}\n\nTITULOS ADICIONAIS DO MESMO GRUPO:\n" + ("\n".join(outros_titulos) if outros_titulos else "Nenhum")
+            prompt_1 = f"{_PROMPT}\n\nNOTÍCIA PARA ANÁLISE:\n{bloco}"
+            resp1 = _chamar(prompt_1, max_tokens=4096)
+            resultado = extrair_json_da_resposta(resp1.text or "")
+        except Exception as e1:
+            if debug:
+                print(f"⚠️ Cluster {cluster_id}: Tentativa 1 falhou - {str(e1)[:100]}...")
+            resultado = None
 
-        # 3. Parsing com status detalhado
-        status, dados = extrair_json_da_resposta(response.text or "")
-
-        # 4. Processar o resultado (espera dict; aceita list[0] como compatibilidade)
-        if status.startswith('SUCESSO'):
-            if isinstance(dados, list) and len(dados) > 0 and isinstance(dados[0], dict):
-                dados = dados[0]
-            if not isinstance(dados, dict):
-                stats['etapa3_falhas_parsing'] = stats.get('etapa3_falhas_parsing', 0) + 1
-                return marcar_cluster_como_erro(db, cluster_id, f"Formato inválido (tipo {type(dados).__name__})")
-
-            stats[f'etapa3_{status.lower()}'] = stats.get(f'etapa3_{status.lower()}', 0) + 1
-
-            obrigatorios = ['prioridade', 'tag', 'resumo_final']
-            if not all(k in dados and dados.get(k) for k in obrigatorios):
-                stats['etapa3_falhas_parsing'] = stats.get('etapa3_falhas_parsing', 0) + 1
-                return marcar_cluster_como_erro(db, cluster_id, "Resposta do LLM sem campos obrigatórios")
-
-            cluster.titulo_cluster = dados.get('titulo', cluster.titulo_cluster)
-            cluster.prioridade = corrigir_prioridade_invalida(dados.get('prioridade'))
-            tipo_fonte_cluster = getattr(cluster, 'tipo_fonte', 'nacional')
-            cluster.tag = mapear_tag_prompt_para_modelo(dados.get('tag'), tipo_fonte_cluster)
-            cluster.resumo_cluster = dados.get('resumo_final')
-            db.commit()
-
-            # Log opcional de saneamento
+        # Tentativa 2: apenas títulos
+        if not resultado or (isinstance(resultado, list) and len(resultado) == 0):
             try:
-                ids_originais = {a.id for a in artigos}
-                ids_usados = set(dados.get('ids_artigos_utilizados', []))
-                if ids_usados and ids_originais != ids_usados:
-                    with open("log_saneamento_cluster.log", "a", encoding="utf-8") as f:
-                        f.write(f"Cluster {cluster_id}: ignorados={sorted(list(ids_originais - ids_usados))} | justificativa={dados.get('justificativa_saneamento')}\n")
-            except Exception:
-                pass
+                titulos_todos = [f"- {a.titulo_extraido or 'N/A'} (Fonte: {a.jornal or 'N/A'})" for a in artigos]
+                bloco2 = "TÍTULOS DAS NOTÍCIAS DO GRUPO:\n" + "\n".join(titulos_todos)
+                prompt_2 = f"{_PROMPT}\n\nNOTÍCIA PARA ANÁLISE (APENAS TÍTULOS):\n{bloco2}"
+                resp2 = _chamar(prompt_2, max_tokens=2048)
+                resultado = extrair_json_da_resposta(resp2.text or "")
+            except Exception as e2:
+                if debug:
+                    print(f"❌ Cluster {cluster_id}: Tentativa 2 falhou - {str(e2)[:100]}...")
+                return marcar_cluster_como_erro(db, cluster_id, "Falha em ambas as tentativas de classificação")
 
-            _corrigir_tag_deterministica_cluster(db, cluster_id, debug=False)
-            return True
+        # Validação do resultado
+        if isinstance(resultado, list) and len(resultado) == 0:
+            if debug:
+                print(f"🚫 Cluster {cluster_id}: marcado como IRRELEVANTE (lista vazia)")
+            return marcar_cluster_irrelevante(db, cluster_id, debug)
+
+        if not resultado or not isinstance(resultado, list) or not resultado[0]:
+            if debug:
+                print(f"❌ Cluster {cluster_id}: resposta inválida do LLM")
+            return marcar_cluster_como_erro(db, cluster_id, "Resposta final inválida")
+
+        classificacao = resultado[0]
+        faltando = [k for k in ("titulo", "prioridade", "tag") if not classificacao.get(k)]
+        if faltando:
+            if debug:
+                print(f"⚠️ Cluster {cluster_id}: campos ausentes - {', '.join(faltando)}")
+
+        prioridade_sugerida = corrigir_prioridade_invalida(classificacao.get('prioridade'))
+        if prioridade_sugerida == 'IRRELEVANTE':
+            if debug:
+                print(f"🚫 Cluster {cluster_id}: prioridade IRRELEVANTE")
+            return marcar_cluster_irrelevante(db, cluster_id, debug)
+
+        # Detecta tipo de fonte do cluster
+        tipo_fonte_cluster = getattr(cluster, 'tipo_fonte', 'nacional')
+
+        cluster.prioridade = prioridade_sugerida
+        cluster.tag = mapear_tag_prompt_para_modelo(classificacao.get('tag', 'Sem categoria'), tipo_fonte_cluster)
+
+        # Só mostra quando houver mudança significativa
+        if debug and (prioridade_sugerida in ['P1_CRITICO', 'P2_ESTRATEGICO'] or 'fallback' in str(classificacao.get('titulo', '')).lower()):
+            print(f"📊 Cluster {cluster_id}: {cluster.prioridade} | {cluster.tag} | {tipo_fonte_cluster}")
+
+        mapa_niveis = {
+            'P1_CRITICO': 'Executivo (P1_CRITICO)',
+            'P2_ESTRATEGICO': 'Padrão (P2_ESTRATEGICO)',
+            'P3_MONITORAMENTO': 'Conciso (P3_MONITORAMENTO)'
+        }
+        nivel_detalhe = mapa_niveis.get(cluster.prioridade, 'Conciso (P3_MONITORAMENTO)')
+
+        if gerar_resumo_unificado(db, cluster_id, client, nivel_detalhe):
+            # Só mostra sucesso para casos especiais
+            if debug and prioridade_sugerida == 'P1_CRITICO':
+                print(f"✅ Cluster {cluster_id}: resumo P1 gerado")
         else:
-            stats['etapa3_falhas_parsing'] = stats.get('etapa3_falhas_parsing', 0) + 1
-            try:
-                with open("erros_llm_etapa3.log", "a", encoding="utf-8") as f:
-                    f.write(f"--- FALHA CLUSTER ID: {cluster_id} | STATUS: {status} | {datetime.now()} ---\n")
-                    f.write("PROMPT ENVIADO (últimos 2000 chars):\n" + (prompt_completo[-2000:] if prompt_completo else "") + "\n\n")
-                    f.write("RAW RESPONSE:\n" + (response.text or "NO RESPONSE TEXT") + "\n")
-                    f.write("------------------------------------------------------------------\n\n")
-            except Exception:
-                pass
-            return marcar_cluster_como_erro(db, cluster_id, f"Falha na análise: {status}")
+            if debug:
+                print(f"❌ Cluster {cluster_id}: falha ao gerar resumo {cluster.prioridade}")
+
+        db.commit()
+
+        # GATING determinístico pós-classificação para evitar absurdos (ex.: horóscopo como P1 M&A)
+        _aplicar_gating_explicito_cluster(db, cluster_id, debug)
+        # Correção determinística de TAG para casos de Dívida Ativa/CDA
+        _corrigir_tag_deterministica_cluster(db, cluster_id, debug)
+        return True
 
     except Exception as e:
-        stats['etapa3_erros_execucao'] = stats.get('etapa3_erros_execucao', 0) + 1
+        if debug:
+            print(f"❌ Cluster {cluster_id}: erro geral - {str(e)[:100]}...")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        if debug:
+            import traceback
+            traceback.print_exc()
         return marcar_cluster_como_erro(db, cluster_id, str(e))
 
 def marcar_cluster_como_erro(db: Session, cluster_id: int, motivo: str) -> bool:
@@ -939,10 +1000,82 @@ def marcar_cluster_como_erro(db: Session, cluster_id: int, motivo: str) -> bool:
 
 def gerar_resumo_unificado(db: Session, cluster_id: int, client, nivel_detalhe: str) -> bool:
     """
-    OBSOLETA: A etapa 3 agora usa PROMPT_ANALISE_E_SINTESE_CLUSTER_V1 para classificar e resumir.
-    Mantida apenas por compatibilidade; retorna False para não ser usada.
+    Gera um resumo para um cluster com um nível de detalhe variável.
+    Usa o PROMPT_RESUMO_FINAL_V3 para consistência.
     """
-    return False
+    try:
+        cluster = get_cluster_by_id(db, cluster_id)
+        if not cluster:
+            return False
+        
+        artigos = get_artigos_by_cluster(db, cluster_id)
+        if not artigos:
+            return False
+        
+        # Coleta todos os textos dos artigos
+        textos = []
+        for artigo in artigos:
+            if artigo.texto_processado:
+                textos.append(f"FONTE: {artigo.jornal or 'Desconhecida'}\n{artigo.texto_processado}")
+        
+        texto_completo = "\n\n".join(textos)
+        
+        # Prepara dados do cluster para o prompt
+        dados_do_grupo = {
+            "tema_principal": cluster.titulo_cluster,
+            "categoria": cluster.tag,
+            "prioridade": cluster.prioridade,
+            "tipo_fonte": getattr(cluster, 'tipo_fonte', 'nacional'),  # CORREÇÃO: Preserva tipo_fonte
+            "noticias": [
+                {
+                    "titulo": artigo.titulo_extraido or "Sem título",
+                    "texto": artigo.texto_processado or "",
+                    "jornal": artigo.jornal or "Fonte desconhecida"
+                }
+                for artigo in artigos
+            ]
+        }
+        
+        # Debug para clusters internacionais
+        if dados_do_grupo["tipo_fonte"] == 'internacional':
+            print(f"    🔍 DEBUG: Gerando resumo para cluster internacional {cluster_id}")
+        
+        # Usa o PROMPT_RESUMO_FINAL_V3 importado de prompts.py
+        prompt_completo = PROMPT_RESUMO_FINAL_V3.format(
+            NIVEL_DE_DETALHE=nivel_detalhe,
+            DADOS_DO_GRUPO=json.dumps(dados_do_grupo, indent=2, ensure_ascii=False)
+        )
+        
+        response = client.generate_content(
+            prompt_completo,
+            generation_config={
+                'temperature': 0.3,
+                'top_p': 0.9,
+                'max_output_tokens': 2048 if nivel_detalhe == 'Executivo (P1_CRITICO)' else 512
+            }
+        )
+        
+        if not response.text:
+            return False
+        
+        # Extrai JSON da resposta (robusto)
+        resultado_json = extrair_json_da_resposta(response.text)
+        
+        if resultado_json and 'resumo_final' in resultado_json:
+            # Remove o título "Resumo Executivo:" se ele aparecer
+            resumo_limpo = resultado_json['resumo_final']
+            if ': ' in resumo_limpo:
+                resumo_limpo = resumo_limpo.split(': ', 1)[1]
+            
+            cluster.resumo_cluster = resumo_limpo
+            db.commit()
+            return True
+        
+        return False
+        
+    except Exception as e:
+        print(f"ERRO: Falha ao gerar resumo unificado para cluster {cluster_id}: {e}")
+        return False
 
 
 def priorizacao_executiva_final(db: Session, client, debug: bool = True) -> bool:
@@ -1069,7 +1202,7 @@ def consolidacao_final_clusters(db: Session, client, debug: bool = True, day_str
                 # Reprocessa (Etapa 3) os clusters destino para atualizar resumo/tag/prioridade
                 for cid in destinos_reprocessar:
                     try:
-                        _ = classificar_e_resumir_cluster(db, cid, client, stats={})
+                        classificar_e_resumir_cluster(db, cid, client, debug=False)
                     except Exception:
                         continue
                 return True
@@ -1243,9 +1376,9 @@ def extrair_sugestoes_consolidacao_seguro(resposta: str) -> Optional[List[Dict[s
     try:
         # Limpeza leve de marcas comuns
         resposta = resposta.replace('\u200b', '').replace("\ufeff", '')
-        status, bruto = extrair_json_da_resposta(resposta)
+        bruto = extrair_json_da_resposta(resposta)
         itens: List[Dict[str, Any]] = []
-        if status.startswith('SUCESSO') and isinstance(bruto, list):
+        if isinstance(bruto, list):
             for obj in bruto:
                 if isinstance(obj, dict) and ('tipo' in obj):
                     itens.append(obj)
@@ -1448,8 +1581,6 @@ def processar_lote_incremental(db: Session, client, artigos_lote: List[ArtigoBru
     Retorna (anexacoes, novos_clusters) ou False se falhar.
     """
     try:
-        # Flag local para logs opcionais neste escopo (evita NameError em 'if debug')
-        debug = False
         # Prepara dados para o prompt incremental
         novas_noticias = []
         for i, artigo in enumerate(artigos_lote):
@@ -1579,6 +1710,10 @@ def processar_lote_incremental(db: Session, client, artigos_lote: List[ArtigoBru
                             else:
                                 associate_artigo_to_cluster(db, artigo.id, cluster_existente.id)
                                 anexacoes += 1
+                                # Só mostra anexações em debug detalhado
+                                if debug and tipo_fonte_ativo == 'internacional':
+                                    tprev = (artigo.titulo_extraido or artigo.texto_processado or "").replace("\n"," ")[:80]
+                                    print(f"  🌍 anexar: '{tprev}' → cluster {cluster_existente.id}")
                                 continue
                         else:
                             print(f"  ❌ Cluster {cluster_id_existente} não encontrado")
@@ -1859,7 +1994,152 @@ IMPORTANTE: Retorne APENAS o JSON válido para este lote.
         ).all()
         marcar_artigos_processados(db, artigos_agrupados)
 
-        # Fallback de agrupamento removido para simplificação e evitar misturas inesperadas
+        # SISTEMA DE FALLBACK: Se algo deu errado na separação nacional/internacional,
+        # processa os artigos restantes DO DIA ATUAL apenas
+        query_fallback = db.query(ArtigoBruto).filter(
+            ArtigoBruto.status == "pronto_agrupar",
+            ArtigoBruto.cluster_id.is_(None)  # Artigos que NÃO foram agrupados
+        )
+
+        # ADIÇÃO CRÍTICA DO FILTRO DE DATA - só processa artigos do dia atual
+        if day_str:
+            query_fallback = query_fallback.filter(func.date(ArtigoBruto.created_at) == day_str)
+
+        artigos_restantes = query_fallback.all()
+        
+        if artigos_restantes:
+            print(f"\n⚠️ FALLBACK: {len(artigos_restantes)} artigos restantes não foram agrupados")
+            print("🔧 Aplicando sistema de fallback para processar todos juntos...")
+            
+            # Mapeamento de ID para artigo original para todo o conjunto restante
+            mapa_id_para_artigo = {i: artigo for i, artigo in enumerate(artigos_restantes)}
+            
+            # Divide a lista de artigos restantes em lotes
+            lotes = [artigos_restantes[i:i + BATCH_SIZE_AGRUPAMENTO] for i in range(0, len(artigos_restantes), BATCH_SIZE_AGRUPAMENTO)]
+            
+            clusters_criados_fallback = 0
+            artigos_agrupados_fallback = 0
+
+            for num_lote, lote_artigos in enumerate(lotes, 1):
+                print(f"\n--- FALLBACK Lote {num_lote}/{len(lotes)} ({len(lote_artigos)} artigos) ---")
+                
+                # Prepara dados apenas para o lote atual
+                noticias_lote_para_prompt = []
+                mapa_id_lote_para_artigo = {}
+                for i, artigo in enumerate(lote_artigos):
+                     # O 'id' aqui é relativo ao lote, para o prompt.
+                    noticia_data = {
+                        "id": i,
+                        "titulo": (artigo.titulo_extraido or gerar_titulo_fallback_curto(artigo.texto_processado or artigo.texto_bruto or "")) or "Sem título",
+                        "jornal": artigo.jornal or "Fonte desconhecida",
+                        "trecho": (artigo.texto_processado[:150] + "...") if len(artigo.texto_processado or "") > 150 else (artigo.texto_processado or "")
+                    }
+                    noticias_lote_para_prompt.append(noticia_data)
+                    mapa_id_lote_para_artigo[i] = artigo # Mapeia o ID do lote para o objeto artigo completo
+
+                # Monta o prompt completo para o lote
+                prompt_completo = f"""
+{PROMPT_AGRUPAMENTO_V1}
+
+NOTÍCIAS PARA AGRUPAR (FALLBACK LOTE {num_lote}/{len(lotes)}):
+{json.dumps(noticias_lote_para_prompt, indent=2, ensure_ascii=False)}
+
+IMPORTANTE: Retorne APENAS o JSON válido para este lote.
+"""
+                
+                print(f"📤 ENVIANDO FALLBACK Lote {num_lote} para a API...")
+                
+                try:
+                    # Chama a API para o lote
+                    response = client.generate_content(
+                        prompt_completo,
+                        generation_config={
+                            'temperature': 0.05,  # Ainda mais determinístico
+                            'top_p': 0.7,
+                            'max_output_tokens': 32768,  # Aumentado para suportar listas completas de grupos
+                            'candidate_count': 1,
+                            'top_k': 10
+                        }
+                    )
+                    
+                    if not response.text:
+                        print(f"⚠️ AVISO: API retornou resposta vazia para o fallback lote {num_lote}. Pulando este lote.")
+                        continue
+                    
+                    print(f"📥 RESPOSTA RECEBIDA para o FALLBACK Lote {num_lote}: {len(response.text)} caracteres")
+                    
+                    # Usa a nova função de extração robusta
+                    grupos_brutos = extrair_grupos_agrupamento_seguro(response.text)
+                    
+                    if not grupos_brutos or not isinstance(grupos_brutos, list):
+                        print(f"❌ ERRO: Resposta de agrupamento inválida para o fallback lote {num_lote}.")
+                        continue
+                    
+                    print(f"✅ SUCESSO FALLBACK LOTE {num_lote}: {len(grupos_brutos)} grupos criados.")
+                    
+                    # Processa os clusters do lote
+                    for grupo_data in grupos_brutos:
+                        try:
+                            tema_principal = grupo_data.get("tema_principal", f"Grupo Fallback Lote {num_lote}")
+                            ids_no_lote = grupo_data.get("ids_originais", [])
+                            artigos_do_grupo = [mapa_id_lote_para_artigo[id_lote] for id_lote in ids_no_lote if id_lote in mapa_id_lote_para_artigo]
+                            
+                            if not artigos_do_grupo:
+                                continue
+                            
+                            # ETAPA 2: SÓ AGRUPA - valores PENDING, serão definidos na ETAPA 3
+                            prioridade_grupo = "PENDING"  # Será definido na ETAPA 3
+                            tag_grupo = "PENDING"  # Será definido na ETAPA 3
+                            
+                            # Calcula embedding médio do grupo
+                            embeddings = []
+                            tipo_fonte = 'nacional'  # Default
+                            for artigo in artigos_do_grupo:
+                                if artigo.embedding:
+                                    embeddings.append(bytes_to_embedding(artigo.embedding))
+                                # Pega o tipo_fonte do primeiro artigo (todos devem ter o mesmo tipo)
+                                if hasattr(artigo, 'tipo_fonte'):
+                                    tipo_fonte = artigo.tipo_fonte
+                            
+                            embedding_medio = None
+                            if embeddings:
+                                import numpy as np
+                                embedding_medio = np.mean(embeddings, axis=0).tobytes()
+                            
+                            # Cria cluster
+                            from backend.models import ClusterEventoCreate
+                            cluster_data = ClusterEventoCreate(
+                                titulo_cluster=tema_principal,
+                                resumo_cluster=None,  # Será preenchido na ETAPA 3
+                                tag=tag_grupo,
+                                prioridade=prioridade_grupo,
+                                embedding_medio=embedding_medio,
+                                tipo_fonte=tipo_fonte
+                            )
+                            
+                            cluster = create_cluster(db, cluster_data)
+                            clusters_criados_fallback += 1
+                            
+                            # Associa artigos ao cluster
+                            for artigo in artigos_do_grupo:
+                                associate_artigo_to_cluster(db, artigo.id, cluster.id)
+                                artigos_agrupados_fallback += 1
+                            
+                            print(f"  ✅ Grupo Fallback: '{tema_principal[:100]}' - {len(artigos_do_grupo)} artigos")
+                            
+                        except Exception as e:
+                            print(f"  ❌ Erro ao processar grupo no fallback lote {num_lote}: {e}")
+                            continue
+
+                except Exception as e_lote:
+                    print(f"❌ ERRO CRÍTICO ao processar o fallback lote {num_lote}: {e_lote}")
+                    continue # Pula para o próximo lote
+
+            print(f"\n🎉 FALLBACK CONCLUÍDO: {clusters_criados_fallback} clusters criados, {artigos_agrupados_fallback} artigos agrupados.")
+            
+            # Atualiza contadores totais
+            clusters_criados_total += clusters_criados_fallback
+            artigos_agrupados_total += artigos_agrupados_fallback
 
         return True
         

@@ -428,114 +428,114 @@ _P3_BULLETS = _render_bullets(P3_ITENS)
 # PROMPT_EXTRACAO_GATEKEEPER_V12 (Versão Definitiva — P3 ou Lixo, checklists e thresholds)
 # ==============================================================================
 
-# Versão reequilibrada (V13) com P3 como base segura e lista de rejeição simplificada
-PROMPT_EXTRACAO_GATEKEEPER_V13 = """
-Você é o "Gatekeeper" (porteiro) da mesa de 'Special Situations' do BTG Pactual. Sua função é EXCLUSIVAMENTE filtrar notícias.
+# # Versão reequilibrada (V13) com P3 como base segura e lista de rejeição simplificada
+# PROMPT_EXTRACAO_GATEKEEPER_V13 = """
+# Você é o "Gatekeeper" (porteiro) da mesa de 'Special Situations' do BTG Pactual. Sua função é EXCLUSIVAMENTE filtrar notícias.
 
-<<< PROCESSO DE DECISÃO OBRIGATÓRIO EM 2 ETAPAS >>>
+# <<< PROCESSO DE DECISÃO OBRIGATÓRIO EM 2 ETAPAS >>>
 
-**ETAPA 1: VERIFICAÇÃO DE REJEIÇÃO IMEDIATA**
-Primeiro, e mais importante, avalie o texto contra a 'LISTA DE REJEIÇÃO IMEDIATA'. Se o conteúdo se encaixar em QUALQUER um dos critérios abaixo, sua tarefa TERMINA. Você DEVE retornar uma lista vazia `[]` e ignorar a Etapa 2.
+# **ETAPA 1: VERIFICAÇÃO DE REJEIÇÃO IMEDIATA**
+# Primeiro, e mais importante, avalie o texto contra a 'LISTA DE REJEIÇÃO IMEDIATA'. Se o conteúdo se encaixar em QUALQUER um dos critérios abaixo, sua tarefa TERMINA. Você DEVE retornar uma lista vazia `[]` e ignorar a Etapa 2.
 
---------------------------------------------------------------------------------
-LISTA DE REJEIÇÃO IMEDIATA (se a notícia for sobre isso, retorne [] IMEDIATAMENTE):
---------------------------------------------------------------------------------
-- **Conteúdo Não-Jornalístico:** Rejeite ativamente classificados, publicidade, editais (de leilão, convocação, etc.), notas de falecimento, propaganda, ofertas de produtos ou serviços (incluindo conserto de eletrodomésticos, serviços de reparo, etc.).
-- **Ruído Político:** Rejeite disputas partidárias e rotinas de políticos. Mantenha apenas legislação ou decisões governamentais com impacto econômico DIRETO.
-- **Conteúdo Irrelevante:** Esportes, cultura, entretenimento, fofoca, crimes comuns, saúde pública geral.
-- **Astrologia/Horóscopo/Espiritualidade/Autoajuda:** Qualquer conteúdo com foco em signos, mapa astral, horóscopo, astrologia, tarô, numerologia, espiritualidade, ou análises pseudo-científicas.
-- **Casos locais de pequena monta:** Decisões judiciais envolvendo estabelecimentos específicos (ex.: pizzaria, padaria, restaurante, comércio local), ainda que aleguem "precedente". Só classifique como P2/P3 se houver impacto setorial amplo, valores relevantes e aplicação imediata comprovada.
-- **Fofoca/reações pessoais:** Declarações e reações pessoais de autoridades/figuras públicas sem ato oficial e sem efeito econômico mensurável DEVEM ser IRRELEVANTES.
-- **Entretenimento/Celebridades/Novelas:** Conteúdo sobre atores/atrizes, novelas, programas de TV, celebridades e afins é IRRELEVANTE.
-- **Anúncios de Serviços Locais:** Qualquer anúncio de serviços como eletricista, bombeiro, consertos, manutenção, etc. DEVE ser rejeitado imediatamente.
-- **JURÍDICO SEM TESE FINANCEIRA DIRETA:** Rejeite decisões judiciais (mesmo do STF/STJ) sobre temas de Direito de Família, Penal, Social, Esportivo ou causas humanitárias. Se o impacto não for primariamente no balanço de empresas, é irrelevante. (Ex: proteção à infância, crimes, regras de jogos, disputas salariais de servidores).
-- **RUÍDO CORPORATIVO DE ROTINA:** Rejeite notícias sobre divulgação de resultados trimestrais (lucro, receita, etc.). A exceção é se o texto mencionar explicitamente gatilhos de distress, como "quebra de covenants", "risco de default", "impairment relevante" ou "pedido de Recuperação Judicial".
+# --------------------------------------------------------------------------------
+# LISTA DE REJEIÇÃO IMEDIATA (se a notícia for sobre isso, retorne [] IMEDIATAMENTE):
+# --------------------------------------------------------------------------------
+# - **Conteúdo Não-Jornalístico:** Rejeite ativamente classificados, publicidade, editais (de leilão, convocação, etc.), notas de falecimento, propaganda, ofertas de produtos ou serviços (incluindo conserto de eletrodomésticos, serviços de reparo, etc.).
+# - **Ruído Político:** Rejeite disputas partidárias e rotinas de políticos. Mantenha apenas legislação ou decisões governamentais com impacto econômico DIRETO.
+# - **Conteúdo Irrelevante:** Esportes, cultura, entretenimento, fofoca, crimes comuns, saúde pública geral.
+# - **Astrologia/Horóscopo/Espiritualidade/Autoajuda:** Qualquer conteúdo com foco em signos, mapa astral, horóscopo, astrologia, tarô, numerologia, espiritualidade, ou análises pseudo-científicas.
+# - **Casos locais de pequena monta:** Decisões judiciais envolvendo estabelecimentos específicos (ex.: pizzaria, padaria, restaurante, comércio local), ainda que aleguem "precedente". Só classifique como P2/P3 se houver impacto setorial amplo, valores relevantes e aplicação imediata comprovada.
+# - **Fofoca/reações pessoais:** Declarações e reações pessoais de autoridades/figuras públicas sem ato oficial e sem efeito econômico mensurável DEVEM ser IRRELEVANTES.
+# - **Entretenimento/Celebridades/Novelas:** Conteúdo sobre atores/atrizes, novelas, programas de TV, celebridades e afins é IRRELEVANTE.
+# - **Anúncios de Serviços Locais:** Qualquer anúncio de serviços como eletricista, bombeiro, consertos, manutenção, etc. DEVE ser rejeitado imediatamente.
+# - **JURÍDICO SEM TESE FINANCEIRA DIRETA:** Rejeite decisões judiciais (mesmo do STF/STJ) sobre temas de Direito de Família, Penal, Social, Esportivo ou causas humanitárias. Se o impacto não for primariamente no balanço de empresas, é irrelevante. (Ex: proteção à infância, crimes, regras de jogos, disputas salariais de servidores).
+# - **RUÍDO CORPORATIVO DE ROTINA:** Rejeite notícias sobre divulgação de resultados trimestrais (lucro, receita, etc.). A exceção é se o texto mencionar explicitamente gatilhos de distress, como "quebra de covenants", "risco de default", "impairment relevante" ou "pedido de Recuperação Judicial".
 
-**ETAPA 2: CLASSIFICAÇÃO DE PRIORIDADE (SOMENTE SE NÃO REJEITADO NA ETAPA 1)**
-Se, e somente se, o conteúdo for jornalístico e relevante (passou pela Etapa 1), adote a persona de Analista de Inteligência Sênior e prossiga com a classificação P1/P2/P3 usando o guia abaixo.
+# **ETAPA 2: CLASSIFICAÇÃO DE PRIORIDADE (SOMENTE SE NÃO REJEITADO NA ETAPA 1)**
+# Se, e somente se, o conteúdo for jornalístico e relevante (passou pela Etapa 1), adote a persona de Analista de Inteligência Sênior e prossiga com a classificação P1/P2/P3 usando o guia abaixo.
 
-<<< LENTE DE FOCO: QUAL A TESE DE INVESTIMENTO? >>>
-Antes de classificar, identifique a 'centelha' da notícia: qual é a oportunidade de negócio ou o risco financeiro estrutural descrito? A notícia trata de M&A, RJ, uma grande tese tributária, um leilão de ativo relevante ou uma empresa em claro *distress*? Se não for possível identificar essa tese, a notícia provavelmente deve ser descartada ou, no máximo, classificada como P3.
+# <<< LENTE DE FOCO: QUAL A TESE DE INVESTIMENTO? >>>
+# Antes de classificar, identifique a 'centelha' da notícia: qual é a oportunidade de negócio ou o risco financeiro estrutural descrito? A notícia trata de M&A, RJ, uma grande tese tributária, um leilão de ativo relevante ou uma empresa em claro *distress*? Se não for possível identificar essa tese, a notícia provavelmente deve ser descartada ou, no máximo, classificada como P3.
 
-<<< PRINCÍPIOS DE CLASSIFICAÇÃO >>>
-1.  **MANDATO DE BUSCA:** Primeiro, avalie se a notícia se encaixa no "Foco Principal" (temas financeiros/jurídicos) ou no "Radar de Contexto" (tecnologia/mercados adjacentes). Notícias do Foco Principal terão prioridade mais alta (P1/P2). Notícias do Radar de Contexto serão, por padrão, P3.
-2.  **MATERIALIDADE É REI:** Avalie a escala do evento. O impacto é setorial/nacional? Os valores são significativos? Uma decisão do STJ sobre a base de cálculo do ICMS para todas as empresas do país é material. Uma decisão sobre uma taxa de fiscalização local ou um bloqueio de salário de uma categoria de servidores não é. Fatos concretos com valores e impacto amplo superam análises genéricas.
-3.  **FATO > OPINIÃO:** Rejeite conteúdo que seja primariamente análise genérica, opinião ou editorial.
+# <<< PRINCÍPIOS DE CLASSIFICAÇÃO >>>
+# 1.  **MANDATO DE BUSCA:** Primeiro, avalie se a notícia se encaixa no "Foco Principal" (temas financeiros/jurídicos) ou no "Radar de Contexto" (tecnologia/mercados adjacentes). Notícias do Foco Principal terão prioridade mais alta (P1/P2). Notícias do Radar de Contexto serão, por padrão, P3.
+# 2.  **MATERIALIDADE É REI:** Avalie a escala do evento. O impacto é setorial/nacional? Os valores são significativos? Uma decisão do STJ sobre a base de cálculo do ICMS para todas as empresas do país é material. Uma decisão sobre uma taxa de fiscalização local ou um bloqueio de salário de uma categoria de servidores não é. Fatos concretos com valores e impacto amplo superam análises genéricas.
+# 3.  **FATO > OPINIÃO:** Rejeite conteúdo que seja primariamente análise genérica, opinião ou editorial.
 
---------------------------------------------------------------------------------
-< GUIA DE PRIORIZAÇÃO E GATING >
---------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
+# < GUIA DE PRIORIZAÇÃO E GATING >
+# --------------------------------------------------------------------------------
 
-**PRINCÍPIO DA RELEVÂNCIA ESTRUTURAL (PROMOÇÃO DE PRIORIDADE):**
-Antes de classificar, pergunte-se: "Esta notícia descreve uma MUDANÇA ESTRUTURAL no ambiente de negócios, de crédito ou jurídico?". Mesmo que não se encaixe perfeitamente em um gatilho abaixo, um evento que 'muda as regras do jogo' para um setor DEVE ser promovido para P1 ou P2 com base no seu impacto potencial.
+# **PRINCÍPIO DA RELEVÂNCIA ESTRUTURAL (PROMOÇÃO DE PRIORIDADE):**
+# Antes de classificar, pergunte-se: "Esta notícia descreve uma MUDANÇA ESTRUTURAL no ambiente de negócios, de crédito ou jurídico?". Mesmo que não se encaixe perfeitamente em um gatilho abaixo, um evento que 'muda as regras do jogo' para um setor DEVE ser promovido para P1 ou P2 com base no seu impacto potencial.
 
 
-**PRIORIDADE P1_CRITICO (ACIONÁVEL AGORA — CHECKLIST EXCLUSIVO):**
-Eventos que exigem atenção imediata. A notícia DEVE ser sobre UM DESTES gatilhos:
-{P1_BULLETS}
+# **PRIORIDADE P1_CRITICO (ACIONÁVEL AGORA — CHECKLIST EXCLUSIVO):**
+# Eventos que exigem atenção imediata. A notícia DEVE ser sobre UM DESTES gatilhos:
+# {P1_BULLETS}
 
-**PRIORIDADE P2 (ESTRATÉGICO — CHECKLIST EXCLUSIVO):**
-Eventos com potencial de se tornarem P1 ou que indicam movimentos estratégicos relevantes. A notícia DEVE ser sobre UM DESTES gatilhos:
-{P2_BULLETS}
+# **PRIORIDADE P2 (ESTRATÉGICO — CHECKLIST EXCLUSIVO):**
+# Eventos com potencial de se tornarem P1 ou que indicam movimentos estratégicos relevantes. A notícia DEVE ser sobre UM DESTES gatilhos:
+# {P2_BULLETS}
 
-**PRIORIDADE P3 (MONITORAMENTO / CONTEXTO — PADRÃO):**
-**SOMENTE se uma notícia relevante passar pelo filtro de rejeição, NÃO atender aos critérios de P1/P2, mas ainda assim possuir um claro, ainda que indireto, link com o ambiente de negócios e crédito (ex: tendências setoriais, contexto macroeconômico com impacto direto), ela deve ser classificada como P3.** Isso inclui:
-{P3_BULLETS}
+# **PRIORIDADE P3 (MONITORAMENTO / CONTEXTO — PADRÃO):**
+# **SOMENTE se uma notícia relevante passar pelo filtro de rejeição, NÃO atender aos critérios de P1/P2, mas ainda assim possuir um claro, ainda que indireto, link com o ambiente de negócios e crédito (ex: tendências setoriais, contexto macroeconômico com impacto direto), ela deve ser classificada como P3.** Isso inclui:
+# {P3_BULLETS}
 
-REGRAS ESPECÍFICAS PARA 'M&A e Transações Corporativas':
-- Atribua esta TAG apenas se houver um GATILHO CONCRETO de transação: anúncio oficial, acordo assinado, negociação exclusiva, OPA, fusão/incorporação, venda de ativo, joint venture, divestiture, memorando de entendimento (MOU) com termos claros.
-- Não classifique como M&A quando houver apenas opinião, análise genérica, intenção vaga ou contexto sociocultural.
+# REGRAS ESPECÍFICAS PARA 'M&A e Transações Corporativas':
+# - Atribua esta TAG apenas se houver um GATILHO CONCRETO de transação: anúncio oficial, acordo assinado, negociação exclusiva, OPA, fusão/incorporação, venda de ativo, joint venture, divestiture, memorando de entendimento (MOU) com termos claros.
+# - Não classifique como M&A quando houver apenas opinião, análise genérica, intenção vaga ou contexto sociocultural.
 
-REGRAS ESPECÍFICAS PARA 'Dívida Ativa e Créditos Públicos':
-- Use esta TAG quando o núcleo do fato envolver termos como: "Certidão de Dívida Ativa (CDA)", "inscrição em dívida ativa", "protesto de CDA", "securitização de dívida ativa", "precatórios" ou "FCVS".
-- Não use 'Jurídico, Falências e Regulatório' quando o foco principal for a dinâmica de dívida ativa/inscrição/protesto/parcelamento vinculada à DA — nesses casos, prefira 'Dívida Ativa e Créditos Públicos'.
+# REGRAS ESPECÍFICAS PARA 'Dívida Ativa e Créditos Públicos':
+# - Use esta TAG quando o núcleo do fato envolver termos como: "Certidão de Dívida Ativa (CDA)", "inscrição em dívida ativa", "protesto de CDA", "securitização de dívida ativa", "precatórios" ou "FCVS".
+# - Não use 'Jurídico, Falências e Regulatório' quando o foco principal for a dinâmica de dívida ativa/inscrição/protesto/parcelamento vinculada à DA — nesses casos, prefira 'Dívida Ativa e Créditos Públicos'.
 
-<<< REGRAS CRÍTICAS PARA A SAÍDA JSON >>>
-1.  **VALIDADE É PRIORIDADE MÁXIMA:** A resposta DEVE ser um JSON perfeitamente válido.
-2.  **ESCAPE OBRIGATÓRIO DE ASPAS:** Dentro de strings, TODAS as aspas duplas (") internas DEVEM ser escapadas (\\").
-3.  **NÃO TRUNCAR:** Certifique-se de que o JSON esteja completo.
+# <<< REGRAS CRÍTICAS PARA A SAÍDA JSON >>>
+# 1.  **VALIDADE É PRIORIDADE MÁXIMA:** A resposta DEVE ser um JSON perfeitamente válido.
+# 2.  **ESCAPE OBRIGATÓRIO DE ASPAS:** Dentro de strings, TODAS as aspas duplas (") internas DEVEM ser escapadas (\\").
+# 3.  **NÃO TRUNCAR:** Certifique-se de que o JSON esteja completo.
 
---- GUIA DE TAGS E CATEGORIAS ---
-{GUIA_TAGS_FORMATADO}
+# --- GUIA DE TAGS E CATEGORIAS ---
+# {GUIA_TAGS_FORMATADO}
 
-<<< EXTRACAÇÃO DE FONTE PARA PDFs >>>
-Para artigos extraídos de PDFs (sem URL), extraia as seguintes informações:
-- **jornal**: Nome do jornal/revista/fonte impressa (ex: "Valor Econômico", "Folha de S.Paulo", "Revista Exame")
-- **autor**: Nome do autor/repórter quando disponível, ou "N/A" se não encontrado
-- **pagina**: Número da página ou seção (ex: "Página 15", "Seção Economia", "Caderno 2")
-- **data**: Data de publicação quando disponível, ou "N/A" se não encontrada
+# <<< EXTRACAÇÃO DE FONTE PARA PDFs >>>
+# Para artigos extraídos de PDFs (sem URL), extraia as seguintes informações:
+# - **jornal**: Nome do jornal/revista/fonte impressa (ex: "Valor Econômico", "Folha de S.Paulo", "Revista Exame")
+# - **autor**: Nome do autor/repórter quando disponível, ou "N/A" se não encontrado
+# - **pagina**: Número da página ou seção (ex: "Página 15", "Seção Economia", "Caderno 2")
+# - **data**: Data de publicação quando disponível, ou "N/A" se não encontrada
 
-Para artigos com URL, mantenha o comportamento padrão.
+# Para artigos com URL, mantenha o comportamento padrão.
 
-**IMPORTANTE PARA PDFs:**
-- Se o artigo veio de um PDF, o campo 'jornal' deve ser o nome real do jornal/revista, não o nome do arquivo
-- O campo 'autor' deve ser extraído do texto quando disponível (geralmente no cabeçalho ou rodapé)
-- O campo 'pagina' deve indicar a página específica onde o artigo aparece
-- O campo 'data' deve ser a data de publicação da edição, não a data de processamento
+# **IMPORTANTE PARA PDFs:**
+# - Se o artigo veio de um PDF, o campo 'jornal' deve ser o nome real do jornal/revista, não o nome do arquivo
+# - O campo 'autor' deve ser extraído do texto quando disponível (geralmente no cabeçalho ou rodapé)
+# - O campo 'pagina' deve indicar a página específica onde o artigo aparece
+# - O campo 'data' deve ser a data de publicação da edição, não a data de processamento
 
-FORMATO DE SAÍDA (JSON PURO):
-```json
-[
-  {{
-    "titulo": "Título da notícia",
-    "texto_completo": "A ideia central da notícia em UMA ÚNICA FRASE. Extraia apenas a informação mais crucial que justifica a classificação de prioridade.",
-    "jornal": "Nome do Jornal/Revista/Fonte",
-    "autor": "Nome do Autor ou N/A",
-    "pagina": "Página/Seção ou N/A",
-    "data": "Data da publicação ou N/A",
-    "categoria": "O setor de interesse mais específico (ex: 'Recuperação Judicial', 'Créditos Inadimplentes (NPLs)', 'Inteligência Artificial (IA)')",
-    "prioridade": "A prioridade correta (P1_CRITICO, P2_ESTRATEGICO ou P3_MONITORAMENTO)",
-    "tag": "A tag temática geral (ex: 'Jurídico, Falências e Regulatório')",
-    "relevance_score": 95.0,
-    "relevance_reason": "Justificativa concisa citando o gatilho/regra."
-  }}
-]
-```
-""".format(GUIA_TAGS_FORMATADO=GUIA_TAGS_FORMATADO, P1_BULLETS=_P1_BULLETS, P2_BULLETS=_P2_BULLETS, P3_BULLETS=_P3_BULLETS)
+# FORMATO DE SAÍDA (JSON PURO):
+# ```json
+# [
+#   {{
+#     "titulo": "Título da notícia",
+#     "texto_completo": "A ideia central da notícia em UMA ÚNICA FRASE. Extraia apenas a informação mais crucial que justifica a classificação de prioridade.",
+#     "jornal": "Nome do Jornal/Revista/Fonte",
+#     "autor": "Nome do Autor ou N/A",
+#     "pagina": "Página/Seção ou N/A",
+#     "data": "Data da publicação ou N/A",
+#     "categoria": "O setor de interesse mais específico (ex: 'Recuperação Judicial', 'Créditos Inadimplentes (NPLs)', 'Inteligência Artificial (IA)')",
+#     "prioridade": "A prioridade correta (P1_CRITICO, P2_ESTRATEGICO ou P3_MONITORAMENTO)",
+#     "tag": "A tag temática geral (ex: 'Jurídico, Falências e Regulatório')",
+#     "relevance_score": 95.0,
+#     "relevance_reason": "Justificativa concisa citando o gatilho/regra."
+#   }}
+# ]
+# ```
+# """.format(GUIA_TAGS_FORMATADO=GUIA_TAGS_FORMATADO, P1_BULLETS=_P1_BULLETS, P2_BULLETS=_P2_BULLETS, P3_BULLETS=_P3_BULLETS)
 
-# Redireciona as variáveis usadas no pipeline para o Gatekeeper V13 (mantendo nomes)
-PROMPT_EXTRACAO_PERMISSIVO_V8 = PROMPT_EXTRACAO_GATEKEEPER_V13
-PROMPT_EXTRACAO_JSON_V1 = PROMPT_EXTRACAO_GATEKEEPER_V13
+# # Novo alias unificado (análise + síntese) para Etapa 3
+# # Nota: conteúdo mantido (usa Gatekeeper V13); a síntese será conduzida
+# # pelo consumo do payload de notícias do cluster no código de orquestração.
 
 # ==============================================================================
 # PROMPTS PARA ETAPAS POSTERIORES (MANTIDOS INTACTOS)
@@ -658,38 +658,38 @@ Você é um Analista de Inteligência Sênior. Sua principal responsabilidade é
 ```
 """
 
-PROMPT_RESUMO_FINAL_V3 = """
-Você é um analista de inteligência criando um resumo sobre um evento específico, baseado em um CLUSTER de notícias relacionadas. A profundidade do seu resumo deve variar conforme o **Nível de Detalhe** solicitado.
+# PROMPT_RESUMO_FINAL_V3 = """
+# # Você é um analista de inteligência criando um resumo sobre um evento específico, baseado em um CLUSTER de notícias relacionadas. A profundidade do seu resumo deve variar conforme o **Nível de Detalhe** solicitado.
 
-**IMPORTANTE:** Você está resumindo um CLUSTER DE NOTÍCIAS sobre o mesmo fato gerador. Combine todas as informações das notícias do cluster em um resumo coerente e abrangente.
+# **IMPORTANTE:** Você está resumindo um CLUSTER DE NOTÍCIAS sobre o mesmo fato gerador. Combine todas as informações das notícias do cluster em um resumo coerente e abrangente.
 
-** Forma do Resumo ** Quem vai ler isso é um executivo do BTG Pactual, então precisamos ir direto ao ponto primeiro e depois detalhar. Para o leitor descartar a leitura rapidamente e só entrar no detalhe caso o inicio preve a relevância. (caso o titulo já não dê essa ideia).
-Além disso, o resumo maior como o p1 e um pouco do p2, podem ter um pouco (nao muito) juizo de valor, falando que aquilo pode ser importante (ou não) para a area de Special Situations do Banco.
+# ** Forma do Resumo ** Quem vai ler isso é um executivo do BTG Pactual, então precisamos ir direto ao ponto primeiro e depois detalhar. Para o leitor descartar a leitura rapidamente e só entrar no detalhe caso o inicio preve a relevância. (caso o titulo já não dê essa ideia).
+# Além disso, o resumo maior como o p1 e um pouco do p2, podem ter um pouco (nao muito) juizo de valor, falando que aquilo pode ser importante (ou não) para a area de Special Situations do Banco.
 
-Um exemplo de um resumo muito util seria assim:
+# Um exemplo de um resumo muito util seria assim:
 
-Titulo: Decisões e debates no sistema judiciário brasileiro
-O judiciário brasileiro teve desenvolvimentos cruciais em 5 e 6 de agosto de 2025. O STJ agilizou a recuperação de créditos ao permitir a venda direta de bens fiduciários e anulou assembleias de Recuperação Judicial com aditivos de última hora, reforçando a transparência. No âmbito tributário, a PGFN ampliou a dispensa de garantia para dívidas fiscais, enquanto o STJ rejeitou a prescrição intercorrente em processos administrativos fiscais e afetará a tese sobre a Selic em dívidas civis antigas, impactando o planejamento e a gestão de passivos. Adicionalmente, o TRT-2 reconheceu a unicidade contratual para bancários, elevando riscos trabalhistas para empresas com estruturas complexas.
+# Titulo: Decisões e debates no sistema judiciário brasileiro
+# O judiciário brasileiro teve desenvolvimentos cruciais em 5 e 6 de agosto de 2025. O STJ agilizou a recuperação de créditos ao permitir a venda direta de bens fiduciários e anulou assembleias de Recuperação Judicial com aditivos de última hora, reforçando a transparência. No âmbito tributário, a PGFN ampliou a dispensa de garantia para dívidas fiscais, enquanto o STJ rejeitou a prescrição intercorrente em processos administrativos fiscais e afetará a tese sobre a Selic em dívidas civis antigas, impactando o planejamento e a gestão de passivos. Adicionalmente, o TRT-2 reconheceu a unicidade contratual para bancários, elevando riscos trabalhistas para empresas com estruturas complexas.
 
-**NÍVEIS DE DETALHE:**
--   **Executivo (P1_CRITICO):** Um resumo de 4 a 7 linhas preferencialmente em um único paragrafo mas no máximo 2. Detalhe o contexto, os principais dados (valores, percentuais), os players envolvidos e as implicações estratégicas (riscos/oportunidades).
--   **Padrão (P2_ESTRATEGICO):** Um único parágrafo denso e informativo que sintetiza os fatos mais importantes do evento, de 2 a 4 linhas.
--   **Conciso (P3_MONITORAMENTO):** Uma ou duas frases que capturam a essência do evento (de 1 preferencialmente a no maximo 2 linhas).
+# **NÍVEIS DE DETALHE:**
+# -   **Executivo (P1_CRITICO):** Um resumo de 4 a 7 linhas preferencialmente em um único paragrafo mas no máximo 2. Detalhe o contexto, os principais dados (valores, percentuais), os players envolvidos e as implicações estratégicas (riscos/oportunidades).
+# -   **Padrão (P2_ESTRATEGICO):** Um único parágrafo denso e informativo que sintetiza os fatos mais importantes do evento, de 2 a 4 linhas.
+# -   **Conciso (P3_MONITORAMENTO):** Uma ou duas frases que capturam a essência do evento (de 1 preferencialmente a no maximo 2 linhas).
 
-**MISSÃO:**
-Baseado no CLUSTER de notícias fornecido e no **Nível de Detalhe** `{NIVEL_DE_DETALHE}` solicitado, produza um resumo consolidado.
+# **MISSÃO:**
+# Baseado no CLUSTER de notícias fornecido e no **Nível de Detalhe** `{NIVEL_DE_DETALHE}` solicitado, produza um resumo consolidado.
 
-**FORMATO DE SAÍDA OBRIGATÓRIO (JSON PURO):**
-```json
-{{
-  "titulo_final": "Use exatamente o tema_principal fornecido no cluster.",
-  "resumo_final": "O resumo consolidado de todas as notícias do cluster conforme o Nível de Detalhe especificado."
-}}
-```
+# **FORMATO DE SAÍDA OBRIGATÓRIO (JSON PURO):**
+# ```json
+# {{
+#   "titulo_final": "Use exatamente o tema_principal fornecido no cluster.",
+#   "resumo_final": "O resumo consolidado de todas as notícias do cluster conforme o Nível de Detalhe especificado."
+# }}
+# ```
 
-**DADOS DO CLUSTER PARA ANÁLISE:**
-{DADOS_DO_GRUPO}
-"""
+# **DADOS DO CLUSTER PARA ANÁLISE:**
+# {DADOS_DO_GRUPO}
+# """
 
 # [UNUSED] Utilitário de decisão granular; não chamado no caminho principal. Mantido para ferramentas/rotas específicas.
 PROMPT_DECISAO_CLUSTER_DETALHADO_V1 = """
@@ -909,6 +909,33 @@ ENTRADA (CLUSTERS DO DIA PARA ANÁLISE):
 {CLUSTERS_DO_DIA}
 """
 
+PROMPT_RESUMO_EXPANDIDO_V1 = """
+Você é um Editor-Chefe de um grande jornal de negócios. Sua tarefa é receber um conjunto de reportagens brutas de diferentes jornalistas (representadas abaixo como uma lista de textos) que cobrem o mesmo evento. Sua missão é sintetizar todas essas informações em uma única matéria coesa, bem estruturada e detalhada, com 2 a 3 parágrafos.
+
+**DIRETRIZES editoriais OBRIGATÓRIAS:**
+
+1.  **PERSONA E TOM:** Aja estritamente como um jornalista experiente e imparcial. Não emita juízo de valor, opiniões ou conselhos de investimento (ex: "isso é uma oportunidade..."). Seu tom deve ser puramente informativo, factual e neutro.
+
+2.  **SÍNTESE, NÃO CÓPIA:** Não junte os textos. Leia todas as fontes, entenda a história completa e reescreva-a com suas próprias palavras, como se estivesse criando a versão definitiva da matéria para o jornal. Combine informações de diferentes fontes para enriquecer a narrativa. Por exemplo, se uma fonte cita um valor e outra fonte explica o motivo, una essas duas informações em uma única frase fluida.
+
+3.  **ESTRUTURA NARRATIVA:** Organize o resumo de forma lógica:
+    * **Primeiro Parágrafo:** Apresente o fato gerador principal. Responda às perguntas essenciais: Quem? O quê? Quando? Onde? Por quê?
+    * **Parágrafos Seguintes:** Detalhe o contexto, os desdobramentos, as diferentes perspectivas apresentadas nas fontes, e as implicações diretas do evento (ex: reações do mercado, próximos passos legais, etc.). Use este espaço para aprofundar a informação.
+
+4.  **FOCO NA INFORMAÇÃO COMPLETA:** Seu objetivo é criar um resumo que dispense a leitura dos artigos originais para quem busca um entendimento aprofundado. Inclua nomes de pessoas, empresas, valores, datas e outros dados específicos mencionados nas fontes.
+
+**DADOS BRUTOS PARA ANÁLISE (LISTA DE NOTÍCIAS):**
+{TEXTOS_ORIGINAIS_DO_CLUSTER}
+
+**FORMATO DE SAÍDA OBRIGATÓRIO (JSON PURO):**
+Sua resposta DEVE ser um único objeto JSON, contendo apenas o texto do resumo expandido.
+```json
+{{
+  "resumo_expandido": "Seu texto jornalístico de 2 a 3 parágrafos aqui, sintetizando todas as fontes fornecidas."
+}}
+```
+"""
+
 PROMPT_EXTRACAO_FONTE = """
 Analise o texto fornecido e extraia as informações de fonte da notícia.
 
@@ -931,8 +958,6 @@ Para artigos com URL:
 
 Retorne apenas o JSON com as informações encontradas, sem explicações adicionais.
 """
-
-
 
 PROMPT_EXTRACAO_PDF_RAW_V1 = """
 <<< EXTRAÇÃO DE NOTÍCIAS DE PDFs - TEXTO COMPLETO >>>
@@ -1007,3 +1032,82 @@ EXEMPLO DE OUTPUT (APENAS JSON PURO):
 \nREGRAS DE JSON OBRIGATÓRIAS:\n- Retorne SOMENTE JSON, sem usar ```json ou qualquer texto adicional.\n- Dentro de strings, escape TODAS as aspas duplas como \\\".\n- Use \\\n para quebras de linha.\n- NÃO deixe vírgulas sobrando antes de } ou ].\n- Se houver múltiplos objetos, retorne uma LISTA JSON com todos eles.
 
 """
+
+# Adicione este novo prompt ao seu arquivo backend/prompts.py
+# Ele substitui tanto o PROMPT_EXTRACAO_GATEKEEPER_V13 quanto o PROMPT_RESUMO_FINAL_V3
+
+PROMPT_ANALISE_E_SINTESE_CLUSTER_V1 = """
+Você é um Analista Sênior da mesa de 'Special Situations' do BTG Pactual. Sua missão é analisar um cluster de notícias que supostamente cobrem o mesmo evento, realizar uma análise crítica do conteúdo, classificar o evento principal e sintetizar todas as informações relevantes em um resumo executivo coeso.
+
+<<< DADOS BRUTOS PARA ANÁLISE >>>
+A seguir, uma lista de notícias (com ID, título e texto completo) que foram pré-agrupadas.
+{NOTICIAS_DO_CLUSTER}
+
+<<< PROCESSO DE ANÁLISE E SÍNTESE OBRIGATÓRIO EM 4 ETAPAS >>>
+
+**ETAPA 1: SANEAMENTO DO CLUSTER E IDENTIFICAÇÃO DO FATO GERADOR**
+Primeiro, leia os títulos e os textos completos de TODAS as notícias fornecidas acima. Identifique o fato gerador principal que une a maioria delas. Durante esta leitura, avalie se alguma das notícias foi agrupada incorretamente.
+- **REGRA DE SANEAMENTO:** Se uma ou mais notícias claramente não pertencem ao fato gerador principal (ex: uma notícia sobre política no meio de um cluster sobre M&A), você DEVE IGNORÁ-LAS nas etapas seguintes de classificação e resumo. Sua análise final deve se basear apenas nas notícias pertinentes.
+
+**ETAPA 2: VERIFICAÇÃO DE REJEIÇÃO IMEDIATA (BASEADO NAS NOTÍCIAS PERTINENTES)**
+Após identificar as notícias relevantes, avalie o fato gerador principal contra a 'LISTA DE REJEIÇÃO IMEDIATA'. Se o evento se encaixar em qualquer um desses critérios, sua tarefa TERMINA. Retorne um JSON com a prioridade "IRRELEVANTE", a tag "IRRELEVANTE" e um resumo conciso explicando a irrelevância.
+
+--------------------------------------------------------------------------------
+LISTA DE REJEIÇÃO IMEDIATA (se o fato gerador for sobre isso, marque como IRRELEVANTE):
+--------------------------------------------------------------------------------
+- **Conteúdo Não-Jornalístico:** Rejeite ativamente classificados, publicidade, editais (de leilão, convocação, etc.), notas de falecimento, propaganda, ofertas de produtos ou serviços.
+- **Ruído Político:** Rejeite disputas partidárias e rotinas de políticos. Mantenha apenas legislação ou decisões governamentais com impacto econômico DIRETO.
+- **Conteúdo Irrelevante:** Esportes, cultura, entretenimento, fofoca, crimes comuns, saúde pública geral.
+- **JURÍDICO SEM TESE FINANCEIRA DIRETA:** Rejeite decisões judiciais (mesmo do STF/STJ) sobre temas de Direito de Família, Penal, Social, Esportivo ou causas humanitárias. Se o impacto não for primariamente no balanço de empresas, é irrelevante.
+- **RUÍDO CORPORATIVO DE ROTINA:** Rejeite notícias sobre divulgação de resultados trimestrais (lucro, receita, etc.). A exceção é se o texto mencionar explicitamente gatilhos de distress, como "quebra de covenants", "risco de default", "impairment relevante" ou "pedido de Recuperação Judicial".
+- **(Manter o restante da lista de rejeição detalhada do PROMPT_EXTRACAO_GATEKEEPER_V13 aqui)**
+
+**ETAPA 3: CLASSIFICAÇÃO DE PRIORIDADE E TAG (SE NÃO REJEITADO)**
+Se o evento for relevante, classifique-o usando os guias de prioridade (P1, P2, P3) e o guia de tags abaixo. Sua decisão deve se basear na visão consolidada de todas as notícias pertinentes que você identificou na Etapa 1.
+
+<<< LENTE DE FOCO: QUAL A TESE DE INVESTIMENTO? >>>
+Identifique a 'centelha' da notícia: qual é a oportunidade de negócio ou o risco financeiro estrutural descrito? A notícia trata de M&A, RJ, uma grande tese tributária, um leilão de ativo relevante ou uma empresa em claro *distress*? Se não houver tese, a notícia é, no máximo, P3.
+
+< GUIA DE PRIORIZAÇÃO E GATING >
+**PRIORIDADE P1_CRITICO (ACIONÁVEL AGORA — CHECKLIST EXCLUSIVO):**
+{P1_BULLETS}
+
+**PRIORIDADE P2 (ESTRATÉGICO — CHECKLIST EXCLUSIVO):**
+{P2_BULLETS}
+
+**PRIORIDADE P3 (MONITORAMENTO / CONTEXTO — PADRÃO):**
+{P3_BULLETS}
+
+--- GUIA DE TAGS E CATEGORIAS ---
+{GUIA_TAGS_FORMATADO}
+
+**ETAPA 4: SÍNTESE DO RESUMO EXECUTIVO**
+Agora, usando TODAS as informações das notícias que você julgou PERTINENTES na Etapa 1, crie o resumo final.
+- **PÚBLICO-ALVO:** O leitor é um executivo do BTG Pactual. Vá direto ao ponto. Comece com a informação mais impactante para que ele possa decidir rapidamente se aprofunda na leitura.
+- **ESTILO:** Seja denso e informativo. Combine dados de todas as fontes para criar uma visão completa. Você pode adicionar um leve juízo de valor sobre a relevância para a área de Special Situations (ex: "Isso representa uma oportunidade de arbitragem..." ou "Este movimento aumenta o risco de crédito para o setor...").
+- **EXEMPLO DE TOM E ESTRUTURA (MODELO A SEGUIR):**
+  "**Título:** Decisões e debates no sistema judiciário brasileiro
+   **Resumo:** O judiciário brasileiro teve desenvolvimentos cruciais em 5 e 6 de agosto de 2025. O STJ agilizou a recuperação de créditos ao permitir a venda direta de bens fiduciários e anulou assembleias de Recuperação Judicial com aditivos de última hora, reforçando a transparência. No âmbito tributário, a PGFN ampliou a dispensa de garantia para dívidas fiscais, enquanto o STJ rejeitou a prescrição intercorrente em processos administrativos fiscais..."
+- **NÍVEL DE DETALHE:** Ajuste o tamanho do resumo com base na prioridade que você atribuiu na Etapa 3:
+  - **P1_CRITICO:** Resumo detalhado (5-8 linhas).
+  - **P2_ESTRATEGICO:** Resumo padrão (3-5 linhas). Titulo precisa passar a ideia rapidamente para o humano ver se vai ler a noticia ou nao.
+  - **P3_MONITORAMENTO:** Resumo conciso (1-2 frases (preferencialmente em uma linha)). Titulo mais curto, umas 3~4 palavras, que apenas serve para o humano ver se vai ler a noticia ou nao, mas aqui o titulo já faz parte do resumo, o resumo é uma continuacao do titulo, nao repita.
+
+<<< FORMATO DE SAÍDA OBRIGATÓRIO (JSON PURO) >>>
+Sua resposta final DEVE ser um ÚNICO objeto JSON, sem markdown (```json), comentários ou qualquer texto adicional.
+```json
+{{
+  "titulo": "Um título curto e informativo para o evento consolidado. Seja direto e evite nomes genéricos.",
+  "prioridade": "A prioridade que você decidiu (P1_CRITICO, P2_ESTRATEGICO, P3_MONITORAMENTO, ou IRRELEVANTE)",
+  "tag": "A tag temática que você escolheu (ex: 'Jurídico, Falências e Regulatório' ou 'IRRELEVANTE')",
+  "resumo_final": "O resumo executivo consolidado que você escreveu, baseado APENAS nas notícias pertinentes.",
+  "ids_artigos_utilizados": [uma, lista, de, ids, inteiros, dos, artigos, que, você, usou, para, a, análise],
+  "justificativa_saneamento": "Uma frase explicando por que algum artigo foi ignorado, se aplicável. Se todos foram usados, retorne 'Todos os artigos eram pertinentes.'",
+  "relevance_reason": "Justificativa concisa citando o gatilho/regra que levou à classificação de prioridade."
+}}
+"""
+
+PROMPT_ANALISE_E_SINTESE_CLUSTER_V1 = PROMPT_ANALISE_E_SINTESE_CLUSTER_V1
+PROMPT_EXTRACAO_PERMISSIVO_V8 = PROMPT_ANALISE_E_SINTESE_CLUSTER_V1
+PROMPT_EXTRACAO_JSON_V1 = PROMPT_ANALISE_E_SINTESE_CLUSTER_V1
+PROMPT_RESUMO_FINAL_V3 = PROMPT_ANALISE_E_SINTESE_CLUSTER_V1

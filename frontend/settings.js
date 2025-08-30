@@ -1679,12 +1679,19 @@ document.addEventListener('DOMContentLoaded', function() {
     // Setup upload functionality
     const uploadBtn = document.getElementById('upload-btn');
     const fileUpload = document.getElementById('file-upload');
+    const processFolderBtn = document.getElementById('process-folder-btn');
     const processArticlesBtn = document.getElementById('process-articles-btn');
     
     if (uploadBtn) {
         uploadBtn.addEventListener('click', async () => {
-            // Em vez de apenas abrir o seletor, dispara o mesmo fluxo do CLI
-            // Equivalente a: python load_news.py --dir ../pdfs --direct --yes
+            // CORREÇÃO: Agora realmente abre o seletor de arquivos
+            fileUpload.click();
+        });
+    }
+    
+    if (processFolderBtn) {
+        processFolderBtn.addEventListener('click', async () => {
+            // Processa pasta ../pdfs como o CLI faz
             const uploadStatus = document.getElementById('upload-status');
             const uploadProgress = document.getElementById('upload-progress');
             const progressText = document.querySelector('#upload-progress .progress-text');

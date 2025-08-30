@@ -30,6 +30,9 @@ const modalTitulo = document.getElementById('modal-titulo');
 const modalResumo = document.getElementById('modal-resumo');
 const modalTabs = document.querySelector('.modal-tabs');
 const modalCopyBtn = document.getElementById('modal-copy-btn');
+const modalExpandBtn = document.getElementById('modal-expand-summary-btn');
+const modalLikeBtn = document.getElementById('modal-like-btn');
+const modalDislikeBtn = document.getElementById('modal-dislike-btn');
 const tabContents = document.querySelectorAll('.tab-content');
 const listaFontesContainer = document.getElementById('lista-fontes-container');
 
@@ -123,6 +126,12 @@ let clustersP1 = [];
 let clustersP2 = [];
 let clustersP3 = [];
 
+// Contadores totais por aba (carregados uma vez e mantidos)
+let contadoresAbas = {
+    nacional: 0,
+    internacional: 0
+};
+
 // =======================================
 // INICIALIZAÇÃO
 // =======================================
@@ -132,8 +141,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             setupEventListeners();
             atualizarDataTexto(); // Atualiza o texto da data antes de carregar
-            
-            // Carrega o feed primeiro (que já chama carregarTagsDisponiveis internamente)
+
+            // PRIMEIRO: Carrega contadores simples das abas
+            await carregarContadoresSimples(currentDate);
+
+            // DEPOIS: Carrega o feed completo
             await carregarFeed();
         } catch (error) {
             console.error('❌ Erro na inicialização:', error);
@@ -351,6 +363,8 @@ async function carregarClustersPorPrioridade(date, token) {
         if (token !== feedLoadToken) return;
         await carregarTagsDisponiveis();
 
+        // Os contadores das abas já foram carregados anteriormente
+
         // Salva no cache
         const cacheData = {
             clusters: clustersCarregados,
@@ -419,9 +433,10 @@ function setupEventListeners() {
     if (dataAnterior) dataAnterior.addEventListener('click', () => navegarData(-1));
     if (dataProxima) dataProxima.addEventListener('click', () => navegarData(1));
     if (dataTexto) dataTexto.addEventListener('click', () => dataInput && dataInput.showPicker());
-    if (dataInput) dataInput.addEventListener('change', (e) => {
+    if (dataInput) dataInput.addEventListener('change', async (e) => {
         currentDate = e.target.value;
         atualizarDataTexto();
+        await carregarContadoresSimples(currentDate);
         carregarFeed();
     });
 
@@ -554,6 +569,16 @@ function setupEventListeners() {
             }
         }
 
+        // Expandir resumo
+        if (e.target.classList.contains('btn-expand-summary')) {
+            const card = e.target.closest('.card-cluster');
+            if (!card) return;
+            const clusterId = card.getAttribute('data-cluster-id');
+            if (!clusterId) return;
+            const resumoEl = card.querySelector('.card-resumo');
+            expandirResumo(clusterId, resumoEl, e.target);
+        }
+
         // Botões de feedback (like/dislike)
         const thumbBtn = e.target.closest('.btn-thumb');
         if (thumbBtn) {
@@ -586,6 +611,50 @@ function setupEventListeners() {
             if (e.key === 'Enter') {
                 enviarMensagemChat();
             }
+        });
+    }
+
+    // Modal: Expandir Resumo / Copiar / Like / Dislike
+    if (modalExpandBtn) {
+        modalExpandBtn.addEventListener('click', async () => {
+            if (!currentClusterId) return;
+            await expandirResumo(currentClusterId, modalResumo, modalExpandBtn);
+        });
+    }
+    if (modalCopyBtn) {
+        modalCopyBtn.addEventListener('click', async () => {
+            const id = currentClusterId;
+            if (!id) return;
+            if (currentClusterDetails) {
+                await copyClusterToClipboard(currentClusterDetails);
+                return;
+            }
+            let cluster = (clustersCarregados || []).find(c => String(c.id) === String(id));
+            if (!cluster) {
+                try {
+                    const details = await carregarDetalhesCluster(id);
+                    if (details) {
+                        currentClusterDetails = details;
+                        await copyClusterToClipboard(details);
+                        return;
+                    }
+                } catch (_) {}
+                showErrorMessage('Cluster não encontrado');
+                return;
+            }
+            await copyClusterToClipboard(cluster);
+        });
+    }
+    if (modalLikeBtn) {
+        modalLikeBtn.addEventListener('click', async () => {
+            if (!currentClusterId) return;
+            await registrarFeedbackCluster(currentClusterId, 'like', modalLikeBtn);
+        });
+    }
+    if (modalDislikeBtn) {
+        modalDislikeBtn.addEventListener('click', async () => {
+            if (!currentClusterId) return;
+            await registrarFeedbackCluster(currentClusterId, 'dislike', modalDislikeBtn);
         });
     }
 
@@ -635,13 +704,16 @@ function setupEventListeners() {
 // =======================================
 // FUNÇÕES DE NAVEGAÇÃO DE DATA
 // =======================================
-function navegarData(dias) {
+async function navegarData(dias) {
     console.log('🔄 navegarData chamado com dias:', dias, 'data atual:', currentDate);
     const data = parseLocalDate(currentDate);
     data.setDate(data.getDate() + dias);
     currentDate = formatLocalYYYYMMDD(data);
     console.log('📅 Nova data selecionada:', currentDate);
     atualizarDataTexto();
+
+    // Recarrega contadores para a nova data
+    await carregarContadoresSimples(currentDate);
     carregarFeed();
 }
 
@@ -682,6 +754,27 @@ async function carregarMetricas(date) {
     }
 }
 
+
+
+// Função para atualizar os contadores nas abas
+function atualizarContadoresAbas(contadorBrasil, contadorInternacional) {
+    const abaBrasil = document.querySelector('.news-tab-btn[data-tipo="nacional"]');
+    const abaInternacional = document.querySelector('.news-tab-btn[data-tipo="internacional"]');
+
+    console.log('🔄 Atualizando abas - Brasil:', contadorBrasil, 'Internacional:', contadorInternacional);
+
+    if (abaBrasil) {
+        // Versão simplificada sem manipular SVG
+        abaBrasil.textContent = `Brasil${contadorBrasil > 0 ? ` (${contadorBrasil})` : ''}`;
+        console.log('✅ Aba Brasil atualizada');
+    }
+
+    if (abaInternacional) {
+        abaInternacional.textContent = `🌍 Internacional${contadorInternacional > 0 ? ` (${contadorInternacional})` : ''}`;
+        console.log('✅ Aba Internacional atualizada');
+    }
+}
+
 async function carregarFeed() {
     // Cancela qualquer carregamento em andamento para troca imediata de aba
     abortActiveFetches();
@@ -696,7 +789,7 @@ async function carregarFeed() {
         await carregarMetricas(currentDate);
         // Usa o novo sistema de carregamento progressivo
         await carregarClustersPorPrioridade(currentDate, myToken);
-        
+
     } catch (error) {
         console.error('❌ Erro ao carregar feed:', error);
         mostrarErro('Erro ao carregar notícias. Tente novamente.');
@@ -840,6 +933,7 @@ function criarCardCluster(cluster) {
                 <button class="btn btn-deep-dive" onclick="openModal(${cluster.id})">
                     💬 Conversar com a notícia
                 </button>
+                <button class="btn btn-secundario btn-expand-summary" data-cluster-id="${cluster.id}">⤴︎ Expandir Resumo</button>
             </div>
         </div>
     `;
@@ -884,6 +978,13 @@ async function openModal(clusterId) {
         // Preenche dados básicos
         if (modalTitulo) modalTitulo.textContent = clusterData.titulo_final;
         if (modalResumo) modalResumo.textContent = clusterData.resumo_final;
+        // Mostra/oculta controles no modal conforme tipo (P3 agrupado não expande)
+        try {
+            const isP3Group = !!(clusterData && clusterData.tag && clusterData.total_artigos === 0 && Array.isArray(clusterData.fontes) === false);
+            if (modalExpandBtn) modalExpandBtn.style.display = isP3Group ? 'none' : '';
+            if (modalLikeBtn) modalLikeBtn.style.display = '';
+            if (modalDislikeBtn) modalDislikeBtn.style.display = '';
+        } catch (_) {}
         
         // Renderiza fontes
         renderizarFontes(clusterData.fontes);
@@ -1131,6 +1232,7 @@ function renderizarFontes(fontes) {
                 
                 li.innerHTML = `
                     <span>${icon} ${fonte.nome}</span>
+                    ${fonte.titulo_original ? `<div class="fonte-titulo">📝 ${fonte.titulo_original}</div>` : ''}
                     ${fonteInfo.length > 0 ? `<div class="fonte-info">${fonteInfo.join(' | ')}</div>` : ''}
                     <button class="btn btn-terciario" onclick="verArtigoBruto(${currentClusterId}, '${fonte.nome}')">
                         📰 Ver Artigo Completo
@@ -1140,6 +1242,7 @@ function renderizarFontes(fontes) {
                 // Para URLs, mantém o comportamento original
                 li.innerHTML = `
                     <span>${icon} ${fonte.nome}</span>
+                    ${fonte.titulo_original ? `<div class="fonte-titulo">📝 ${fonte.titulo_original}</div>` : ''}
                     <a href="${fonte.url}" target="_blank" class="btn btn-terciario">Acessar Original</a>
                 `;
             }
@@ -1148,6 +1251,53 @@ function renderizarFontes(fontes) {
         });
     } else {
         listaFontesContainer.innerHTML = '<li>Nenhuma fonte disponível</li>';
+    }
+}
+
+async function expandirResumo(clusterId, summaryElement, buttonElement) {
+    try {
+        if (!clusterId) return;
+        if (!summaryElement) return;
+        const btn = buttonElement || document.querySelector(`.btn-expand-summary[data-cluster-id="${clusterId}"]`);
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Expandindo...';
+        }
+        const original = summaryElement.innerHTML;
+        summaryElement.innerHTML = '<i>Gerando resumo detalhado, por favor aguarde...</i>';
+
+        const response = await fetch(`/api/clusters/${clusterId}/expandir-resumo`, { method: 'POST' });
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        const novo = (data && data.resumo_expandido) ? data.resumo_expandido : null;
+        if (!novo) throw new Error('Resposta inválida');
+
+        summaryElement.innerHTML = String(novo).replace(/\n/g, '<br>');
+
+        // Atualiza cache local, se existir
+        try {
+            const idx = (clustersCarregados || []).findIndex(c => String(c.id) === String(clusterId));
+            if (idx >= 0) {
+                clustersCarregados[idx].resumo_final = novo;
+            }
+        } catch (_) {}
+
+        if (btn) {
+            btn.style.display = 'none';
+        }
+        showNotification('Resumo expandido com sucesso', 'success');
+    } catch (err) {
+        console.error('Falha ao expandir resumo', err);
+        if (summaryElement && typeof original !== 'undefined') {
+            summaryElement.innerHTML = original;
+        }
+        showErrorMessage('Não foi possível expandir o resumo agora');
+        if (buttonElement) {
+            buttonElement.disabled = false;
+            buttonElement.textContent = 'Expandir Resumo';
+        }
     }
 }
 
@@ -1554,6 +1704,45 @@ function filterAndRender() {
         console.log('Nenhum cluster para renderizar');
         showEmptyFeedMessage();
     }
+
+
+}
+
+// =======================================
+// FUNÇÕES PARA CONTADORES DAS ABAS
+// =======================================
+
+// Carrega contadores simples de cada aba (via endpoint dedicado)
+async function carregarContadoresSimples(date) {
+    try {
+        console.log('🔄 Carregando contadores simples...');
+
+        // Chama endpoint dedicado que retorna { nacional: X, internacional: Y }
+        const resp = await fetch(`/api/contadores_abas?data=${encodeURIComponent(date || '')}`);
+        if (resp.ok) {
+            const data = await resp.json();
+            contadoresAbas.nacional = Number(data.nacional || 0);
+            contadoresAbas.internacional = Number(data.internacional || 0);
+            atualizarContadoresAbas(contadoresAbas.nacional, contadoresAbas.internacional);
+            return;
+        }
+
+        // Fallback: tenta sem data (API assume hoje)
+        const respSemData = await fetch(`/api/contadores_abas`);
+        if (respSemData.ok) {
+            const data2 = await respSemData.json();
+            contadoresAbas.nacional = Number(data2.nacional || 0);
+            contadoresAbas.internacional = Number(data2.internacional || 0);
+            atualizarContadoresAbas(contadoresAbas.nacional, contadoresAbas.internacional);
+            return;
+        }
+
+        // Último fallback: zera
+        atualizarContadoresAbas(0, 0);
+    } catch (e) {
+        console.error('❌ Erro ao carregar contadores:', e);
+        atualizarContadoresAbas(0, 0);
+    }
 }
 
 // =======================================
@@ -1599,7 +1788,7 @@ function calcularContadores() {
     
     // Atualiza filtros de prioridade
     atualizarContadoresPrioridade(contadoresPrioridade);
-    
+
     // Atualiza filtros de categoria
     atualizarContadoresCategoria(contadoresCategoria);
 }
@@ -1791,7 +1980,7 @@ async function carregarTagsDisponiveis() {
         
         // Atualiza os filtros de prioridade
         atualizarContadoresPrioridade(contadoresPrioridade);
-        
+
         console.log('✅ Tags extraídas dos clusters:', tagsDisponiveis);
         console.log('📈 Contadores de categoria calculados:', contadoresCategoria);
         console.log('📈 Contadores de prioridade calculados:', contadoresPrioridade);

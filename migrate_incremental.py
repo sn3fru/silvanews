@@ -166,6 +166,7 @@ def migrate_clusters(db_src: Session, db_dst: Session, since: datetime, no_updat
                     existing.total_artigos = cluster.total_artigos or existing.total_artigos
                     existing.ultima_atualizacao = cluster.ultima_atualizacao or existing.ultima_atualizacao
                     existing.updated_at = cluster.updated_at or existing.updated_at
+                    existing.tipo_fonte = cluster.tipo_fonte or existing.tipo_fonte  # NOVO: Atualiza tipo_fonte
                 continue
 
             clone = ClusterEvento(
@@ -179,6 +180,7 @@ def migrate_clusters(db_src: Session, db_dst: Session, since: datetime, no_updat
                 status=cluster.status or "ativo",
                 total_artigos=cluster.total_artigos or 0,
                 ultima_atualizacao=cluster.ultima_atualizacao or cluster.created_at,
+                tipo_fonte=cluster.tipo_fonte or 'nacional',  # NOVO: Campo crítico para separação nacional/internacional
             )
             db_dst.add(clone)
             db_dst.commit()
@@ -204,6 +206,9 @@ def migrate_artigos(db_src: Session, db_dst: Session, since: datetime, cluster_i
                 # Atualiza vínculo de cluster se necessário
                 if artigo.cluster_id and not exists.cluster_id:
                     exists.cluster_id = cluster_id_map.get(artigo.cluster_id)
+                # NOVO: Atualiza tipo_fonte se necessário
+                if hasattr(artigo, 'tipo_fonte') and artigo.tipo_fonte and artigo.tipo_fonte != exists.tipo_fonte:
+                    exists.tipo_fonte = artigo.tipo_fonte
                 continue
 
             clone = ArtigoBruto(
@@ -228,6 +233,7 @@ def migrate_artigos(db_src: Session, db_dst: Session, since: datetime, cluster_i
                 relevance_reason=artigo.relevance_reason,
                 embedding=artigo.embedding,
                 cluster_id=cluster_id_map.get(artigo.cluster_id) if artigo.cluster_id else None,
+                tipo_fonte=artigo.tipo_fonte or 'nacional',  # NOVO: Campo crítico para separação nacional/internacional
             )
             db_dst.add(clone)
             total += 1
@@ -465,6 +471,7 @@ def migrate_prompts(db_src: Session, db_dst: Session, since: datetime, no_update
             existing.descricao = tag.descricao
             existing.exemplos = tag.exemplos
             existing.ordem = tag.ordem
+            existing.tipo_fonte = tag.tipo_fonte or existing.tipo_fonte  # NOVO: Atualiza tipo_fonte
             existing.updated_at = datetime.now(timezone.utc)
         else:
             # Cria nova tag
@@ -473,6 +480,7 @@ def migrate_prompts(db_src: Session, db_dst: Session, since: datetime, no_update
                 descricao=tag.descricao,
                 exemplos=tag.exemplos,
                 ordem=tag.ordem,
+                tipo_fonte=tag.tipo_fonte or 'nacional',  # NOVO: Campo crítico para separação nacional/internacional
                 created_at=tag.created_at,
                 updated_at=tag.updated_at
             )
@@ -485,7 +493,7 @@ def migrate_prompts(db_src: Session, db_dst: Session, since: datetime, no_update
     for prioridade in q_prioridades.yield_per(100):
         existing = db_dst.query(PromptPrioridadeItem).filter_by(
             nivel=prioridade.nivel, 
-            item=prioridade.item
+            texto=prioridade.texto
         ).first()
         
         if existing and no_update:
@@ -493,16 +501,17 @@ def migrate_prompts(db_src: Session, db_dst: Session, since: datetime, no_update
             
         if existing:
             # Atualiza item existente
-            existing.descricao = prioridade.descricao
+            existing.texto = prioridade.texto
             existing.ordem = prioridade.ordem
+            existing.tipo_fonte = prioridade.tipo_fonte or existing.tipo_fonte  # NOVO: Atualiza tipo_fonte
             existing.updated_at = datetime.now(timezone.utc)
         else:
             # Cria novo item
             clone = PromptPrioridadeItem(
                 nivel=prioridade.nivel,
-                item=prioridade.item,
-                descricao=prioridade.descricao,
+                texto=prioridade.texto,
                 ordem=prioridade.ordem,
+                tipo_fonte=prioridade.tipo_fonte or 'nacional',  # NOVO: Campo crítico para separação nacional/internacional
                 created_at=prioridade.created_at,
                 updated_at=prioridade.updated_at
             )
@@ -520,6 +529,7 @@ def migrate_prompts(db_src: Session, db_dst: Session, since: datetime, no_update
         if existing:
             # Atualiza template existente
             existing.conteudo = template.conteudo
+            existing.descricao = template.descricao  # NOVO: Atualiza descrição
             existing.updated_at = datetime.now(timezone.utc)
         else:
             # Cria novo template
@@ -607,7 +617,10 @@ def main() -> None:
             migrate_chat(db_src, db_dst, since, cluster_id_map)
 
         if args.include_logs and want("logs"):
-            migrate_logs(db_src, db_dst, since, cluster_id_map, artigo_hash_to_id={})
+            # REMOVIDO: Migração de logs para tornar o processo mais rápido
+            # Os logs não são essenciais para o funcionamento do sistema em produção
+            print("⏭️ Pulando migração de logs (não essencial para produção)")
+            # migrate_logs(db_src, db_dst, since, cluster_id_map, artigo_hash_to_id={})
 
         if args.include_prompts and want("prompts"):
             migrate_prompts(db_src, db_dst, since, args.no_update_existing)

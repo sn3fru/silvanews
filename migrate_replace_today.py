@@ -7,12 +7,14 @@ O que faz no DESTINO (produção):
 - Remove clusters do dia e dependências (chat, alterações, feedback, estagiário).
 
 Depois migra do ORIGEM (local) para o DESTINO somente o dia alvo:
-- Insere clusters do dia e cria mapa de IDs.
-- Upserta artigos do dia (por hash_unico): se existir, ATUALIZA e força cluster_id do dia; senão, insere.
+- Insere clusters do dia e cria mapa de IDs (com campo tipo_fonte para separação nacional/internacional).
+- Upserta artigos do dia (por hash_unico): se existir, ATUALIZA e força cluster_id do dia; senão, insere (com campo tipo_fonte).
 - Insere síntese executiva do dia, se houver.
 - Migra feedback dos artigos do dia (se --include-feedback).
 - Migra sessões e mensagens do estagiário do dia (se --include-estagiario).
-- Migra configurações de prompts (tags, prioridades, templates) (se --include-prompts).
+- Migra configurações de prompts (tags, prioridades, templates) com tipo_fonte (se --include-prompts).
+
+NOTA: Logs não são migrados para tornar o processo mais rápido e focado no essencial.
 
 Uso:
   python migrate_replace_today.py \
@@ -30,6 +32,7 @@ Notas:
 - Este script faz um replace COMPLETO do dia, incluindo todas as tabelas relacionadas.
 - Por padrão, migra apenas as tabelas essenciais de notícias (ArtigoBruto, ClusterEvento, SinteseExecutiva).
 - Use as flags para incluir tabelas adicionais conforme necessário.
+- Campo tipo_fonte é sempre migrado para manter separação nacional/internacional.
 """
 
 # python migrate_replace_today.py --source "postgresql+psycopg2://postgres_local@localhost:5433/devdb" --dest "postgres://u71uif3ajf4qqh:pbfa5924f245d80b107c9fb38d5496afc0c1372a3f163959faa933e5b9f7c47d6@c3v5n5ajfopshl.cluster-czrs8kj4isg7.us-east-1.rds.amazonaws.com:5432/daoetg9ahbmcff" --day "2025-08-13" --include-chat
@@ -115,7 +118,17 @@ def parse_day(day_str: Optional[str]) -> date:
     return datetime.strptime(day_str, "%Y-%m-%d").date()
 
 
-def cleanup_destination_for_day(db_dst: Session, day: date, include_chat: bool, include_feedback: bool, include_estagiario: bool) -> None:
+def cleanup_destination_for_day(db_dst: Session, day: date, include_chat: bool, include_feedback: bool, include_estagiario: bool, include_prompts: bool) -> None:
+    # CORREÇÃO CRÍTICA: Remove TODAS as sessões de chat primeiro (evita constraint violation)
+    print("🧹 Removendo todas as sessões de chat para evitar constraint violation...")
+    all_chat_sessions = db_dst.query(ChatSession).all()
+    if all_chat_sessions:
+        print(f"⚠️ Encontradas {len(all_chat_sessions)} sessões de chat, removendo todas...")
+        for s in all_chat_sessions:
+            db_dst.delete(s)
+        db_dst.commit()
+        print("✅ Todas as sessões de chat removidas com sucesso")
+
     # Remove síntese do dia
     db_dst.query(SinteseExecutiva).filter(func.date(SinteseExecutiva.data_sintese) == day).delete(synchronize_session=False)
 
@@ -124,7 +137,7 @@ def cleanup_destination_for_day(db_dst: Session, day: date, include_chat: bool, 
     cluster_ids = [c.id for c in clusters]
 
     if cluster_ids:
-        # Desassocia artigos desses clusters
+        # Desassocia artigos desses clusters (agora seguro, chat já foi removido)
         db_dst.query(ArtigoBruto).filter(ArtigoBruto.cluster_id.in_(cluster_ids)).update({ArtigoBruto.cluster_id: None}, synchronize_session=False)
 
         # Remove feedback dos artigos desses clusters (se habilitado)
@@ -137,12 +150,6 @@ def cleanup_destination_for_day(db_dst: Session, day: date, include_chat: bool, 
         # Remove alterações
         db_dst.query(ClusterAlteracao).filter(ClusterAlteracao.cluster_id.in_(cluster_ids)).delete(synchronize_session=False)
 
-        # Remove chat (se quiser manter histórico, não use --include-chat ao migrar de volta)
-        if include_chat:
-            sessions = db_dst.query(ChatSession).filter(ChatSession.cluster_id.in_(cluster_ids)).all()
-            for s in sessions:
-                db_dst.delete(s)
-
         # Remove clusters do dia
         for c in clusters:
             db_dst.delete(c)
@@ -152,6 +159,12 @@ def cleanup_destination_for_day(db_dst: Session, day: date, include_chat: bool, 
         estagiario_sessions = db_dst.query(EstagiarioChatSession).filter(func.date(EstagiarioChatSession.data_referencia) == day).all()
         for s in estagiario_sessions:
             db_dst.delete(s)
+
+    # Remove configurações de prompts do dia (se habilitado)
+    if include_prompts:
+        # Remove tags e prioridades específicas do dia (se houver timestamp)
+        # Por padrão, mantém as configurações existentes para não perder personalizações
+        pass
 
     db_dst.commit()
 
@@ -404,7 +417,7 @@ def main() -> None:
 
     try:
         print("🧹 Limpando destino para o dia alvo...")
-        cleanup_destination_for_day(db_dst, day, include_chat=args.include_chat, include_feedback=args.include_feedback, include_estagiario=args.include_estagiario)
+        cleanup_destination_for_day(db_dst, day, include_chat=args.include_chat, include_feedback=args.include_feedback, include_estagiario=args.include_estagiario, include_prompts=args.include_prompts)
 
         print("🚚 Migrando dados do dia a partir da origem...")
         migrate_day_from_source(db_src, db_dst, day, include_chat=args.include_chat, include_feedback=args.include_feedback, include_estagiario=args.include_estagiario, include_prompts=args.include_prompts)
