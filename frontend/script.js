@@ -1234,8 +1234,8 @@ function renderizarFontes(fontes) {
                     <span>${icon} ${fonte.nome}</span>
                     ${fonte.titulo_original ? `<div class="fonte-titulo">📝 ${fonte.titulo_original}</div>` : ''}
                     ${fonteInfo.length > 0 ? `<div class="fonte-info">${fonteInfo.join(' | ')}</div>` : ''}
-                    <button class="btn btn-terciario" onclick="verArtigoBruto(${currentClusterId}, '${fonte.nome}')">
-                        📰 Ver Artigo Completo
+                    <button class="btn btn-terciario" onclick="verArtigoBruto(${currentClusterId}, '${fonte.nome.replace(/'/g, "\\'")}')">
+                        📖 Ler
                     </button>
                 `;
             } else {
@@ -3225,25 +3225,73 @@ async function verArtigoBruto(clusterId, fonteNome) {
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const data = await response.json();
-        
+
+        // Filtrar apenas o artigo da fonte específica
+        const todosArtigos = data.artigos || [];
+
+        // Matching exato primeiro
+        let artigosDaFonte = todosArtigos.filter(artigo =>
+            artigo.jornal === fonteNome ||
+            artigo.fonte === fonteNome
+        );
+
+        // Se não encontrou com matching exato, tentar parcial
+        if (artigosDaFonte.length === 0) {
+            artigosDaFonte = todosArtigos.filter(artigo =>
+                (artigo.jornal && artigo.jornal.includes(fonteNome)) ||
+                (artigo.fonte && artigo.fonte.includes(fonteNome))
+            );
+        }
+
+        // Se não encontrou nenhum artigo específico da fonte, mostrar todos (fallback)
+        if (artigosDaFonte.length === 0) {
+            console.log(`Nenhuma notícia específica encontrada para "${fonteNome}". Mostrando todas as notícias do cluster.`);
+            artigosDaFonte = todosArtigos;
+        }
+
+        // Preparar dados para o modal
+        const primeiroArtigo = artigosDaFonte[0] || {};
+        const tituloArtigo = primeiroArtigo.titulo || 'Sem título';
+
         // Cria modal para mostrar artigos brutos (usa classes padrão de modal)
         const modal = document.createElement('div');
         modal.className = 'modal-overlay';
         modal.innerHTML = `
             <div class="modal-container modal-large">
-                <button class="modal-close-btn" onclick="this.closest('.modal-overlay').remove()">&times;</button>
                 <div class="modal-header">
-                    <h3>📰 Artigos Brutos - ${fonteNome}</h3>
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                        <h3 style="margin: 0;">📰 Artigo Completo - ${fonteNome.replace(/'/g, "\\'")}</h3>
+                        <button class="btn btn-terciario" onclick="this.closest('.modal-overlay').remove()">← Voltar</button>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 0.5rem;">
+                        <h4 style="margin: 0; color: var(--cor-texto-secundario;">${tituloArtigo.replace(/'/g, "\\'")}</h4>
+                        <div style="font-size: 0.8rem; color: var(--cor-texto-secundario); opacity: 0.7;">
+                            ${artigosDaFonte.length} notícia${artigosDaFonte.length > 1 ? 's' : ''} encontrada${artigosDaFonte.length > 1 ? 's' : ''}
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-body">
                     <div class="artigos-brutos-container">
-                        ${data.artigos.map(artigo => `
+                        ${artigosDaFonte.map((artigo, index) => {
+                            const artigoId = `artigo_${index}_${Date.now()}`;
+                            return `
                             <div class="artigo-bruto-item">
-                                <h4>${artigo.titulo || 'Sem título'}</h4>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+                                    <h4 style="margin: 0; flex: 1;">${artigo.titulo || 'Sem título'}</h4>
+                                    <button class="btn btn-secundario btn-sm" onclick="copiarArtigoIndividual(event, '${artigoId}')" style="margin-left: 1rem; padding: 0.25rem 0.5rem; font-size: 0.8rem;">📋 Copiar</button>
+                                </div>
+                                <div id="${artigoId}_data" style="display: none;">
+                                    ${JSON.stringify({
+                                        titulo: artigo.titulo || 'Sem título',
+                                        fonte: artigo.jornal || artigo.fonte || 'Fonte desconhecida',
+                                        data: artigo.data_publicacao ? new Date(artigo.data_publicacao).toLocaleDateString('pt-BR') : 'Data não disponível',
+                                        texto: artigo.texto_completo || 'Texto não disponível'
+                                    }).replace(/"/g, '&quot;')}
+                                </div>
                                 <div class="artigo-meta">
-                                    <span class="jornal">📰 ${artigo.jornal || 'Fonte desconhecida'}</span>
+                                    <span class="jornal">📰 ${artigo.jornal || artigo.fonte || 'Fonte desconhecida'}</span>
                                     ${artigo.autor && artigo.autor !== 'N/A' ? `<span class="autor">✍️ ${artigo.autor}</span>` : ''}
                                     ${artigo.pagina && artigo.pagina !== 'N/A' ? `<span class="pagina">📄 ${artigo.pagina}</span>` : ''}
                                     ${artigo.data_publicacao ? `<span class="data">📅 ${new Date(artigo.data_publicacao).toLocaleDateString('pt-BR')}</span>` : ''}
@@ -3251,17 +3299,225 @@ async function verArtigoBruto(clusterId, fonteNome) {
                                 <div class="artigo-texto">
                                     <p>${artigo.texto_completo || 'Texto não disponível'}</p>
                                 </div>
-                            </div>
-                        `).join('')}
+                            </div>`;
+                        }).join('')}
                     </div>
                 </div>
             </div>
         `;
-        
+
         document.body.appendChild(modal);
-        
+
     } catch (error) {
         console.error('Erro ao carregar artigos brutos:', error);
         alert('Erro ao carregar artigos brutos: ' + error.message);
+    }
+}
+
+// =======================================
+// FUNÇÃO PARA REFORMATAR TEXTO DO JORNAL
+// =======================================
+function reformatarTextoJornal(texto) {
+    if (!texto) return '';
+
+    // Dividir em linhas
+    const linhas = texto.split('\n');
+
+    // Juntar linhas curtas (menos de 60 caracteres) que não terminam com pontuação
+    const linhasReformatadas = [];
+    let linhaAtual = '';
+
+    for (let i = 0; i < linhas.length; i++) {
+        const linha = linhas[i].trim();
+        const linhaLimpa = linha.replace(/\s+/g, ' '); // Normalizar espaços
+
+        // Se a linha está vazia ou é muito curta, pula
+        if (!linhaLimpa || linhaLimpa.length < 3) {
+            continue;
+        }
+
+        // Se é uma linha curta (provavelmente continuação) e linha anterior não termina com pontuação
+        if (linhaLimpa.length < 60 &&
+            linhaAtual &&
+            !/[.!?:;]$/.test(linhaAtual) &&
+            !linhaLimpa.match(/^[A-Z\s]+$/) && // Não é um cabeçalho em maiúsculo
+            !linhaLimpa.includes(':::') && // Não é separador
+            !linhaLimpa.match(/^\d/) && // Não começa com número
+            !linhaLimpa.includes('HUGO') && !linhaLimpa.includes('Por ') && !linhaLimpa.includes('por ')) { // Não é assinatura
+
+            linhaAtual += ' ' + linhaLimpa;
+        } else {
+            // Salvar linha anterior se existir
+            if (linhaAtual.trim()) {
+                linhasReformatadas.push(linhaAtual.trim());
+            }
+            linhaAtual = linhaLimpa;
+        }
+    }
+
+    // Adicionar última linha
+    if (linhaAtual.trim()) {
+        linhasReformatadas.push(linhaAtual.trim());
+    }
+
+    // Juntar tudo com quebras de linha apropriadas
+    return linhasReformatadas.join('\n\n');
+}
+
+// =======================================
+// FUNÇÃO PARA COPIAR ARTIGO INDIVIDUAL
+// =======================================
+async function copiarArtigoIndividual(event, artigoId) {
+    try {
+        // Buscar dados do artigo no elemento oculto
+        const dataElement = document.getElementById(artigoId + '_data');
+        if (!dataElement) {
+            console.error('Dados do artigo não encontrados:', artigoId);
+            alert('Erro: Dados do artigo não encontrados.');
+            return;
+        }
+
+        const artigoData = JSON.parse(dataElement.textContent);
+
+        // Reformatar o texto antes de copiar
+        const textoReformatado = reformatarTextoJornal(artigoData.texto);
+
+        const text = `*Título:* ${artigoData.titulo} / *Fonte:* ${artigoData.fonte} / ${artigoData.data}\n*Texto:* ${textoReformatado}`;
+
+        let success = false;
+
+        // 1) Tentar texto simples (alta compatibilidade)
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            try {
+                await navigator.clipboard.writeText(text);
+                success = true;
+            } catch (_) {}
+        }
+
+        // 2) Fallback para execCommand (mais antigo)
+        if (!success) {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            textArea.style.top = '-999999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+
+            try {
+                success = document.execCommand('copy');
+            } catch (_) {}
+
+            textArea.remove();
+        }
+
+        if (success) {
+            // Feedback visual simples no botão clicado
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = '✅ Copiado!';
+            btn.style.backgroundColor = '#28a745';
+            setTimeout(() => {
+                btn.textContent = originalText;
+                btn.style.backgroundColor = '';
+            }, 2000);
+        } else {
+            alert('Não foi possível copiar. Tente selecionar e copiar manualmente.');
+        }
+
+    } catch (error) {
+        console.error('Erro ao copiar artigo individual:', error);
+        alert('Erro ao copiar artigo: ' + error.message);
+    }
+}
+
+// =======================================
+// FUNÇÃO PARA COPIAR ARTIGOS FILTRADOS
+// =======================================
+async function copiarArtigosFiltrados(event, clusterId, fonteNome) {
+    try {
+        // Buscar dados do cluster novamente
+        const response = await fetch(`/api/cluster/${clusterId}/artigos`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const todosArtigos = data.artigos || [];
+
+        // Aplicar o mesmo filtro usado no modal
+        let artigosFiltrados = todosArtigos.filter(artigo =>
+            artigo.jornal === fonteNome ||
+            artigo.fonte === fonteNome ||
+            (artigo.jornal && artigo.jornal.includes(fonteNome)) ||
+            (artigo.fonte && artigo.fonte.includes(fonteNome))
+        );
+
+        // Fallback para todos os artigos se nenhum foi encontrado
+        if (artigosFiltrados.length === 0) {
+            artigosFiltrados = todosArtigos;
+        }
+
+        let text = '';
+        artigosFiltrados.forEach((artigo, index) => {
+            const titulo = artigo.titulo || 'Sem título';
+            const fonte = artigo.jornal || artigo.fonte || 'Fonte desconhecida';
+            const dataStr = artigo.data_publicacao ?
+                new Date(artigo.data_publicacao).toLocaleDateString('pt-BR') : 'Data não disponível';
+            const texto = artigo.texto_completo || 'Texto não disponível';
+
+            text += `*ARTIGO ${index + 1}:*\n`;
+            text += `*Título:* ${titulo} / *Fonte:* ${fonte} / ${dataStr}\n`;
+            text += `*Texto:* ${texto}\n\n`;
+        });
+
+        let success = false;
+
+        // 1) Tentar texto simples (alta compatibilidade)
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            try {
+                await navigator.clipboard.writeText(text);
+                success = true;
+            } catch (_) {}
+        }
+
+        // 2) Fallback para execCommand (mais antigo)
+        if (!success) {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            textArea.style.top = '-999999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+
+            try {
+                success = document.execCommand('copy');
+            } catch (_) {}
+
+            textArea.remove();
+        }
+
+        if (success) {
+            // Feedback visual simples
+            if (event && event.target) {
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = '✅ Copiado!';
+                btn.style.backgroundColor = '#28a745';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.style.backgroundColor = '';
+                }, 2000);
+            }
+        } else {
+            alert('Não foi possível copiar. Tente selecionar e copiar manualmente.');
+        }
+
+    } catch (error) {
+        console.error('Erro ao copiar:', error);
+        alert('Erro ao copiar: ' + error.message);
     }
 }

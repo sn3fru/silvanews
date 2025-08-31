@@ -1081,18 +1081,31 @@ Identifique a 'centelha' da notícia: qual é a oportunidade de negócio ou o ri
 --- GUIA DE TAGS E CATEGORIAS ---
 {GUIA_TAGS_FORMATADO}
 
-**ETAPA 4: SÍNTESE DO RESUMO EXECUTIVO**
-Agora, usando TODAS as informações das notícias que você julgou PERTINENTES na Etapa 1, crie o resumo final.
-- **PÚBLICO-ALVO:** O leitor é um executivo do BTG Pactual. Vá direto ao ponto. Comece com a informação mais impactante para que ele possa decidir rapidamente se aprofunda na leitura.
-- **ESTILO:** Seja denso e informativo. Combine dados de todas as fontes para criar uma visão completa. Você pode adicionar um leve juízo de valor sobre a relevância para a área de Special Situations (ex: "Isso representa uma oportunidade de arbitragem..." ou "Este movimento aumenta o risco de crédito para o setor...").
-- **EXEMPLO DE TOM E ESTRUTURA (MODELO A SEGUIR):**
-  "**Título:** Decisões e debates no sistema judiciário brasileiro
-   **Resumo:** O judiciário brasileiro teve desenvolvimentos cruciais em 5 e 6 de agosto de 2025. O STJ agilizou a recuperação de créditos ao permitir a venda direta de bens fiduciários e anulou assembleias de Recuperação Judicial com aditivos de última hora, reforçando a transparência. No âmbito tributário, a PGFN ampliou a dispensa de garantia para dívidas fiscais, enquanto o STJ rejeitou a prescrição intercorrente em processos administrativos fiscais..."
-- **NÍVEL DE DETALHE:** Ajuste o tamanho do resumo com base na prioridade que você atribuiu na Etapa 3:
-  - **P1_CRITICO:** Resumo detalhado (5-8 linhas).
-  - **P2_ESTRATEGICO:** Resumo padrão (3-5 linhas). Titulo precisa passar a ideia rapidamente para o humano ver se vai ler a noticia ou nao.
-  - **P3_MONITORAMENTO:** Resumo conciso (1-2 frases (preferencialmente em uma linha)). Titulo mais curto, umas 3~4 palavras, que apenas serve para o humano ver se vai ler a noticia ou nao, mas aqui o titulo já faz parte do resumo, o resumo é uma continuacao do titulo, nao repita.
+**ETAPA 4: GERAÇÃO DO TÍTULO E RESUMO (SEGUINDO REGRAS RÍGIDAS DE FORMATAÇÃO)**
+Com base na prioridade definida na Etapa 3, você DEVE formatar os campos "titulo" e "resumo_final" de acordo com as seguintes regras EXCLUSIVAS para cada nível.
 
+--------------------------------------------------------------------------------
+REGRAS DE FORMATAÇÃO POR PRIORIDADE:
+--------------------------------------------------------------------------------
+- **SE a prioridade for `P1_CRITICO`:**
+  - **Título:** Crie um título informativo e completo que capture a essência do evento.
+  - **Resumo:** Elabore um resumo detalhado com 5 a 8 linhas. É permitido usar múltiplos parágrafos para estruturar a análise, detalhando o contexto, os players, os valores e as implicações estratégicas. O foco é a profundidade.
+
+- **SE a prioridade for `P2_ESTRATEGICO`:**
+  - **Título:** Crie um título claro e direto que permita ao leitor entender o tema rapidamente.
+  - **Resumo:** Elabore um único parágrafo denso e informativo com 3 a 5 linhas, sintetizando os fatos mais importantes. Este é o formato padrão.
+
+- **SE a prioridade for `P3_MONITORAMENTO`:**
+  - **LÓGICA ESPECIAL:** O título e o resumo devem formar uma única frase contínua.
+  - **Passo A:** Primeiro, escreva a frase de resumo completa, com 1 ou 2 sentenças no máximo. (Ex: "FED vai aumentar a taxa de juros em 0.25% no próximo mês devido à inflação persistente.")
+  - **Passo B:** Pegue as 3 a 4 primeiras palavras dessa frase para criar o `titulo`. (Ex: "FED vai aumentar juros")
+  - **Passo C:** Use o restante da frase como o `resumo_final`, sem repetir as palavras do título. (Ex: "em 0.25% no próximo mês devido à inflação persistente.")
+
+- **SE a prioridade for `IRRELEVANTE`:**
+  - **Título:** Use um título que descreva o motivo da rejeição (Ex: "Notícia sobre Esportes", "Conteúdo Publicitário").
+  - **Resumo:** Use a justificativa da rejeição como resumo.
+
+  
 <<< FORMATO DE SAÍDA OBRIGATÓRIO (JSON PURO) >>>
 Sua resposta final DEVE ser um ÚNICO objeto JSON, sem markdown (```json), comentários ou qualquer texto adicional.
 ```json
