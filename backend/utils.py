@@ -191,47 +191,78 @@ def extrair_json_da_resposta(resposta: str) -> Any:
     que pode estar envolto em markdown, texto solto ou ser truncado.
     Inclui depuração detalhada em caso de falha.
     """
+    import logging
+    logger = logging.getLogger(__name__)
+
     # ETAPA 0: Validação inicial da resposta
     if not isinstance(resposta, str) or not resposta.strip():
-        print("❌ Erro ao extrair JSON: A resposta recebida da API está vazia ou não é uma string.")
+        logger.error("❌ Erro ao extrair JSON: A resposta recebida da API está vazia ou não é uma string.")
         return None
+
+    logger.debug(f"🔍 Processando resposta do LLM (comprimento: {len(resposta)} chars)")
 
     json_str = ""
-    # ETAPA 1: Tenta encontrar um bloco de código JSON explícito (```json ... ```)
-    match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', resposta, re.DOTALL)
+
+    # ETAPA 1: Primeiro tenta encontrar JSON puro sem markdown
+    # Procura por {"chave": "valor"} ou similares
+    json_pattern = r'\{[^{}]*"resumo_expandido"[^{}]*\}'
+    match = re.search(json_pattern, resposta, re.DOTALL)
     if match:
-        json_str = match.group(1).strip()
+        json_str = match.group(0).strip()
+        logger.debug("✅ Encontrou JSON puro na resposta")
     else:
-        # ETAPA 2 (Fallback): Se não houver bloco de código, busca o primeiro '[' ou '{'
-        start_bracket = resposta.find('[')
-        start_brace = resposta.find('{')
-        
-        start = -1
-        if start_bracket != -1 and (start_bracket < start_brace or start_brace == -1):
-            start = start_bracket
-        elif start_brace != -1:
-            start = start_brace
-
-        if start != -1:
-            json_str = resposta[start:].strip()
+        # ETAPA 2: Tenta encontrar um bloco de código JSON explícito (```json ... ```)
+        match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', resposta, re.DOTALL)
+        if match:
+            json_str = match.group(1).strip()
+            logger.debug("✅ Encontrou bloco JSON markdown na resposta")
         else:
-            print("❌ Erro ao extrair JSON: Nenhum marcador de início ('[' ou '{') foi encontrado.")
-            print("📋 RESPOSTA COMPLETA DA API (para depuração):")
-            print("-" * 50)
-            print(resposta)
-            print("-" * 50)
-            return None
+            # ETAPA 3 (Fallback): Se não houver bloco de código, busca o primeiro '{'
+            start_brace = resposta.find('{')
+            if start_brace != -1:
+                # Procura pelo fim do objeto JSON (conta chaves)
+                json_str = resposta[start_brace:].strip()
+                logger.debug("✅ Usando fallback - procurando '{' na resposta")
+            else:
+                logger.error("❌ Erro ao extrair JSON: Nenhum marcador de início ('{') foi encontrado.")
+                logger.error("📋 RESPOSTA COMPLETA DA API (para depuração):")
+                logger.error("-" * 50)
+                logger.error(resposta)
+                logger.error("-" * 50)
+                return None
 
-    # ETAPA 3: Tenta decodificar o JSON extraído
+    # ETAPA 4: Limpa a string JSON (remove caracteres extras)
+    json_str = json_str.strip()
+
+    # Remove caracteres estranhos no início/fim se houver
+    if json_str.startswith('```'):
+        json_str = json_str[3:]
+    if json_str.endswith('```'):
+        json_str = json_str[:-3]
+    json_str = json_str.strip()
+
+    # ETAPA 5: Tenta decodificar o JSON extraído
     try:
-        return json.loads(json_str)
+        parsed = json.loads(json_str)
+        logger.debug("✅ JSON decodificado com sucesso")
+        return parsed
     except json.JSONDecodeError as e:
-        print(f"❌ Erro ao decodificar JSON: {e}")
-        print(f"📋 String que tentou decodificar:")
-        print("-" * 50)
-        print(json_str)
-        print("-" * 50)
-        return None
+        logger.error(f"❌ Erro ao decodificar JSON: {e}")
+        logger.error("📋 String que tentou decodificar:")
+        logger.error("-" * 50)
+        logger.error(repr(json_str))  # Usando repr para mostrar caracteres especiais
+        logger.error("-" * 50)
+
+        # TENTA 6: Último recurso - tenta corrigir problemas comuns
+        try:
+            # Remove aspas simples incorretas e substitui por duplas
+            corrected = json_str.replace("'", '"')
+            parsed = json.loads(corrected)
+            logger.warning("⚠️ JSON corrigido automaticamente (aspas simples -> duplas)")
+            return parsed
+        except:
+            logger.error("❌ Falha mesmo na correção automática")
+            return None
 
 
 def verificar_dependencias():

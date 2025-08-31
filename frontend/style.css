@@ -404,6 +404,83 @@ button:disabled {
 /* Tooltip simples em hover mostrando "Desativado" - via title já funciona nativo.
    Para garantir feedback visual, manter o cursor not-allowed acima. */
 
+/* Estado de loading para botões */
+.btn.loading {
+    position: relative;
+    color: transparent !important;
+}
+.btn.loading::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    top: 50%;
+    left: 50%;
+    margin-left: -8px;
+    margin-top: -8px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top: 2px solid #ffffff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Indicador de carregamento melhorado */
+.loading-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    color: var(--cor-texto-secundario);
+    font-style: italic;
+}
+
+.loading-indicator i {
+    margin-right: 0.5rem;
+}
+
+/* Melhorias para notificações de erro */
+.error-message {
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    margin: 0.5rem 0;
+    display: flex;
+    align-items: center;
+    font-weight: 500;
+}
+
+.error-message::before {
+    content: '⚠️';
+    margin-right: 0.5rem;
+    font-size: 1.1em;
+}
+
+/* Notificações de sucesso melhoradas */
+.success-message {
+    background-color: #d1e7dd;
+    border: 1px solid #badbcc;
+    color: #0f5132;
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    margin: 0.5rem 0;
+    display: flex;
+    align-items: center;
+    font-weight: 500;
+}
+
+.success-message::before {
+    content: '✅';
+    margin-right: 0.5rem;
+    font-size: 1.1em;
+}
+
 /* ======================================= */
 /* MODAL DEEP DIVE                         */
 /* ======================================= */

@@ -150,6 +150,15 @@ async def serve_root_index():
     with open(index_path, "r", encoding="utf-8") as f:
         return HTMLResponse(content=f.read(), status_code=200)
 
+@app.get("/api/health")
+async def health_check():
+    """Endpoint simples de health check para verificar se o servidor está funcionando."""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "service": "btg-alphafeed-backend"
+    }
+
 # Removido catch-all para não interferir nas rotas /api
 
 
@@ -506,41 +515,108 @@ async def expandir_resumo_cluster(cluster_id: int, db: Session = Depends(get_db)
     Gera um resumo expandido (2-3 parágrafos) a partir dos textos brutos do cluster e
     atualiza o campo `resumo_cluster` do cluster.
     """
+    import logging
+    logger = logging.getLogger(__name__)
+
     try:
+        logger.info(f"🔄 Iniciando expansão de resumo para cluster {cluster_id}")
+
         textos_originais = get_textos_brutos_por_cluster_id(db, cluster_id)
         if not textos_originais:
+            logger.warning(f"⚠️ Cluster {cluster_id} não encontrado ou sem artigos")
             raise HTTPException(status_code=404, detail="Cluster não encontrado ou sem artigos.")
 
-        try:
-            from .prompts import PROMPT_RESUMO_EXPANDIDO_V1 as _PROMPT
-        except Exception:
-            from backend.prompts import PROMPT_RESUMO_EXPANDIDO_V1 as _PROMPT
+        # Tenta primeiro com o prompt principal
+        resumo_novo = None
+        tentativas = 0
+        max_tentativas = 2
 
-        payload_text = json.dumps(textos_originais, ensure_ascii=False, indent=2)
-        prompt_text = _PROMPT.format(TEXTOS_ORIGINAIS_DO_CLUSTER=payload_text)
+        while tentativas < max_tentativas and not resumo_novo:
+            tentativas += 1
+            logger.info(f"🔄 Tentativa {tentativas} de geração de resumo")
 
-        model = get_gemini_model()
-        response = model.generate_content(prompt_text)
-        resposta_texto = getattr(response, 'text', None) or ""
+            try:
+                if tentativas == 1:
+                    # Primeira tentativa com prompt JSON estruturado
+                    try:
+                        from .prompts import PROMPT_RESUMO_EXPANDIDO_V1 as _PROMPT
+                    except Exception:
+                        from backend.prompts import PROMPT_RESUMO_EXPANDIDO_V1 as _PROMPT
+                else:
+                    # Segunda tentativa com prompt fallback mais simples
+                    logger.warning("⚠️ Usando prompt de fallback na tentativa 2")
+                    try:
+                        from .prompts import PROMPT_RESUMO_EXPANDIDO_FALLBACK as _PROMPT
+                    except Exception:
+                        from backend.prompts import PROMPT_RESUMO_EXPANDIDO_FALLBACK as _PROMPT
 
-        dados = extrair_json_da_resposta(resposta_texto) or {}
-        resumo_novo = dados.get('resumo_expandido') if isinstance(dados, dict) else None
+                payload_text = json.dumps(textos_originais, ensure_ascii=False, indent=2)
+                prompt_text = _PROMPT.format(TEXTOS_ORIGINAIS_DO_CLUSTER=payload_text)
+
+                logger.debug(f"📝 Prompt preparado (tamanho: {len(prompt_text)} chars)")
+
+                model = get_gemini_model()
+                logger.debug("🤖 Fazendo chamada para Gemini API")
+
+                response = model.generate_content(prompt_text)
+                resposta_texto = getattr(response, 'text', None) or ""
+
+                logger.debug(f"📄 Resposta do LLM recebida (tamanho: {len(resposta_texto)} chars)")
+
+                if tentativas == 1:
+                    # Primeira tentativa espera JSON
+                    dados = extrair_json_da_resposta(resposta_texto) or {}
+                    resumo_novo = dados.get('resumo_expandido') if isinstance(dados, dict) else None
+                else:
+                    # Fallback usa texto puro
+                    resumo_novo = resposta_texto.strip() if resposta_texto.strip() else None
+
+                if resumo_novo:
+                    logger.info(f"✅ Resumo gerado com sucesso na tentativa {tentativas}")
+                    break
+                else:
+                    logger.warning(f"⚠️ Tentativa {tentativas} falhou - resposta vazia ou inválida")
+                    if tentativas < max_tentativas:
+                        logger.info("⏳ Aguardando 2 segundos antes da próxima tentativa...")
+                        import time
+                        time.sleep(2)  # Pequena pausa entre tentativas
+
+            except Exception as tentativa_error:
+                logger.error(f"💥 Erro na tentativa {tentativas}: {str(tentativa_error)}")
+                if tentativas < max_tentativas:
+                    logger.info("⏳ Aguardando 2 segundos antes da próxima tentativa...")
+                    import time
+                    time.sleep(2)
+
         if not resumo_novo:
-            raise HTTPException(status_code=500, detail="Falha ao gerar resumo expandido a partir da resposta do LLM.")
+            # Log detalhado da última resposta quando todas as tentativas falham
+            logger.error("❌ Todas as tentativas de geração de resumo falharam")
+            logger.error("📋 ÚLTIMA RESPOSTA DO LLM:")
+            logger.error("-" * 80)
+            logger.error(resposta_texto if 'resposta_texto' in locals() else "Nenhuma resposta recebida")
+            logger.error("-" * 80)
+
+            raise HTTPException(status_code=500, detail="Falha ao gerar resumo expandido após múltiplas tentativas.")
+
+        logger.info(f"✅ Resumo expandido gerado com sucesso (tamanho: {len(resumo_novo)} chars)")
 
         cluster = get_cluster_by_id(db, cluster_id)
         if not cluster:
+            logger.warning(f"⚠️ Cluster {cluster_id} não encontrado para atualização")
             raise HTTPException(status_code=404, detail="Cluster não encontrado")
+
         cluster.resumo_cluster = resumo_novo
         cluster.updated_at = datetime.utcnow()
         db.commit()
 
+        logger.info(f"💾 Resumo salvo no banco para cluster {cluster_id}")
         return {"resumo_expandido": resumo_novo}
 
     except HTTPException:
         raise
     except Exception as e:
-        create_log(db, "ERROR", "api", f"Erro em expandir-resumo: {e}")
+        logger.error(f"💥 Erro inesperado em expandir-resumo para cluster {cluster_id}: {str(e)}", exc_info=True)
+        create_log(db, "ERROR", "api", f"Erro em expandir-resumo cluster {cluster_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Erro na geração do resumo expandido: {str(e)}")
 
 @app.post("/internal/processar-artigo")

@@ -4,6 +4,20 @@
 const API_BASE = window.location.origin; // Usa o mesmo domínio da aplicação
 
 // =======================================
+// CONFIGURAÇÃO DE CONFIABILIDADE
+// =======================================
+const EXPAND_CONFIG = {
+    MAX_RETRIES: 3,
+    RETRY_DELAY: 1000, // ms
+    BACKOFF_MULTIPLIER: 2,
+    REQUEST_TIMEOUT: 30000, // 30 segundos
+    CONNECTION_CHECK_TIMEOUT: 5000 // 5 segundos para verificar conectividade
+};
+
+// Cache para evitar chamadas desnecessárias
+const expandCache = new Map();
+
+// =======================================
 // REFERÊNCIAS AOS ELEMENTOS DO DOM
 // =======================================
 // Seletor de Data
@@ -1228,7 +1242,7 @@ function renderizarFontes(fontes) {
             if (fonte.tipo === 'pdf' || !fonte.url) {
                 const fonteInfo = [];
                 if (fonte.autor && fonte.autor !== 'N/A') fonteInfo.push(`✍️ ${fonte.autor}`);
-                if (fonte.pagina && fonte.pagina !== 'N/A') fonteInfo.push(`📄 Página ${fonte.pagina}`);
+                // Removido: informação de página
                 
                 li.innerHTML = `
                     <span>${icon} ${fonte.nome}</span>
@@ -1254,50 +1268,266 @@ function renderizarFontes(fontes) {
     }
 }
 
-async function expandirResumo(clusterId, summaryElement, buttonElement) {
+// =======================================
+// FUNÇÕES DE EXPANSÃO DE RESUMO
+// =======================================
+
+/**
+ * Verifica se o servidor backend está acessível
+ */
+async function verificarConectividade() {
     try {
-        if (!clusterId) return;
-        if (!summaryElement) return;
-        const btn = buttonElement || document.querySelector(`.btn-expand-summary[data-cluster-id="${clusterId}"]`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), EXPAND_CONFIG.CONNECTION_CHECK_TIMEOUT);
+
+        const response = await fetch(`${API_BASE}/api/health`, {
+            method: 'GET',
+            signal: controller.signal,
+            headers: { 'Cache-Control': 'no-cache' }
+        });
+
+        clearTimeout(timeoutId);
+        return response.ok;
+    } catch (error) {
+        console.warn('Conectividade com backend falhou:', error.message);
+        return false;
+    }
+}
+
+/**
+ * Função fetch com timeout e tratamento de erros robusto
+ */
+async function fetchWithTimeout(url, options = {}) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), EXPAND_CONFIG.REQUEST_TIMEOUT);
+
+    try {
+        const response = await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        return response;
+    } catch (error) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+            throw new Error('TIMEOUT: Requisição excedeu o tempo limite');
+        }
+        throw error;
+    }
+}
+
+/**
+ * Sistema de retry com backoff exponencial
+ */
+async function retryWithBackoff(fn, maxRetries = EXPAND_CONFIG.MAX_RETRIES) {
+    let lastError;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            return await fn();
+        } catch (error) {
+            lastError = error;
+
+            // Não fazer retry para erros específicos
+            if (error.message.includes('404') ||
+                error.message.includes('403') ||
+                error.message.includes('401') ||
+                error.message.includes('Cluster não encontrado')) {
+                throw error;
+            }
+
+            // Última tentativa falhou
+            if (attempt === maxRetries) {
+                break;
+            }
+
+            // Calcular delay com backoff exponencial + jitter
+            const baseDelay = EXPAND_CONFIG.RETRY_DELAY * Math.pow(EXPAND_CONFIG.BACKOFF_MULTIPLIER, attempt);
+            const jitter = Math.random() * 0.3 * baseDelay; // ±30% de variação
+            const delay = baseDelay + jitter;
+
+            console.warn(`Tentativa ${attempt + 1} falhou. Tentando novamente em ${Math.round(delay)}ms...`, error.message);
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
+
+    throw lastError;
+}
+
+/**
+ * Obtém mensagem de erro amigável baseada no tipo de erro
+ */
+function getErrorMessage(error) {
+    const errorMsg = error.message || '';
+
+    if (errorMsg.includes('Failed to fetch') || errorMsg.includes('ERR_CONNECTION_REFUSED')) {
+        return 'Servidor indisponível. Verifique sua conexão e tente novamente.';
+    }
+
+    if (errorMsg.includes('TIMEOUT')) {
+        return 'Tempo limite excedido. O servidor pode estar sobrecarregado.';
+    }
+
+    if (errorMsg.includes('404')) {
+        return 'Conteúdo não encontrado.';
+    }
+
+    if (errorMsg.includes('500')) {
+        return 'Erro interno do servidor. Tente novamente em alguns instantes.';
+    }
+
+    if (errorMsg.includes('Cluster não encontrado')) {
+        return 'Notícia não encontrada.';
+    }
+
+    return 'Erro inesperado. Tente novamente.';
+}
+
+/**
+ * Limpa o cache de expansão de resumos (útil para debugging ou refresh forçado)
+ */
+function limparCacheExpansao() {
+    expandCache.clear();
+    console.log('Cache de expansão de resumos limpo');
+}
+
+/**
+ * Obtém estatísticas do cache de expansão
+ */
+function getCacheStats() {
+    const stats = {
+        total: expandCache.size,
+        entries: []
+    };
+
+    for (const [key, value] of expandCache.entries()) {
+        stats.entries.push({
+            clusterId: key.replace('expand_', ''),
+            timestamp: new Date(value.timestamp).toLocaleString(),
+            hasData: !!value.resumo_expandido
+        });
+    }
+
+    return stats;
+}
+
+async function expandirResumo(clusterId, summaryElement, buttonElement) {
+    // Validação inicial
+    if (!clusterId || !summaryElement) {
+        console.warn('Parâmetros inválidos para expandirResumo:', { clusterId, summaryElement });
+        return;
+    }
+
+    // Verificar cache primeiro
+    const cacheKey = `expand_${clusterId}`;
+    if (expandCache.has(cacheKey)) {
+        const cachedData = expandCache.get(cacheKey);
+        if (cachedData && cachedData.resumo_expandido) {
+            console.log('Usando dados em cache para cluster', clusterId);
+            summaryElement.innerHTML = String(cachedData.resumo_expandido).replace(/\n/g, '<br>');
+            const btn = buttonElement || document.querySelector(`.btn-expand-summary[data-cluster-id="${clusterId}"]`);
+            if (btn) btn.style.display = 'none';
+            return;
+        }
+    }
+
+    const btn = buttonElement || document.querySelector(`.btn-expand-summary[data-cluster-id="${clusterId}"]`);
+    const originalContent = summaryElement.innerHTML;
+
+    try {
+        // Verificar conectividade antes de tentar
+        const isConnected = await verificarConectividade();
+        if (!isConnected) {
+            throw new Error('ERR_CONNECTION_REFUSED');
+        }
+
+        // Atualizar UI para estado de carregamento
         if (btn) {
             btn.disabled = true;
             btn.textContent = 'Expandindo...';
+            btn.classList.add('loading');
         }
-        const original = summaryElement.innerHTML;
-        summaryElement.innerHTML = '<i>Gerando resumo detalhado, por favor aguarde...</i>';
+        summaryElement.innerHTML = '<div class="loading-indicator"><i>🔄 Gerando resumo detalhado, por favor aguarde...</i></div>';
 
-        const response = await fetch(`/api/clusters/${clusterId}/expandir-resumo`, { method: 'POST' });
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-        const data = await response.json();
-        const novo = (data && data.resumo_expandido) ? data.resumo_expandido : null;
-        if (!novo) throw new Error('Resposta inválida');
+        // Função de requisição com retry
+        const makeRequest = async () => {
+            const response = await fetchWithTimeout(`${API_BASE}/api/clusters/${clusterId}/expandir-resumo`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Cache-Control': 'no-cache'
+                }
+            });
 
-        summaryElement.innerHTML = String(novo).replace(/\n/g, '<br>');
+            if (!response.ok) {
+                const errorText = await response.text().catch(() => '');
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
 
-        // Atualiza cache local, se existir
+            const data = await response.json();
+            const novo = (data && data.resumo_expandido) ? data.resumo_expandido : null;
+            if (!novo) throw new Error('Resposta inválida: resumo_expandido não encontrado');
+
+            return novo;
+        };
+
+        // Executar com retry
+        const novoResumo = await retryWithBackoff(makeRequest);
+
+        // Sucesso: atualizar UI
+        summaryElement.innerHTML = String(novoResumo).replace(/\n/g, '<br>');
+
+        // Salvar no cache
+        expandCache.set(cacheKey, {
+            resumo_expandido: novoResumo,
+            timestamp: Date.now()
+        });
+
+        // Atualizar cache local dos clusters
         try {
             const idx = (clustersCarregados || []).findIndex(c => String(c.id) === String(clusterId));
             if (idx >= 0) {
-                clustersCarregados[idx].resumo_final = novo;
+                clustersCarregados[idx].resumo_final = novoResumo;
             }
-        } catch (_) {}
+        } catch (cacheError) {
+            console.warn('Erro ao atualizar cache local:', cacheError);
+        }
 
+        // Esconder botão após sucesso
         if (btn) {
             btn.style.display = 'none';
+            btn.classList.remove('loading');
         }
-        showNotification('Resumo expandido com sucesso', 'success');
+
+        showNotification('✅ Resumo expandido com sucesso', 'success');
+
     } catch (err) {
-        console.error('Falha ao expandir resumo', err);
-        if (summaryElement && typeof original !== 'undefined') {
-            summaryElement.innerHTML = original;
+        console.error('❌ Falha ao expandir resumo:', err);
+
+        // Restaurar conteúdo original
+        if (summaryElement) {
+            summaryElement.innerHTML = originalContent;
         }
-        showErrorMessage('Não foi possível expandir o resumo agora');
-        if (buttonElement) {
-            buttonElement.disabled = false;
-            buttonElement.textContent = 'Expandir';
+
+        // Resetar botão
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Expandir';
+            btn.classList.remove('loading');
         }
+
+        // Mostrar mensagem de erro específica
+        const errorMessage = getErrorMessage(err);
+        showErrorMessage(`🚫 ${errorMessage}`);
+
+        // Log detalhado para debugging
+        console.error('Detalhes do erro:', {
+            clusterId,
+            error: err.message,
+            stack: err.stack,
+            timestamp: new Date().toISOString()
+        });
     }
 }
 

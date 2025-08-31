@@ -910,30 +910,40 @@ ENTRADA (CLUSTERS DO DIA PARA ANÁLISE):
 """
 
 PROMPT_RESUMO_EXPANDIDO_V1 = """
-Você é um Editor-Chefe de um grande jornal de negócios. Sua tarefa é receber um conjunto de reportagens brutas de diferentes jornalistas (representadas abaixo como uma lista de textos) que cobrem o mesmo evento. Sua missão é sintetizar todas essas informações em uma única matéria coesa, bem estruturada e detalhada, com 2 a 3 parágrafos.
+Você é um redator sênior de jornalismo econômico. Receba os textos de várias fontes sobre o mesmo evento e crie um resumo jornalístico coeso de 2-3 parágrafos.
 
-**DIRETRIZES editoriais OBRIGATÓRIAS:**
+**INSTRUÇÕES:**
+1. Leia TODAS as fontes fornecidas
+2. Sintetize a informação em uma narrativa única e fluida
+3. Mantenha tom neutro e factual
+4. Foque nos fatos essenciais: quem, o que, quando, onde, como, por quê
+5. Inclua dados específicos (valores, nomes, datas) das fontes
 
-1.  **PERSONA E TOM:** Aja estritamente como um jornalista experiente e imparcial. Não emita juízo de valor, opiniões ou conselhos de investimento (ex: "isso é uma oportunidade..."). Seu tom deve ser puramente informativo, factual e neutro.
-
-2.  **SÍNTESE, NÃO CÓPIA:** Não junte os textos. Leia todas as fontes, entenda a história completa e reescreva-a com suas próprias palavras, como se estivesse criando a versão definitiva da matéria para o jornal. Combine informações de diferentes fontes para enriquecer a narrativa. Por exemplo, se uma fonte cita um valor e outra fonte explica o motivo, una essas duas informações em uma única frase fluida.
-
-3.  **ESTRUTURA NARRATIVA:** Organize o resumo de forma lógica:
-    * **Primeiro Parágrafo:** Apresente o fato gerador principal. Responda às perguntas essenciais: Quem? O quê? Quando? Onde? Por quê?
-    * **Parágrafos Seguintes:** Detalhe o contexto, os desdobramentos, as diferentes perspectivas apresentadas nas fontes, e as implicações diretas do evento (ex: reações do mercado, próximos passos legais, etc.). Use este espaço para aprofundar a informação.
-
-4.  **FOCO NA INFORMAÇÃO COMPLETA:** Seu objetivo é criar um resumo que dispense a leitura dos artigos originais para quem busca um entendimento aprofundado. Inclua nomes de pessoas, empresas, valores, datas e outros dados específicos mencionados nas fontes.
-
-**DADOS BRUTOS PARA ANÁLISE (LISTA DE NOTÍCIAS):**
+**FONTES PARA ANÁLISE:**
 {TEXTOS_ORIGINAIS_DO_CLUSTER}
 
-**FORMATO DE SAÍDA OBRIGATÓRIO (JSON PURO):**
-Sua resposta DEVE ser um único objeto JSON, contendo apenas o texto do resumo expandido.
-```json
-{{
-  "resumo_expandido": "Seu texto jornalístico de 2 a 3 parágrafos aqui, sintetizando todas as fontes fornecidas."
-}}
-```
+**IMPORTANTE:**
+- Responda APENAS com JSON puro
+- NÃO use blocos de código markdown
+- NÃO adicione texto antes ou depois do JSON
+
+**FORMATO EXATO (copie exatamente):**
+{"resumo_expandido": "Texto do seu resumo jornalístico aqui, com 2-3 parágrafos detalhados."}
+"""
+
+# Fallback mais simples para casos onde o prompt principal falha
+PROMPT_RESUMO_EXPANDIDO_FALLBACK = """
+Crie um resumo jornalístico de 2-3 parágrafos baseado nos textos fornecidos.
+
+TEXTOS:
+{TEXTOS_ORIGINAIS_DO_CLUSTER}
+
+INSTRUÇÕES:
+- Sintetize as informações principais
+- Mantenha tom factual e neutro
+- Foque nos fatos essenciais
+
+Responda apenas com o texto do resumo, sem JSON ou formatação especial.
 """
 
 PROMPT_EXTRACAO_FONTE = """
