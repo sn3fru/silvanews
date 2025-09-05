@@ -1372,14 +1372,37 @@ def agrupar_noticias_incremental(db: Session, client, day_str: Optional[str] = N
         
         print(f"🔗 AGRUPAMENTO INCREMENTAL: {len(artigos_novos)} notícias novas, {len(clusters_existentes)} clusters existentes")
 
-        # NUNCA misturar tipos: separamos artigos e clusters por tipo_fonte
-        artigos_novos_nac = [a for a in artigos_novos if getattr(a, 'tipo_fonte', 'nacional') != 'internacional']
-        artigos_novos_int = [a for a in artigos_novos if getattr(a, 'tipo_fonte', 'nacional') == 'internacional']
-        clusters_existentes_nac = [c for c in clusters_existentes if getattr(c, 'tipo_fonte', 'nacional') != 'internacional']
-        clusters_existentes_int = [c for c in clusters_existentes if getattr(c, 'tipo_fonte', 'nacional') == 'internacional']
+        # SEPARAÇÃO POR TRÊS TIPOS: Brasil Físico, Brasil Online, Internacional
+        def _get_tipo_fonte_normalizado(obj):
+            """Normaliza tipo_fonte para garantir compatibilidade"""
+            tipo = getattr(obj, 'tipo_fonte', 'brasil_fisico')
+            # Retrocompatibilidade com sistema antigo
+            if tipo == 'nacional':
+                return 'brasil_fisico'  # Default para PDFs
+            elif tipo in ('brasil_fisico', 'brasil_online', 'internacional'):
+                return tipo
+            else:
+                return 'brasil_fisico'  # Default seguro
         
-        # CORREÇÃO: Log mais preciso mostrando clusters por tipo
-        print(f"🔗 CLUSTERS POR TIPO: {len(clusters_existentes_nac)} nacionais, {len(clusters_existentes_int)} internacionais")
+        # Separação mais granular
+        artigos_brasil_fisico = [a for a in artigos_novos if _get_tipo_fonte_normalizado(a) == 'brasil_fisico']
+        artigos_brasil_online = [a for a in artigos_novos if _get_tipo_fonte_normalizado(a) == 'brasil_online']
+        artigos_internacional = [a for a in artigos_novos if _get_tipo_fonte_normalizado(a) == 'internacional']
+        
+        clusters_brasil_fisico = [c for c in clusters_existentes if _get_tipo_fonte_normalizado(c) == 'brasil_fisico']
+        clusters_brasil_online = [c for c in clusters_existentes if _get_tipo_fonte_normalizado(c) == 'brasil_online']
+        clusters_internacional = [c for c in clusters_existentes if _get_tipo_fonte_normalizado(c) == 'internacional']
+        
+        # Mantém compatibilidade com o código existente agrupando Brasil Físico + Online como "nacional"
+        artigos_novos_nac = artigos_brasil_fisico + artigos_brasil_online
+        artigos_novos_int = artigos_internacional
+        clusters_existentes_nac = clusters_brasil_fisico + clusters_brasil_online
+        clusters_existentes_int = clusters_internacional
+        
+        # CORREÇÃO: Log mais preciso mostrando clusters e artigos por tipo
+        print(f"📰 ARTIGOS POR TIPO: {len(artigos_brasil_fisico)} físicos, {len(artigos_brasil_online)} online, {len(artigos_internacional)} internacionais")
+        print(f"📁 CLUSTERS POR TIPO: {len(clusters_brasil_fisico)} físicos, {len(clusters_brasil_online)} online, {len(clusters_internacional)} internacionais")
+        print(f"🔗 COMPATIBILIDADE: {len(clusters_existentes_nac)} nacionais (fís+online), {len(clusters_existentes_int)} internacionais")
         
         # Determina se precisa processar em lotes
         TAMANHO_LOTE_MAXIMO = 100  # Reduzido para evitar truncamento de respostas do modelo
@@ -1549,6 +1572,25 @@ def processar_lote_incremental(db: Session, client, artigos_lote: List[ArtigoBru
                 tema = obj.get("tema_principal")
                 return {"tipo": tipo, "noticia_id": n_id, "cluster_id_existente": c_id, "tema_principal": tema}
 
+            # CORREÇÃO: Cria mapa de cluster_ids válidos para validação
+            cluster_ids_validos = {c.id for c in clusters_existentes}
+            print(f"  🔍 DEBUG: Cluster IDs válidos para lote {numero_lote}: {sorted(list(cluster_ids_validos))}")
+            
+            # CORREÇÃO: Adiciona fallback para IDs inválidos baseado no array de clusters
+            def _validar_cluster_id(cluster_id_bruto: int) -> tuple:
+                """Retorna (cluster_id_valido, cluster_encontrado) ou (None, None) se inválido"""
+                if cluster_id_bruto in cluster_ids_validos:
+                    cluster = next((c for c in clusters_existentes if c.id == cluster_id_bruto), None)
+                    return (cluster_id_bruto, cluster)
+                
+                # FALLBACK: Se o ID parece ser um índice de array (0, 1, 2, ...), tenta mapear para o cluster real
+                if 0 <= cluster_id_bruto < len(clusters_existentes):
+                    cluster_real = clusters_existentes[cluster_id_bruto]
+                    print(f"  🔧 FALLBACK: Mapeando índice {cluster_id_bruto} → cluster ID {cluster_real.id}")
+                    return (cluster_real.id, cluster_real)
+                
+                return (None, None)
+
             tipos_encontrados: Dict[str, int] = {}
             for classificacao in classificacoes:
                 try:
@@ -1565,23 +1607,26 @@ def processar_lote_incremental(db: Session, client, artigos_lote: List[ArtigoBru
                     artigo = mapa_id_para_artigo[noticia_id]
                     
                     if tipo == "anexar":
-                        # Anexa a cluster existente
-                        cluster_id_existente = cls.get("cluster_id_existente")
-                        cluster_existente = next((c for c in clusters_existentes if c.id == cluster_id_existente), None)
-                        
-                        if cluster_existente:
-                            artigo_tf = getattr(artigo, 'tipo_fonte', 'nacional') or 'nacional'
-                            cluster_tf = getattr(cluster_existente, 'tipo_fonte', 'nacional') or 'nacional'
-                            if artigo_tf != cluster_tf:
-                                print(f"  ↪ skip anexar: tipo_fonte mismatch artigo={artigo_tf} cluster={cluster_tf} (cluster_id={cluster_existente.id})")
-                                # trata como novo cluster
-                                tipo = "novo_cluster"
+                        # Anexa a cluster existente com validação melhorada
+                        cluster_id_bruto = cls.get("cluster_id_existente")
+                        if cluster_id_bruto is not None:
+                            cluster_id_valido, cluster_existente = _validar_cluster_id(cluster_id_bruto)
+                            
+                            if cluster_existente:
+                                artigo_tf = getattr(artigo, 'tipo_fonte', 'nacional') or 'nacional'
+                                cluster_tf = getattr(cluster_existente, 'tipo_fonte', 'nacional') or 'nacional'
+                                if artigo_tf != cluster_tf:
+                                    print(f"  ↪ skip anexar: tipo_fonte mismatch artigo={artigo_tf} cluster={cluster_tf} (cluster_id={cluster_existente.id})")
+                                    # trata como novo cluster
+                                    tipo = "novo_cluster"
+                                else:
+                                    associate_artigo_to_cluster(db, artigo.id, cluster_existente.id)
+                                    anexacoes += 1
+                                    continue
                             else:
-                                associate_artigo_to_cluster(db, artigo.id, cluster_existente.id)
-                                anexacoes += 1
-                                continue
+                                print(f"  ❌ Cluster {cluster_id_bruto} não encontrado (nem como ID nem como índice)")
                         else:
-                            print(f"  ❌ Cluster {cluster_id_existente} não encontrado")
+                            print(f"  ⚠️ cluster_id_existente não definido para anexação")
                     
                     elif tipo == "novo_cluster":
                         # Cria novo cluster; se título genérico, gera fallback curto para evitar "sem título"

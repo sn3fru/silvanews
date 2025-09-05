@@ -683,9 +683,21 @@ def get_clusters_for_feed_by_date(db: Session, target_date: datetime.date, page:
     if priority:
         clusters_query = clusters_query.filter(ClusterEvento.prioridade == priority)
     
-    # Aplica filtro de tipo de fonte se especificado (nacional | internacional)
-    if tipo_fonte in ('nacional', 'internacional'):
-        clusters_query = clusters_query.filter(ClusterEvento.tipo_fonte == tipo_fonte)
+    # Aplica filtro de tipo de fonte se especificado
+    # Compatibilidade:
+    # - 'internacional' → apenas internacional
+    # - 'nacional' → nacional legado + brasil_fisico + brasil_online
+    # - 'brasil_fisico' → apenas brasil_fisico
+    # - 'brasil_online' → brasil_online + nacional (legado)
+    if tipo_fonte:
+        if tipo_fonte == 'internacional':
+            clusters_query = clusters_query.filter(ClusterEvento.tipo_fonte == 'internacional')
+        elif tipo_fonte == 'nacional':
+            clusters_query = clusters_query.filter(ClusterEvento.tipo_fonte.in_(['nacional', 'brasil_fisico', 'brasil_online']))
+        elif tipo_fonte == 'brasil_fisico':
+            clusters_query = clusters_query.filter(ClusterEvento.tipo_fonte == 'brasil_fisico')
+        elif tipo_fonte == 'brasil_online':
+            clusters_query = clusters_query.filter(ClusterEvento.tipo_fonte.in_(['brasil_online', 'nacional']))
     
     # Ordena por prioridade (P1 primeiro) e depois por data
     clusters_query = clusters_query.order_by(
@@ -1267,7 +1279,19 @@ def get_cluster_counts_by_date_and_tipo_fonte(db: Session, target_date: datetime
         ClusterEvento.tag != 'IRRELEVANTE',
     ]
 
-    nacional = db.query(func.count(ClusterEvento.id)).filter(
+    # Novas categorias
+    brasil_fisico = db.query(func.count(ClusterEvento.id)).filter(
+        *filtros_base,
+        ClusterEvento.tipo_fonte == 'brasil_fisico'
+    ).scalar() or 0
+
+    brasil_online = db.query(func.count(ClusterEvento.id)).filter(
+        *filtros_base,
+        ClusterEvento.tipo_fonte == 'brasil_online'
+    ).scalar() or 0
+
+    # Legado 'nacional' (itens antigos)
+    nacional_legado = db.query(func.count(ClusterEvento.id)).filter(
         *filtros_base,
         ClusterEvento.tipo_fonte == 'nacional'
     ).scalar() or 0
@@ -1277,9 +1301,17 @@ def get_cluster_counts_by_date_and_tipo_fonte(db: Session, target_date: datetime
         ClusterEvento.tipo_fonte == 'internacional'
     ).scalar() or 0
 
+    # Brasil Online inclui 'nacional' legado para manter compatibilidade visual
+    brasil_online_total = (brasil_online + nacional_legado)
+    # Aba antiga 'nacional' (para compatibilidade com consumidores antigos) = físico + online atuais
+    nacional_total = (brasil_fisico + brasil_online_total)
+
     return {
-        "nacional": int(nacional),
-        "internacional": int(internacional)
+        "brasil_fisico": int(brasil_fisico),
+        "brasil_online": int(brasil_online_total),
+        "internacional": int(internacional),
+        # chaves legadas
+        "nacional": int(nacional_total)
     }
 
 

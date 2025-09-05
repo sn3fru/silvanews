@@ -83,7 +83,22 @@ class FileLoader:
     
     def detectar_tipo_fonte(self, jornal: str) -> str:
         """
+        OBSOLETA: Mantida para compatibilidade. Use detectar_tipo_fonte_completo().
         Detecta se um jornal é nacional ou internacional baseado no nome.
+        """
+        return self.detectar_tipo_fonte_completo(jornal, tem_url=False, tipo_arquivo='pdf')
+    
+    def detectar_tipo_fonte_completo(self, jornal: str, tem_url: bool = False, tipo_arquivo: str = 'pdf') -> str:
+        """
+        Detecta o tipo de fonte considerando três categorias:
+        - 'brasil_fisico': PDFs de jornais brasileiros (jornais impressos)
+        - 'brasil_online': JSONs com URL de sites brasileiros 
+        - 'internacional': Qualquer fonte estrangeira (PDF ou JSON)
+        
+        Args:
+            jornal: Nome do jornal/fonte
+            tem_url: Se True, indica que é uma notícia online (JSON com link)
+            tipo_arquivo: 'pdf' ou 'json'
         """
         jornais_nacionais = {
             'folha', 'folha de s. paulo', 'folha de são paulo', 'folha de s.paulo',
@@ -118,26 +133,42 @@ class FileLoader:
         }
         
         if not jornal:
-            return 'nacional'  # Default para nacional
+            # Default baseado no tipo de arquivo
+            return 'brasil_fisico' if tipo_arquivo == 'pdf' else 'brasil_online'
         
         jornal_lower = jornal.lower().strip()
         
-        # Verifica se é nacional
-        for nome in jornais_nacionais:
-            if nome in jornal_lower:
-                return 'nacional'
-        
-        # Verifica se é internacional
+        # Verifica se é internacional (prioridade mais alta)
         for nome in jornais_internacionais:
             if nome in jornal_lower:
                 return 'internacional'
         
-        # Se tem .br no nome, provavelmente é nacional
-        if '.br' in jornal_lower or 'brasil' in jornal_lower or 'brazil' in jornal_lower:
-            return 'nacional'
+        # Verifica se é nacional brasileiro
+        is_nacional = False
+        for nome in jornais_nacionais:
+            if nome in jornal_lower:
+                is_nacional = True
+                break
         
-        # Default para nacional para manter compatibilidade
-        return 'nacional'
+        # Se tem .br no nome ou palavras-chave brasileiras, também é nacional
+        if not is_nacional:
+            if '.br' in jornal_lower or 'brasil' in jornal_lower or 'brazil' in jornal_lower:
+                is_nacional = True
+        
+        if is_nacional:
+            # Se é nacional, diferencia por tipo de fonte
+            if tipo_arquivo == 'pdf' or not tem_url:
+                return 'brasil_fisico'  # PDF = impresso/físico
+            else:
+                return 'brasil_online'   # JSON com URL = online
+        
+        # Se não identificou como nacional nem internacional, usa heurística:
+        # - PDFs sem identificação clara: brasil_fisico (compatibilidade)
+        # - JSONs com URL: internacional (assume fonte estrangeira)
+        if tipo_arquivo == 'pdf':
+            return 'brasil_fisico'
+        else:
+            return 'internacional' if tem_url else 'brasil_online'
 
     # --- LÓGICA DE PROCESSAMENTO DE PDF (REFATORADA) ---
 
@@ -820,13 +851,25 @@ class FileLoader:
                 
                 texto_bruto = item.get('texto_completo', item.get('titulo', ''))
                 if texto_bruto:
+                    # NOVO: Detecta tipo_fonte usando a nova classificação de três tipos
+                    url_original = item.get('link', '')
+                    fonte_original = item.get('fonte', 'JSON_Dump')
+                    tem_url = bool(url_original.strip())  # Se tem URL, é online
+                    
+                    # Detecta o tipo usando a nova função
+                    tipo_fonte = self.detectar_tipo_fonte_completo(
+                        fonte_original, 
+                        tem_url=tem_url, 
+                        tipo_arquivo='json'
+                    )
+                    
                     artigos.append({
                         'texto_bruto': texto_bruto,
-                        'url_original': item.get('link', ''),
+                        'url_original': url_original,
                         'metadados': {
                             'titulo': item.get('titulo', ''),
                             'subtitulo': item.get('subtitulo', ''),
-                            'fonte_original': item.get('fonte', 'JSON_Dump'),
+                            'fonte_original': fonte_original,
                             'categoria': item.get('categoria', ''),
                             'data_publicacao': item.get('data_publicacao', ''),
                             'data_ultima_modificacao': item.get('data_ultima_modificacao', ''),
@@ -835,6 +878,8 @@ class FileLoader:
                             'arquivo_origem': file_path.name,
                             'data_processamento': get_datetime_brasil_str(),
                             'tipo_arquivo': 'json',
+                            'tipo_fonte_detectado': tipo_fonte,  # NOVO: Armazena o tipo detectado
+                            'tem_url': tem_url,  # NOVO: Flag de URL
                             **item  # Adiciona todos os outros campos do JSON original aos metadados
                         }
                     })
@@ -990,12 +1035,18 @@ class FileLoader:
                 print(f"⚠️ AVISO: Artigo já existe no banco: {artigo_existente.id}")
                 return True
             
-            # Detecta tipo de fonte baseado no jornal
+            # Detecta tipo de fonte usando a nova classificação de três tipos
             jornal = artigo_data.get('metadados', {}).get('jornal') or artigo_data.get('metadados', {}).get('fonte_original', '')
-            # Heurística ampliada: tenta inferir por nome quando lista interna não captar
-            tipo_fonte = self.detectar_tipo_fonte(jornal)
-            if not tipo_fonte or tipo_fonte not in ('nacional', 'internacional'):
-                tipo_fonte = inferir_tipo_fonte_por_jornal(jornal)
+            # Para PDFs, usa a nova classificação completa
+            tipo_fonte = self.detectar_tipo_fonte_completo(jornal, tem_url=False, tipo_arquivo='pdf')
+            
+            # Fallback para compatibilidade com sistema antigo (nacional/internacional)
+            if tipo_fonte not in ('brasil_fisico', 'brasil_online', 'internacional'):
+                tipo_fonte_antigo = inferir_tipo_fonte_por_jornal(jornal)
+                if tipo_fonte_antigo == 'internacional':
+                    tipo_fonte = 'internacional'
+                else:
+                    tipo_fonte = 'brasil_fisico'  # PDFs brasileiros = físico
             
             # Cria novo artigo
             dados_artigo = ArtigoBrutoCreate(
@@ -1010,6 +1061,10 @@ class FileLoader:
             
             # Salva dados originais nos novos campos
             metadados = artigo_data.get('metadados', {})
+            
+            # NOVO: Se é um JSON, usa o tipo_fonte detectado nos metadados
+            if metadados.get('tipo_arquivo') == 'json' and metadados.get('tipo_fonte_detectado'):
+                tipo_fonte = metadados['tipo_fonte_detectado']
             
             # Atualiza campos originais (com verificação de existência)
             try:

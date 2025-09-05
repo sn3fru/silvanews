@@ -105,18 +105,21 @@
                 <div id="loading-text" class="loading-text">Carregando...</div>
             </div>
             
-            <!-- Abas Brasil/Internacional -->
+            <!-- Abas Brasil Físico / Brasil Online / Internacional -->
             <div class="news-tabs-container">
                 <nav class="news-tabs">
-                    <button class="news-tab-btn ativo" data-tipo="nacional">
-                        <svg class="flag-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 20" aria-hidden="true">
-                            <rect width="28" height="20" fill="#009b3a"/>
-                            <polygon points="14,2 26,10 14,18 2,10" fill="#ffdf00"/>
-                            <circle cx="14" cy="10" r="5" fill="#002776"/>
-                        </svg>
-                        Brasil
+                    <button class="news-tab-btn ativo" data-tipo="brasil_fisico">
+                        <img src="/frontend/jornal.jpg" alt="Jornal" class="tab-img" aria-hidden="true" />
+                        <span class="tab-label">Brasil Físico</span><span class="tab-count"></span>
                     </button>
-                    <button class="news-tab-btn" data-tipo="internacional">🌍 Internacional</button>
+                    <button class="news-tab-btn" data-tipo="brasil_online">
+                        <img src="/frontend/online.png" alt="Online" class="tab-img" aria-hidden="true" />
+                        <span class="tab-label">Brasil Online</span><span class="tab-count"></span>
+                    </button>
+                    <button class="news-tab-btn" data-tipo="internacional">
+                        <span style="font-size:14px;">🌍</span>
+                        <span class="tab-label">Internacional</span><span class="tab-count"></span>
+                    </button>
                 </nav>
             </div>
             

@@ -75,3 +75,6 @@ def testar_endpoint_expandir_resumo():
 
 if __name__ == "__main__":
     testar_endpoint_expandir_resumo()
+
+
+

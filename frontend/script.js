@@ -64,7 +64,9 @@ let currentClusterId = null; // ID do cluster atual no modal
 let currentChatSession = null; // Sessão de chat atual
 let currentTags = []; // Tags atuais do cluster
 let currentClusterDetails = null; // Detalhes do cluster atualmente aberto no modal
-let tipoFonteAtivo = 'nacional'; // Tipo de fonte ativo: 'nacional' ou 'internacional'
+// Tipo de fonte ativo: 'brasil_fisico' | 'brasil_online' | 'internacional'
+// Compatibilidade: valores antigos 'nacional' tratam como 'brasil_fisico'
+let tipoFonteAtivo = 'brasil_fisico';
 
 // Helpers de data sem impacto de fuso (tratam 'YYYY-MM-DD' como data local)
 function parseLocalDate(yyyyMmDd) {
@@ -239,6 +241,7 @@ async function fetchTodasPaginasPorPrioridade(date, priority, pageSize = 50, onP
     let metricasPrimeiraPagina = null;
 
     while (temProxima) {
+        // Compat: se algum estado antigo colocar 'nacional', use 'brasil_fisico' + 'brasil_online' no backend via lógica de compat
         const url = `/api/feed?data=${date}&priority=${priority}&page=${page}&page_size=${pageSize}&tipo_fonte=${tipoFonteAtivo}`;
         const resp = await fetch(url);
         if (!resp.ok) break;
@@ -419,16 +422,18 @@ function setupNewsTabsListeners() {
     tabsBtns.forEach(btn => {
         btn.addEventListener('click', async (e) => {
             const novoTipo = e.target.getAttribute('data-tipo');
+            // Compatibilidade: se vier 'nacional', trata como 'brasil_fisico'
+            const normalizado = (novoTipo === 'nacional') ? 'brasil_fisico' : novoTipo;
             
             // Se já está na aba ativa, não faz nada
-            if (novoTipo === tipoFonteAtivo) return;
+            if (normalizado === tipoFonteAtivo) return;
             
             // Atualiza a aba ativa
             tabsBtns.forEach(b => b.classList.remove('ativo'));
             e.target.classList.add('ativo');
             
             // Atualiza o tipo de fonte ativo
-            tipoFonteAtivo = novoTipo;
+            tipoFonteAtivo = normalizado;
             
             // Limpa o cache para forçar recarregamento
             clearCache();
@@ -771,21 +776,37 @@ async function carregarMetricas(date) {
 
 
 // Função para atualizar os contadores nas abas
-function atualizarContadoresAbas(contadorBrasil, contadorInternacional) {
-    const abaBrasil = document.querySelector('.news-tab-btn[data-tipo="nacional"]');
+function atualizarContadoresAbas(contadorNacionalCompat, contadorInternacional) {
+    // Lê do endpoint valores detalhados (se já carregados em contadoresAbas)
+    // contadoresAbas: { nacional, internacional, brasil_fisico?, brasil_online? }
+    const fisico = Number(contadoresAbas.brasil_fisico || 0);
+    const online = Number(contadoresAbas.brasil_online || 0);
+    const nacional = Number(contadoresAbas.nacional || contadorNacionalCompat || (fisico + online));
+
+    const abaFisico = document.querySelector('.news-tab-btn[data-tipo="brasil_fisico"]');
+    const abaOnline = document.querySelector('.news-tab-btn[data-tipo="brasil_online"]');
     const abaInternacional = document.querySelector('.news-tab-btn[data-tipo="internacional"]');
 
-    console.log('🔄 Atualizando abas - Brasil:', contadorBrasil, 'Internacional:', contadorInternacional);
-
-    if (abaBrasil) {
-        // Versão simplificada sem manipular SVG
-        abaBrasil.textContent = `Brasil${contadorBrasil > 0 ? ` (${contadorBrasil})` : ''}`;
-        console.log('✅ Aba Brasil atualizada');
+    // Atualiza somente os spans, preservando ícones/IMG no botão
+    if (abaFisico) {
+        const label = abaFisico.querySelector('.tab-label');
+        const count = abaFisico.querySelector('.tab-count');
+        if (label) label.textContent = 'Brasil Físico';
+        if (count) count.textContent = fisico > 0 ? ` (${fisico})` : '';
     }
-
+    if (abaOnline) {
+        const label = abaOnline.querySelector('.tab-label');
+        const count = abaOnline.querySelector('.tab-count');
+        if (label) label.textContent = 'Brasil Online';
+        // Online inclui legado 'nacional' quando online==0, para manter compat
+        const onlineCount = online > 0 ? online : nacional;
+        if (count) count.textContent = onlineCount > 0 ? ` (${onlineCount})` : '';
+    }
     if (abaInternacional) {
-        abaInternacional.textContent = `🌍 Internacional${contadorInternacional > 0 ? ` (${contadorInternacional})` : ''}`;
-        console.log('✅ Aba Internacional atualizada');
+        const label = abaInternacional.querySelector('.tab-label');
+        const count = abaInternacional.querySelector('.tab-count');
+        if (label) label.textContent = 'Internacional';
+        if (count) count.textContent = contadorInternacional > 0 ? ` (${contadorInternacional})` : '';
     }
 }
 
@@ -1947,12 +1968,14 @@ async function carregarContadoresSimples(date) {
     try {
         console.log('🔄 Carregando contadores simples...');
 
-        // Chama endpoint dedicado que retorna { nacional: X, internacional: Y }
+        // Chama endpoint dedicado que retorna { brasil_fisico, brasil_online, internacional, nacional }
         const resp = await fetch(`/api/contadores_abas?data=${encodeURIComponent(date || '')}`);
         if (resp.ok) {
             const data = await resp.json();
-            contadoresAbas.nacional = Number(data.nacional || 0);
+            contadoresAbas.brasil_fisico = Number(data.brasil_fisico || 0);
+            contadoresAbas.brasil_online = Number(data.brasil_online || 0);
             contadoresAbas.internacional = Number(data.internacional || 0);
+            contadoresAbas.nacional = Number(data.nacional || (contadoresAbas.brasil_fisico + contadoresAbas.brasil_online));
             atualizarContadoresAbas(contadoresAbas.nacional, contadoresAbas.internacional);
             return;
         }
@@ -1961,8 +1984,10 @@ async function carregarContadoresSimples(date) {
         const respSemData = await fetch(`/api/contadores_abas`);
         if (respSemData.ok) {
             const data2 = await respSemData.json();
-            contadoresAbas.nacional = Number(data2.nacional || 0);
+            contadoresAbas.brasil_fisico = Number(data2.brasil_fisico || 0);
+            contadoresAbas.brasil_online = Number(data2.brasil_online || 0);
             contadoresAbas.internacional = Number(data2.internacional || 0);
+            contadoresAbas.nacional = Number(data2.nacional || (contadoresAbas.brasil_fisico + contadoresAbas.brasil_online));
             atualizarContadoresAbas(contadoresAbas.nacional, contadoresAbas.internacional);
             return;
         }

@@ -222,7 +222,8 @@ LISTA_RELEVANCIA_HIERARQUICA_INTERNACIONAL = [
             "Major market crashes (indices down > 5% in a day)",
             "Trade wars escalation with immediate tariffs implementation",
             "Sanctions on major economies or corporations",
-            "Systemic banking crises in developed markets"
+            "Systemic banking crises in developed markets",
+            "Maiores Empresas de tecnologia: Google, Apple, Tesla, Nvidia, Microsoft, Intel, Meta, AMD, Intuitive Machines, Netflix, Micron, Siemens Energy AG"
         ]
     },
     {
