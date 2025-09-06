@@ -1613,8 +1613,11 @@ def processar_lote_incremental(db: Session, client, artigos_lote: List[ArtigoBru
                             cluster_id_valido, cluster_existente = _validar_cluster_id(cluster_id_bruto)
                             
                             if cluster_existente:
-                                artigo_tf = getattr(artigo, 'tipo_fonte', 'nacional') or 'nacional'
-                                cluster_tf = getattr(cluster_existente, 'tipo_fonte', 'nacional') or 'nacional'
+                                artigo_tf = getattr(artigo, 'tipo_fonte', 'brasil_online') or 'brasil_online'
+                                cluster_tf = getattr(cluster_existente, 'tipo_fonte', 'brasil_online') or 'brasil_online'
+                                # Converte 'nacional' legado do cluster para equivalente físico/online do artigo
+                                if cluster_tf == 'nacional':
+                                    cluster_tf = artigo_tf
                                 if artigo_tf != cluster_tf:
                                     print(f"  ↪ skip anexar: tipo_fonte mismatch artigo={artigo_tf} cluster={cluster_tf} (cluster_id={cluster_existente.id})")
                                     # trata como novo cluster
@@ -1653,11 +1656,16 @@ def processar_lote_incremental(db: Session, client, artigos_lote: List[ArtigoBru
                                 jornal = (getattr(artigo, 'jornal', None) or '')
                                 tipo_fonte = _infer_tf(jornal)
                             
-                            # CORREÇÃO: Garante que o tipo_fonte seja preservado corretamente
-                            # Se o artigo tem tipo_fonte 'internacional', força o cluster a ser internacional
+                            # Define tipo_fonte do novo cluster seguindo a regra de precedência
+                            # 1) internacional se artigo internacional
+                            # 2) brasil_fisico se artigo físico
+                            # 3) brasil_online caso contrário
                             if tipo_fonte == 'internacional':
-                                print(f"    🔍 DEBUG: Artigo {artigo.id} forçado para tipo_fonte='internacional'")
-                            tipo_fonte = 'internacional' if tipo_fonte == 'internacional' else 'nacional'
+                                tipo_fonte_cluster = 'internacional'
+                            elif tipo_fonte == 'brasil_fisico':
+                                tipo_fonte_cluster = 'brasil_fisico'
+                            else:
+                                tipo_fonte_cluster = 'brasil_online'
 
                             # Cria cluster
                             from backend.models import ClusterEventoCreate
@@ -1667,7 +1675,7 @@ def processar_lote_incremental(db: Session, client, artigos_lote: List[ArtigoBru
                                 tag="PENDING",  # Será definido na ETAPA 3
                                 prioridade="PENDING",  # Será definido na ETAPA 3
                                 embedding_medio=embedding_medio,
-                                tipo_fonte=tipo_fonte
+                                tipo_fonte=tipo_fonte_cluster
                             )
 
                             cluster = create_cluster(db, cluster_data)
@@ -1837,18 +1845,17 @@ IMPORTANTE: Retorne APENAS o JSON válido para este lote.
                                 if artigo.embedding:
                                     embeddings.append(bytes_to_embedding(artigo.embedding))
                             
-                            # Define tipo_fonte a partir do rótulo do lote (NACIONAL/INTERNACIONAL)
-                            # CORREÇÃO: Garante que o tipo_fonte seja preservado corretamente
-                            tipo_fonte = 'internacional' if str(rotulo).strip().upper() == 'INTERNACIONAL' else 'nacional'
-                            
-                            # Verificação adicional: se algum artigo do grupo tem tipo_fonte diferente, usa o mais comum
-                            tipos_artigos = [getattr(a, 'tipo_fonte', 'nacional') for a in artigos_do_grupo]
-                            if tipos_artigos:
-                                from collections import Counter
-                                tipo_mais_comum = Counter(tipos_artigos).most_common(1)[0][0]
-                                if tipo_mais_comum == 'internacional':
-                                    tipo_fonte = 'internacional'
-                                    print(f"    🔍 DEBUG: Grupo {tema_principal[:50]}... forçado para tipo_fonte='internacional'")
+                            # Regra de tipo_fonte do cluster (força idioma/precedência):
+                            # 1) Se QUALQUER artigo for internacional → cluster internacional
+                            # 2) Senão, se houver QUALQUER artigo 'brasil_fisico' → cluster brasil_fisico
+                            # 3) Caso contrário → brasil_online
+                            tipos_artigos = [getattr(a, 'tipo_fonte', 'brasil_online') or 'brasil_online' for a in artigos_do_grupo]
+                            if any(t == 'internacional' for t in tipos_artigos):
+                                tipo_fonte = 'internacional'
+                            elif any(t == 'brasil_fisico' for t in tipos_artigos):
+                                tipo_fonte = 'brasil_fisico'
+                            else:
+                                tipo_fonte = 'brasil_online'
 
                             embedding_medio = None
                             if embeddings:

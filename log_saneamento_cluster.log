@@ -274,3 +274,24 @@ Cluster 20723: ignorados=[19848] | justificativa=O artigo com ID 19848 foi ignor
 Cluster 20676: ignorados=[19776] | justificativa=O artigo 19776 foi ignorado pois trata apenas da oferta de depoimento de Vânia Marques Pinto, presidente da Contag, sem detalhar o impacto financeiro ou regulatório da investigação.
 Cluster 20551: ignorados=[19960, 19962, 19983, 19987, 20031, 20044] | justificativa=Os artigos 19983, 19987, 20044, 19960, 19962 e 20031 foram ignorados por não serem diretamente relacionados ao impacto imediato do tarifaço nas exportações brasileiras, focando em aspectos mais amplos ou tangenciais.
 Cluster 20556: ignorados=[19653, 19707, 19800, 20110, 20112, 20118, 20121, 20122, 20127, 20129, 20130, 20131, 20132, 20134, 20167, 20168, 20169] | justificativa=Artigos 20130, 20121, 20118, 20122, 20129, 20131, 20167, 20132, 20134, 19707, 19653, 20168, 20169 foram ignorados por tratarem de temas tangenciais ou irrelevantes ao fato gerador principal.
+Cluster 21023: ignorados=[20426] | justificativa=O artigo 20426 foi ignorado pois foca no histórico da empresa vencedora e em uma das engenheiras do projeto, sendo menos relevante para a tese principal do leilão e seus impactos financeiros.
+Cluster 21034: ignorados=[20416] | justificativa=O artigo 20416 foi ignorado por tratar de um pedido de visita a Bolsonaro na prisão domiciliar, sendo menos relevante para a tese principal sobre a anistia.
+Cluster 21044: ignorados=[20457] | justificativa=O artigo 20457 foi ignorado por tratar de preocupações com a fronteira e não se relacionar diretamente com o tema central da notícia principal.
+Cluster 21064: ignorados=[20440] | justificativa=O artigo 20440 foi ignorado por tratar de estratégia da BMW no mercado de carros elétricos, não relacionado ao setor solar chinês.
+Cluster 21096: ignorados=[20477] | justificativa=O artigo 20477 não é pertinente ao tema central.
+Cluster 21099: ignorados=[20481] | justificativa=O artigo 20481 não continha informações relevantes além do título, sendo redundante e desatualizado em relação ao artigo 20509.
+Cluster 21113: ignorados=[20500, 20501, 20532, 20533, 20534, 20535, 20551, 20562, 20563, 20564, 20569, 20581, 20612] | justificativa=Todos os artigos eram pertinentes.
+Cluster 21148: ignorados=[20692] | justificativa=O artigo 20692 foi ignorado por tratar de independência de bancos centrais, tema não relacionado ao foco principal.
+Cluster 21141: ignorados=[20681] | justificativa=O artigo 20681 foi ignorado por tratar de investigação de desvio de verbas em Belford Roxo, sem relação com o tema central do cluster.
+Cluster 21176: ignorados=[20727, 20730] | justificativa=Artigos 20727 e 20730 foram ignorados por serem opiniões sem impacto direto na tese principal.
+Cluster 21177: ignorados=[20731] | justificativa=O artigo 20731 foi ignorado por ser uma opinião sem informações relevantes para a análise.
+Cluster 21208: ignorados=[20775] | justificativa=O artigo 20775 foi ignorado por se tratar de um anúncio de serviço de limpeza, não relacionado ao conteúdo publicitário dos demais.
+Cluster 21326: ignorados=[20553] | justificativa=O artigo 20553 foi ignorado por tratar de tendências de moda e não possuir relevância financeira ou econômica para a mesa de Special Situations.
+Cluster 21346: ignorados=[20590] | justificativa=O artigo 20590 é muito curto e vago, não agregando valor à análise. Os demais artigos eram pertinentes.
+Cluster 21359: ignorados=[20606, 20608] | justificativa=Os artigos 20608 e 20606 não são relevantes para o evento principal (M&A da Bakkavor).
+Cluster 21031: ignorados=[20835] | justificativa=O artigo 20835 foi ignorado por focar primariamente em política externa e na figura de Donald Trump, sem apresentar uma tese de investimento clara ou um evento acionável no curto prazo.
+Cluster 21034: ignorados=[20401, 20416, 20727, 20728, 20729, 20730, 20808] | justificativa=Os artigos 20728, 20727, 20416, 20729, 20730 e 20808 foram ignorados por serem opiniões ou notícias com baixa relevância para a tese central.
+Cluster 21148: ignorados=[20692] | justificativa=O artigo 20692 foi ignorado por tratar de independência de bancos centrais, um tema diferente das declarações de Trump sobre o Brasil.
+Cluster 21044: ignorados=[20457] | justificativa=A notícia com ID 20457 foi ignorada por tratar de preocupações com a fronteira com a Venezuela, um tema distinto do foco principal do cluster.
+Cluster 21148: ignorados=[20692] | justificativa=Todos os artigos eram pertinentes.
+Cluster 21055: ignorados=[20731] | justificativa=O artigo 20731 foi ignorado por ser uma opinião sem relevância para a análise.

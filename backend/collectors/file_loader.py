@@ -170,6 +170,32 @@ class FileLoader:
         else:
             return 'internacional' if tem_url else 'brasil_online'
 
+    # Heurística leve de idioma: detecta se o texto está majoritariamente em PT-BR
+    def _texto_e_portugues(self, texto: Optional[str]) -> bool:
+        try:
+            if not isinstance(texto, str) or len(texto) < 40:
+                # Texto muito curto: presume PT para segurança (evita falso internacional)
+                return True
+            s = texto.lower()
+            # Conjunto enxuto de stopwords/frequentes do PT
+            termos_pt = [
+                ' de ', ' do ', ' da ', ' dos ', ' das ', ' que ', ' em ', ' para ', ' por ', ' com ',
+                ' não ', ' ao ', ' aos ', ' aos ', ' uma ', ' sua ', ' seu ', ' seus ', ' suas ',
+                ' é ', ' foi ', ' são ', ' estar ', ' como ', ' sobre ', ' entre ', ' contra ', ' pela ', ' pelas '
+            ]
+            acentos = any(ch in s for ch in 'áàâãéêíóôõúç')
+            hits = sum(1 for t in termos_pt if t in s)
+            densidade = hits / max(1, len(s) / 500)  # escala com tamanho
+            return acentos or densidade >= 1.0
+        except Exception:
+            return True
+
+    def inferir_tipo_por_texto(self, texto: Optional[str], tipo_arquivo: str, tem_url: bool) -> str:
+        # Internacional se claramente não PT; caso contrário decide entre físico/online
+        if not self._texto_e_portugues(texto):
+            return 'internacional'
+        return 'brasil_fisico' if tipo_arquivo == 'pdf' or not tem_url else 'brasil_online'
+
     # --- LÓGICA DE PROCESSAMENTO DE PDF (REFATORADA) ---
 
     def _extrair_json_da_resposta(self, resposta: str, contexto: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
@@ -650,6 +676,9 @@ class FileLoader:
                     titulo_extraido = (noticia.get('titulo') or '').strip()
                     if titulo_e_generico(titulo_extraido):
                         titulo_extraido = gerar_titulo_fallback_curto(noticia.get('texto_completo'))
+                    # Decide tipo_fonte por texto (OCR sempre físico, exceto se idioma não for PT → internacional)
+                    tipo_por_texto = self.inferir_tipo_por_texto(noticia.get('texto_completo'), tipo_arquivo='pdf', tem_url=False)
+
                     artigos_formatados.append({
                         'texto_bruto': noticia['texto_completo'],
                         'url_original': url_detectada,
@@ -661,6 +690,7 @@ class FileLoader:
                             'arquivo_origem': nome_arquivo_original,
                             'data_processamento': get_datetime_brasil_str(),
                             'tipo_arquivo': 'pdf',
+                            'tipo_fonte_detectado': tipo_por_texto,
                             # Campos extraídos pela IA
                             'jornal': jornal_extraido,
                             'autor': noticia.get('autor') or 'N/A',
@@ -741,6 +771,7 @@ class FileLoader:
                         continue
                     # Título como primeira linha da página
                     primeira_linha = texto_pagina.split('\n', 1)[0].strip()
+                    tipo_por_texto = self.inferir_tipo_por_texto(texto_pagina, tipo_arquivo='pdf', tem_url=False)
                     artigos_simples.append({
                         'texto_bruto': texto_pagina,
                         'url_original': None,
@@ -750,6 +781,7 @@ class FileLoader:
                             'arquivo_origem': file_path.name,
                             'data_processamento': get_datetime_brasil_str(),
                             'tipo_arquivo': 'pdf',
+                            'tipo_fonte_detectado': tipo_por_texto,
                             'jornal': jornal_fallback,
                             'pagina': idx,
                             'total_paginas_pdf': num_paginas
@@ -857,11 +889,16 @@ class FileLoader:
                     tem_url = bool(url_original.strip())  # Se tem URL, é online
                     
                     # Detecta o tipo usando a nova função
-                    tipo_fonte = self.detectar_tipo_fonte_completo(
-                        fonte_original, 
-                        tem_url=tem_url, 
+                    # Primeiro: heurística leve por texto para detectar idioma (internacional x pt)
+                    tipo_por_texto = self.inferir_tipo_por_texto(texto_bruto, tipo_arquivo='json', tem_url=tem_url)
+                    # Segundo: heurística por fonte/domínio
+                    tipo_por_fonte = self.detectar_tipo_fonte_completo(
+                        fonte_original,
+                        tem_url=tem_url,
                         tipo_arquivo='json'
                     )
+                    # Combinação: internacional vence se qualquer heurística apontar; senão prefere online
+                    tipo_fonte = 'internacional' if (tipo_por_texto == 'internacional' or tipo_por_fonte == 'internacional') else 'brasil_online'
                     
                     artigos.append({
                         'texto_bruto': texto_bruto,
@@ -1062,8 +1099,8 @@ class FileLoader:
             # Salva dados originais nos novos campos
             metadados = artigo_data.get('metadados', {})
             
-            # NOVO: Se é um JSON, usa o tipo_fonte detectado nos metadados
-            if metadados.get('tipo_arquivo') == 'json' and metadados.get('tipo_fonte_detectado'):
+            # NOVO: Se existir tipo_fonte_detectado nos metadados (pdf ou json), usa-o
+            if metadados.get('tipo_fonte_detectado') in ('brasil_fisico', 'brasil_online', 'internacional'):
                 tipo_fonte = metadados['tipo_fonte_detectado']
             
             # Atualiza campos originais (com verificação de existência)

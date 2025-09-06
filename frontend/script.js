@@ -798,9 +798,8 @@ function atualizarContadoresAbas(contadorNacionalCompat, contadorInternacional) 
         const label = abaOnline.querySelector('.tab-label');
         const count = abaOnline.querySelector('.tab-count');
         if (label) label.textContent = 'Brasil Online';
-        // Online inclui legado 'nacional' quando online==0, para manter compat
-        const onlineCount = online > 0 ? online : nacional;
-        if (count) count.textContent = onlineCount > 0 ? ` (${onlineCount})` : '';
+        // Mostra APENAS o total de brasil_online (sem agregar nacional legado)
+        if (count) count.textContent = online > 0 ? ` (${online})` : '';
     }
     if (abaInternacional) {
         const label = abaInternacional.querySelector('.tab-label');
@@ -989,6 +988,31 @@ function criarCardCluster(cluster) {
             }
         }
     } catch (_) {}
+
+    // Garante estado independente do botão Expandir por card/cluster
+    try {
+        const expandBtn = card.querySelector('.btn-expand-summary');
+        const cacheKey = `expand_${cluster.id}`;
+        if (expandBtn) {
+            // Reset estado visual e de acessibilidade ao criar o card
+            expandBtn.disabled = false;
+            expandBtn.textContent = '⤴︎ Expandir';
+            expandBtn.classList.remove('loading');
+
+            // Se já existe resumo expandido em cache, esconde o botão apenas deste card
+            if (expandCache && expandCache.has(cacheKey)) {
+                const cached = expandCache.get(cacheKey);
+                if (cached && cached.resumo_expandido) {
+                    expandBtn.style.display = 'none';
+                } else {
+                    expandBtn.style.display = '';
+                }
+            } else {
+                // Sem cache: mostra o botão
+                expandBtn.style.display = '';
+            }
+        }
+    } catch (_) {}
     return card;
 }
 
@@ -1001,6 +1025,26 @@ async function openModal(clusterId) {
     try {
         showModalLoading();
         currentClusterId = clusterId;
+        // Resetar estado do botão Expandir no modal ao abrir para outro cluster
+        try {
+            if (modalExpandBtn) {
+                modalExpandBtn.disabled = false;
+                modalExpandBtn.textContent = 'Expandir';
+                modalExpandBtn.classList.remove('loading');
+                // Controlar visibilidade conforme cache do cluster atual
+                const cacheKey = `expand_${clusterId}`;
+                if (expandCache && expandCache.has(cacheKey)) {
+                    const cached = expandCache.get(cacheKey);
+                    if (cached && cached.resumo_expandido) {
+                        modalExpandBtn.style.display = 'none';
+                    } else {
+                        modalExpandBtn.style.display = '';
+                    }
+                } else {
+                    modalExpandBtn.style.display = '';
+                }
+            }
+        } catch (_) {}
         
         const clusterData = await carregarDetalhesCluster(clusterId);
         if (!clusterData) {

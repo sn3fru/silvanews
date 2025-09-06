@@ -1514,10 +1514,14 @@ hr { border: none; border-top: 1px solid var(--cor-borda); margin: 1.5rem 0; }
 
 .news-tabs {
     display: flex;
-    gap: 0.5rem;
+    gap: 0; /* separadores serão bordas, não gap */
+    border: 1px solid var(--cor-borda);
     border-bottom: 2px solid var(--cor-borda);
-    padding-bottom: 0;
+    border-radius: 8px 8px 0 0;
+    padding: 0;
     width: 100%;
+    background: #fff;
+    overflow: hidden; /* bordas de separação visíveis como abas de navegador */
 }
 
 .news-tab-btn {
@@ -1530,12 +1534,17 @@ hr { border: none; border-top: 1px solid var(--cor-borda); margin: 1.5rem 0; }
     cursor: pointer;
     transition: all 0.2s ease;
     border-bottom: 3px solid transparent;
-    margin-bottom: -2px;
+    margin-bottom: -1px; /* alinha com borda inferior do container */
     flex: 1; /* divide 50/50 */
     display: flex;
     align-items: center;
     justify-content: center;
     gap: .5rem;
+}
+
+/* Separadores verticais entre abas (estilo navegador) */
+.news-tab-btn:not(:last-child) {
+    border-right: 1px solid var(--cor-borda);
 }
 
 .news-tab-btn:hover {
@@ -1546,7 +1555,27 @@ hr { border: none; border-top: 1px solid var(--cor-borda); margin: 1.5rem 0; }
 .news-tab-btn.ativo {
     color: var(--cor-destaque-btg);
     border-bottom-color: var(--cor-destaque-btg);
-    background-color: rgba(0, 82, 155, 0.05);
+    background-color: #fff; /* ativa visual de aba selecionada */
+    box-shadow: inset 0 -2px 0 var(--cor-destaque-btg);
+    position: relative;
+}
+
+.news-tab-btn.ativo::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -2px;
+    height: 2px;
+    background: var(--cor-destaque-btg);
+}
+
+/* Bordas arredondadas nas extremidades como abas de navegador */
+.news-tab-btn:first-child {
+    border-top-left-radius: 8px;
+}
+.news-tab-btn:last-child {
+    border-top-right-radius: 8px;
 }
 
 /* Flags */
