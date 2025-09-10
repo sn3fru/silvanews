@@ -1165,12 +1165,12 @@ function buildClipboardPayload(cluster) {
     }
     const dataStr = formatarDataBR(cluster.timestamp || cluster.created_at);
 
-    const text = `*Título:* ${titulo} / *Fonte:* ${fonteDetalhe} / ${dataStr}\n*Resumo:* ${resumo}${link ? `\n*Link:* ${link}` : ''}`;
+    const text = `${titulo} / ${fonteDetalhe} / ${dataStr}\n*Resumo:* ${resumo}${link ? `\n${link}` : ''}`;
 
     const html = `<div>
-  <div><b>Título:</b> ${titulo} / <b>Fonte:</b> ${fonteDetalhe} / ${dataStr}</div>
+  <div>${titulo} / ${fonteDetalhe} / ${dataStr}</div>
   <div><b>Resumo:</b> ${resumo}</div>
-  ${link ? `<div><b>Link:</b> <a href="${link}">${link}</a></div>` : ``}
+  ${link ? `<div><a href="${link}">${link}</a></div>` : ``}
 </div>`;
 
     return { text, html };
@@ -3681,7 +3681,7 @@ async function copiarArtigoIndividual(event, artigoId) {
         // Reformatar o texto antes de copiar
         const textoReformatado = reformatarTextoJornal(artigoData.texto);
 
-        const text = `*Título:* ${artigoData.titulo} / *Fonte:* ${artigoData.fonte} / ${artigoData.data}\n*Texto:* ${textoReformatado}`;
+        const text = `${artigoData.titulo} / ${artigoData.fonte} / ${artigoData.data}\n${textoReformatado}`;
 
         let success = false;
 
@@ -3767,8 +3767,8 @@ async function copiarArtigosFiltrados(event, clusterId, fonteNome) {
             const texto = artigo.texto_completo || 'Texto não disponível';
 
             text += `*ARTIGO ${index + 1}:*\n`;
-            text += `*Título:* ${titulo} / *Fonte:* ${fonte} / ${dataStr}\n`;
-            text += `*Texto:* ${texto}\n\n`;
+            text += `${titulo} / ${fonte} / ${dataStr}\n`;
+            text += `${texto}\n\n`;
         });
 
         let success = false;

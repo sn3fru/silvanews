@@ -130,12 +130,11 @@ def update_artigo_dados_sem_status(
     artigo.relevance_score = dados_processados.get('relevance_score')
     artigo.relevance_reason = dados_processados.get('relevance_reason')
     
-    # IMPORTANTE: Preserva o tipo_fonte que foi definido durante o carregamento
-    # NÃO sobrescreve o tipo_fonte com dados_processados.get('tipo_fonte')
-    # CORREÇÃO: Se o artigo não tem tipo_fonte definido, usa o valor dos dados processados
+    # IMPORTANTE: Preserva o tipo_fonte definido no carregamento.
+    # Se ainda não houver valor, aceita novo conjunto de categorias.
     if not hasattr(artigo, 'tipo_fonte') or artigo.tipo_fonte is None:
-        tipo_fonte_dados = dados_processados.get('tipo_fonte')
-        if tipo_fonte_dados and tipo_fonte_dados in ('nacional', 'internacional'):
+        tipo_fonte_dados = (dados_processados.get('tipo_fonte') or '').strip().lower()
+        if tipo_fonte_dados in ('nacional', 'internacional', 'brasil_fisico', 'brasil_online'):
             artigo.tipo_fonte = tipo_fonte_dados
             print(f"    🔍 DEBUG: Artigo {id_artigo} recebe tipo_fonte='{tipo_fonte_dados}' dos dados processados")
     
@@ -246,13 +245,13 @@ def create_cluster(db: Session, cluster_data: ClusterEventoCreate) -> ClusterEve
 
     prioridade_normalizada = corrigir_prioridade_invalida(cluster_data.prioridade if cluster_data.prioridade else None)
 
-    # Normaliza tipo_fonte
+    # Normaliza tipo_fonte (agora aceita brasil_fisico/brasil_online além de internacional e legado nacional)
     tipo_fonte_normalizado = None
     try:
         tf = getattr(cluster_data, 'tipo_fonte', None)
         if isinstance(tf, str):
             tf = tf.strip().lower()
-            if tf in ('nacional', 'internacional'):
+            if tf in ('nacional', 'internacional', 'brasil_fisico', 'brasil_online'):
                 tipo_fonte_normalizado = tf
     except Exception:
         pass

@@ -974,14 +974,15 @@ def consolidacao_final_clusters(db: Session, client, debug: bool = True, day_str
                 print("ℹ️ Consolidação final: nenhum cluster elegível hoje")
             return True
 
-        # Monta payload mínimo por cluster (id, título, tag, prioridade)
+        # Monta payload mínimo por cluster (id, título, tag, prioridade, tipo_fonte)
         itens = []
         for c in clusters:
             itens.append({
                 "id": c.id,
                 "titulo": c.titulo_cluster,
                 "tag": c.tag,
-                "prioridade": c.prioridade
+                "prioridade": c.prioridade,
+                "tipo_fonte": getattr(c, 'tipo_fonte', 'nacional')
             })
 
         from backend.crud import merge_clusters, update_cluster_title, update_cluster_priority, update_cluster_tags
@@ -1038,14 +1039,15 @@ def consolidacao_final_clusters(db: Session, client, debug: bool = True, day_str
                             try:
                                 fonte_objs = [db.query(ClusterEvento).filter(ClusterEvento.id == int(fid)).first() for fid in fontes]
                                 fonte_objs = [f for f in fonte_objs if f is not None]
-                                
                                 if destino_obj and fonte_objs:
-                                    tipo_destino = getattr(destino_obj, 'tipo_fonte', 'nacional')
-                                    tipos_fontes = [getattr(f, 'tipo_fonte', 'nacional') for f in fonte_objs]
-                                    
-                                    # Não permite merge entre tipos diferentes (nacional vs internacional)
-                                    if (tipo_destino == 'internacional' and 'nacional' in tipos_fontes) or \
-                                       (tipo_destino == 'nacional' and 'internacional' in tipos_fontes):
+                                    tipo_destino = getattr(destino_obj, 'tipo_fonte', 'nacional') or 'nacional'
+                                    tipos_fontes = [getattr(f, 'tipo_fonte', 'nacional') or 'nacional' for f in fonte_objs]
+                                    # Bloqueia qualquer mistura entre internacional e brasil_* (inclui legado 'nacional')
+                                    misturando_internacional = (
+                                        (tipo_destino == 'internacional' and any(tf != 'internacional' for tf in tipos_fontes)) or
+                                        (tipo_destino != 'internacional' and any(tf == 'internacional' for tf in tipos_fontes))
+                                    )
+                                    if misturando_internacional:
                                         continue
                             except Exception:
                                 pass
@@ -1062,6 +1064,19 @@ def consolidacao_final_clusters(db: Session, client, debug: bool = True, day_str
                             )
                             merges_aplicados_total += 1
                             destinos_reprocessar.add(int(destino))
+                            # Recalcula tipo_fonte do destino usando precedência (internacional > brasil_fisico > brasil_online)
+                            try:
+                                artigos_dest = db.query(ArtigoBruto).filter(ArtigoBruto.cluster_id == int(destino)).all()
+                                tipos_dest = [(getattr(a, 'tipo_fonte', None) or '').strip().lower() for a in artigos_dest]
+                                if any(t == 'internacional' for t in tipos_dest):
+                                    destino_obj.tipo_fonte = 'internacional'
+                                elif any(t in ('brasil_fisico', 'nacional') for t in tipos_dest):
+                                    destino_obj.tipo_fonte = 'brasil_fisico'
+                                elif any(t == 'brasil_online' for t in tipos_dest):
+                                    destino_obj.tipo_fonte = 'brasil_online'
+                                db.commit()
+                            except Exception:
+                                pass
                     except Exception:
                         continue
                 if debug:
@@ -1093,7 +1108,8 @@ def consolidacao_final_clusters(db: Session, client, debug: bool = True, day_str
                 # Evita agrupar por títulos genéricos (ex.: 'sem titulo')
                 if not titulo_norm or titulo_e_generico(it.get('titulo')):
                     continue
-                chave = (titulo_norm, it.get('tag'))
+                # Inclui tipo_fonte na chave para evitar merges entre tipos diferentes
+                chave = (titulo_norm, it.get('tag'), it.get('tipo_fonte'))
                 if not chave[0] or not chave[1]:
                     continue
                 grupos.setdefault(chave, []).append(it)

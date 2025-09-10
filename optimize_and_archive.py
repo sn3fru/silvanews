@@ -129,6 +129,8 @@ def move_old_articles(engine, days: int, batch_size: int, dry_run: bool, quiet: 
     ensure_cold_table(engine)
 
     moved_total = 0
+    deleted_total = 0
+    compacted_total = 0
     with engine.begin() as conn:
         # Conta candidatos
         total = conn.execute(text(
@@ -173,14 +175,46 @@ def move_old_articles(engine, days: int, batch_size: int, dry_run: bool, quiet: 
                 """
             ), {"ids": ids})
 
-            conn.execute(text(
-                "DELETE FROM artigos_brutos WHERE id = ANY(:ids)"
-            ), {"ids": ids})
+            # Identifica IDs referenciados por FKs para evitar violação
+            ref_rows = conn.execute(text(
+                """
+                SELECT a.id
+                FROM artigos_brutos a
+                WHERE a.id = ANY(:ids)
+                  AND (
+                        EXISTS (SELECT 1 FROM feedback_noticias f WHERE f.artigo_id = a.id)
+                     OR EXISTS (SELECT 1 FROM logs_processamento l WHERE l.artigo_id = a.id)
+                     OR EXISTS (SELECT 1 FROM semantic_embeddings s WHERE s.artigo_id = a.id)
+                  )
+                """
+            ), {"ids": ids}).fetchall()
+            referenced_ids = {r[0] for r in ref_rows}
+
+            deletable_ids = [i for i in ids if i not in referenced_ids]
+            if deletable_ids:
+                conn.execute(text(
+                    "DELETE FROM artigos_brutos WHERE id = ANY(:ids)"
+                ), {"ids": deletable_ids})
+                deleted_total += len(deletable_ids)
+
+            # Para IDs referenciados, compacta (nulos nos campos pesados) sem deletar
+            if referenced_ids:
+                conn.execute(text(
+                    """
+                    UPDATE artigos_brutos
+                    SET texto_bruto = '',
+                        texto_processado = NULL,
+                        embedding = NULL
+                    WHERE id = ANY(:ids)
+                      AND created_at < :cutoff
+                    """
+                ), {"ids": list(referenced_ids), "cutoff": cutoff_dt})
+                compacted_total += len(referenced_ids)
 
             moved_total += len(ids)
 
     if not quiet:
-        print(f"✅ Movidos: {moved_total}")
+        print(f"✅ Copiados para cold: {moved_total} | Removidos do principal: {deleted_total} | Compactados (referenciados): {compacted_total}")
 
 
 def set_search_path(engine, schema: str) -> None:
