@@ -406,3 +406,71 @@ Cluster 22951: ignorados=[22893] | justificativa=O artigo 22893 foi ignorado por
 Cluster 22640: ignorados=[22619] | justificativa=O artigo 22619 foi ignorado por ser um artigo de opinião, e não uma notícia factual.
 Cluster 22835: ignorados=[22568, 22613] | justificativa=O artigo 22568 e 22613 não são pertinentes ao tema central.
 Cluster 22794: ignorados=[22803] | justificativa=O artigo 22803 não é pertinente ao tema central.
+Cluster 23182: ignorados=[23197] | justificativa=O artigo 23197 foi ignorado por tratar de política interna francesa sem impacto financeiro direto.
+Cluster 23183: ignorados=[23234] | justificativa=Artigo 23234 foi ignorado por tratar de crítica musical, sendo irrelevante para a análise da situação financeira da Vice Media.
+Cluster 23185: ignorados=[23256, 23257, 23264] | justificativa=Os artigos 23256, 23257 e 23264 não são relevantes para a análise do IPCA e, portanto, foram ignorados.
+Cluster 23213: ignorados=[23469, 23470, 23472, 23473, 23474] | justificativa=Todos os artigos eram pertinentes.
+Cluster 23253: ignorados=[23493] | justificativa=O artigo 23493 foi ignorado por tratar de assunto diferente (legalização de auxílios a funcionários do TCE).
+Cluster 23251: ignorados=[23390] | justificativa=O artigo 23390 foi ignorado por tratar da inauguração de uma linha de transmissão de energia e não se relaciona diretamente com a temática de minerais críticos e a instalação do conselho.
+Cluster 23461: ignorados=[23485, 23557, 23558, 23559] | justificativa=O artigo 23559 e 23485 foram ignorados por serem opiniões sem relevância para a análise do evento principal. O artigo 23557 e 23558 foram ignorados por serem opiniões sem relevância para a análise do evento principal.
+Cluster 23485: ignorados=[23524, 23643] | justificativa=Artigos 23524 e 23643 foram ignorados por tratarem de temas distintos da criação do Comitê de Harmonização, como ITCMD e incentivos fiscais na Zona Franca de Manaus, respectivamente.
+Cluster 23515: ignorados=[23639] | justificativa=O artigo 23639 foi ignorado por não apresentar informações relevantes sobre o evento principal.
+Cluster 23490: ignorados=[23410, 23482, 23508, 23556, 23644] | justificativa=O artigo 23410 (ameaças a Dino) e 23508 (anistia) são tangenciais, mas o foco principal é o voto de Fux. O artigo 23482 e 23644 são irrelevantes e foram ignorados.
+Cluster 23574: ignorados=[23199] | justificativa=O artigo 23199 não apresenta informações factuais ou detalhadas sobre o evento principal, sendo mais opinativo e vago.
+Cluster 23580: ignorados=[23198] | justificativa=O artigo 23198 é uma peça de marketing e não contribui para a análise do evento principal.
+Cluster 23308: ignorados=[23640] | justificativa=O artigo 23640 foi ignorado por conter apenas o título da notícia, sem informações relevantes para a análise.
+Cluster 23252: ignorados=[23493] | justificativa=O artigo 23493 foi ignorado por tratar de penduricalhos a funcionários do TCE, um tema distinto da previdência rural.
+Cluster 23381: ignorados=[23256, 23257, 23264] | justificativa=Os artigos 23256, 23257 e 23264 não são relacionados ao IPCA e, portanto, foram ignorados.
+Cluster 23260: ignorados=[23122, 23168, 23281, 23282, 23408, 23503, 23557, 23650, 23658, 23659, 23666] | justificativa=Todos os artigos eram pertinentes.
+Cluster 23170: ignorados=[23100] | justificativa=O artigo 23100 foi ignorado por tratar de um evento diferente (alta nas bolsas asiáticas impulsionada por tecnologia).
+Cluster 23246: ignorados=[23640] | justificativa=O artigo 23640 foi ignorado por ser excessivamente curto e não agregar informações relevantes além das já contidas nos demais artigos.
+Cluster 23260: ignorados=[23121, 23122, 23168, 23265, 23281, 23282, 23408, 23503, 23505, 23557, 23650, 23658, 23659] | justificativa=Todos os artigos eram pertinentes.
+Cluster 23263: ignorados=[23194] | justificativa=O artigo 23194 foi ignorado pois menciona um evento anterior (domingo) e não se alinha diretamente com o foco principal do cluster, que são os eventos mais recentes envolvendo a invasão do espaço aéreo polonês por drones russos durante ataques à Ucrânia.
+Cluster 23876: ignorados=[23840, 23870] | justificativa=Os artigos 23870 e 23840 são irrelevantes e não se encaixam no contexto do edital de licitação.
+Cluster 23624: ignorados=[24051, 24052, 24053, 24197] | justificativa=O artigo 23917 e 23888 foram mantidos por serem menções diretas ao evento principal, ainda que curtas. O artigo 24197 foi ignorado por tratar de especulações políticas sobre eleições futuras, sem relação direta com o evento principal.
+Cluster 23646: ignorados=[23950] | justificativa=O artigo 23950 não é pertinente ao tema principal.
+Cluster 23648: ignorados=[23962] | justificativa=O artigo 23962 foi ignorado por se tratar de uma declaração pública sobre uso fraudulento de dados pessoais, não relacionada a leilões ou ativos distressed.
+Cluster 23683: ignorados=[24071] | justificativa=O artigo 24071 não é pertinente ao tema.
+Cluster 23679: ignorados=[24037] | justificativa=O artigo 24037 não é pertinente ao tema central.
+Cluster 23692: ignorados=[24092] | justificativa=Todos os artigos eram pertinentes.
+Cluster 23704: ignorados=[24103, 24104, 24106, 24119] | justificativa=Todos os artigos eram pertinentes.
+Cluster 23734: ignorados=[24165, 24172] | justificativa=Os artigos 24172 e 24165 não estão diretamente relacionados ao impacto das tarifas americanas no comércio de aço e carvão entre Brasil e EUA, focando em escassez de mão de obra e desenvolvimento de ligas de aço, respectivamente.
+Cluster 23761: ignorados=[23835] | justificativa=O artigo 23835 foi ignorado pois trata de um incidente diferente, envolvendo um míssil que caiu na Polônia na semana anterior, e não da incursão de drones russos.
+Cluster 23758: ignorados=[24306] | justificativa=O artigo 24306 foi ignorado por se tratar de uma correção sobre outra notícia, não impactando o evento principal.
+Cluster 23784: ignorados=[23762, 23772] | justificativa=Todos os artigos eram pertinentes.
+Cluster 23843: ignorados=[23934] | justificativa=O artigo 23934 não continha informações relevantes para a análise.
+Cluster 23987: ignorados=[23884] | justificativa=O artigo 23884 é apenas um título repetido e não agrega informações.
+Cluster 23646: ignorados=[23950, 24306] | justificativa=Os artigos 23950 e 24306 foram ignorados por tratarem de assuntos distintos (Embraer e correção sobre desinvestimentos da Previ, respectivamente).
+Cluster 23624: ignorados=[23762, 23888, 23894, 23898, 23910, 23982] | justificativa=Os artigos 23888, 24071 e 24125 são fragmentos ou notas sem conteúdo informativo relevante para a análise principal. O artigo 24125 trata de negociação de compra de rede de supermercados, não relacionado ao tema central.
+Cluster 23949: ignorados=[23835] | justificativa=O artigo 23835 foi ignorado por focar em um incidente diferente (queda de míssil) e não nas incursões de drones.
+Cluster 24025: ignorados=[24362, 24363, 24375, 24376, 24417, 24422, 24423, 24504, 24518, 24519, 24618] | justificativa=Os artigos 24417, 24423, 24518, 24519, 24422, 24375, 24376, 24362 e 24363 foram ignorados por serem opiniões, cartas de leitores, ou sobre temas não relacionados diretamente ao evento principal (condenação de Bolsonaro e anistia). O artigo 24618 foi ignorado por estar em inglês.
+Cluster 24075: ignorados=[24622] | justificativa=O artigo 24622 não se refere ao mesmo evento.
+Cluster 24094: ignorados=[24396] | justificativa=O artigo 24396 foi ignorado por tratar de um caso diferente, envolvendo o dono da Hurb.
+Cluster 24033: ignorados=[24460, 24462, 24463, 24470, 24475, 24486] | justificativa=Todos os artigos eram pertinentes.
+Cluster 24131: ignorados=[24506, 24507, 24508, 24510, 24517, 24528, 24530] | justificativa=Os artigos 24508, 24510, 24507, 24506, 24530, 24517 e 24528 foram ignorados por serem ruído político, cobertura de redes sociais, ou opiniões sem impacto financeiro direto.
+Cluster 24133: ignorados=[24512] | justificativa=O artigo 24512 foi ignorado por ser uma opinião política genérica sem impacto financeiro direto.
+Cluster 24166: ignorados=[24661] | justificativa=O artigo 24661 foi ignorado por ser uma versão preliminar do artigo 24670 e conter informações desatualizadas.
+Cluster 24168: ignorados=[24624] | justificativa=O artigo 24624 foca primariamente no uso de drones pela Rússia na Ucrânia e nas dificuldades de defesa enfrentadas por Kyiv, não abordando diretamente a violação do espaço aéreo polonês, que é o tema central dos demais artigos.
+Cluster 24180: ignorados=[24614] | justificativa=O artigo 24614 foi ignorado por ser um fragmento de notícia sem contexto suficiente para análise.
+Cluster 24185: ignorados=[24615] | justificativa=O artigo 24615 é muito curto e não agrega informações relevantes além do título, sendo redundante com o artigo 24669.
+Cluster 24093: ignorados=[24362, 24363, 24375, 24376, 24415, 24417, 24422, 24423, 24518, 24519, 24618] | justificativa=Os artigos 24415, 24417, 24423, 24518, 24519, 24618, 24376, 24362 e 24363 foram ignorados por serem opiniões, irrelevantes ou tangenciais ao evento principal. O artigo 24375 foi ignorado por tratar de outro assunto (COP30).
+Cluster 24094: ignorados=[24396] | justificativa=O artigo 24396 foi ignorado por tratar de um caso diferente, envolvendo o dono da Hurb.
+Cluster 24093: ignorados=[24356, 24362, 24363, 24375, 24376, 24417, 24422, 24423, 24519] | justificativa=Os artigos 24417, 24423, 24519, 24376, 24362, 24363, 24375, 24422 e 24356 foram ignorados por serem opiniões, cartas de leitores, ou por tratarem de assuntos sem tese financeira direta (legado ambiental, crise de hospedagem na COP30, etc.).
+Cluster 24250: ignorados=[24770] | justificativa=O artigo 24770 foi ignorado por tratar de um sistema de saúde na Áustria, sendo irrelevante para o tema central de violência política nos EUA.
+Cluster 24266: ignorados=[24798, 24807] | justificativa=Artigos 24798 e 24807 são fragmentos de texto sem contexto e não contribuem para a análise do evento principal.
+Cluster 24312: ignorados=[25036] | justificativa=O artigo 25036 é redundante e não agrega informações relevantes.
+Cluster 24340: ignorados=[25004, 25015, 25016, 25017, 25018, 25020, 25021, 25025, 25026, 25027, 25029, 25030, 25031, 25032, 25033, 25035, 25037, 25038, 25040, 25041, 25044, 25045, 25048, 25050, 25051, 25052, 25054, 25055, 25057, 25058, 25059, 25060, 25061, 25064, 25068, 25069, 25070, 25071, 25072, 25073, 25115, 25125, 25128, 25142, 25147, 25160, 25172, 25184, 25189] | justificativa=Os artigos 25005 e 25013 são títulos genéricos que ganham contexto com o artigo 25110. Os demais artigos foram considerados irrelevantes para o tema central.
+Cluster 24345: ignorados=[24751] | justificativa=O artigo 24751 foi ignorado por tratar de avaliação do governo Lula, não estando relacionado ao tema central dos demais artigos.
+Cluster 24344: ignorados=[24729, 24730] | justificativa=Os artigos 24729 e 24730 foram ignorados por tratarem de temas periféricos: o primeiro sobre a atuação de um advogado de Bolsonaro na Comissão de Anistia e o segundo sobre ações judiciais movidas por ele em 2015 e 2023, sem relação direta com a anistia em discussão.
+Cluster 24357: ignorados=[24870] | justificativa=Artigo 24870 ignorado por ser apenas referência de página.
+Cluster 24456: ignorados=[24727, 24731, 24790, 24792, 24938] | justificativa=Artigos 24727, 24731, 24790, 24792 e 24938 foram ignorados por não serem relacionados ao tema principal.
+Cluster 24458: ignorados=[25008] | justificativa=O artigo 25008 é um título genérico e não agrega informações relevantes ao contexto geral dos demais artigos.
+Cluster 24464: ignorados=[25107] | justificativa=O artigo 25107 foi ignorado por tratar primariamente de questões de privacidade e segurança de dados em IA, desviando-se do foco principal nos investimentos e riscos financeiros associados ao boom da IA.
+Cluster 24475: ignorados=[25185] | justificativa=O artigo 25185 não é relevante para o tema principal.
+Cluster 24481: ignorados=[25159] | justificativa=O artigo 25159 trata de outro assunto (LTC na Europa) e, portanto, foi ignorado.
+Cluster 24482: ignorados=[25162] | justificativa=O artigo 25162 foi ignorado por ser uma seção de índice de outros artigos.
+Cluster 24484: ignorados=[25175] | justificativa=Artigo 25175 não é pertinente.
+Cluster 24459: ignorados=[25007] | justificativa=O artigo 25007 foi ignorado por ser vago e não adicionar informações relevantes ao evento principal.
+Cluster 24490: ignorados=[25199] | justificativa=O artigo 25199 foi ignorado por tratar de política monetária nos EUA, um tema diferente do foco no comércio internacional da China.
+Cluster 24506: ignorados=[25006] | justificativa=O artigo 25006 é redundante e não agrega informações relevantes.
+Cluster 24476: ignorados=[25006] | justificativa=O artigo 25006 foi ignorado por ser um título incompleto e sem contexto adicional.

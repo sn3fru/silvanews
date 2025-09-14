@@ -488,9 +488,16 @@ function setupEventListeners() {
         modalCopyBtn.addEventListener('click', async () => {
             const id = currentClusterId;
             if (!id) return;
+            // Captura o resumo visível no modal, se disponível
+            let overrideResumo = null;
+            try {
+                if (typeof modalResumo !== 'undefined' && modalResumo && (modalResumo.innerText || modalResumo.textContent)) {
+                    overrideResumo = String(modalResumo.innerText || modalResumo.textContent).trim();
+                }
+            } catch (_) {}
             // Preferir detalhes já carregados no modal
             if (currentClusterDetails) {
-                await copyClusterToClipboard(currentClusterDetails);
+                await copyClusterToClipboard(currentClusterDetails, overrideResumo);
                 return;
             }
             // Fallback: procurar no cache do feed
@@ -500,14 +507,14 @@ function setupEventListeners() {
                     const details = await carregarDetalhesCluster(id);
                     if (details) {
                         currentClusterDetails = details;
-                        await copyClusterToClipboard(details);
+                        await copyClusterToClipboard(details, overrideResumo);
                         return;
                     }
                 } catch (_) {}
                 showErrorMessage('Cluster não encontrado');
                 return;
             }
-            await copyClusterToClipboard(cluster);
+            await copyClusterToClipboard(cluster, overrideResumo);
         });
     }
 
@@ -644,8 +651,15 @@ function setupEventListeners() {
         modalCopyBtn.addEventListener('click', async () => {
             const id = currentClusterId;
             if (!id) return;
+            // Captura o resumo visível no modal, se disponível
+            let overrideResumo = null;
+            try {
+                if (typeof modalResumo !== 'undefined' && modalResumo && (modalResumo.innerText || modalResumo.textContent)) {
+                    overrideResumo = String(modalResumo.innerText || modalResumo.textContent).trim();
+                }
+            } catch (_) {}
             if (currentClusterDetails) {
-                await copyClusterToClipboard(currentClusterDetails);
+                await copyClusterToClipboard(currentClusterDetails, overrideResumo);
                 return;
             }
             let cluster = (clustersCarregados || []).find(c => String(c.id) === String(id));
@@ -654,14 +668,14 @@ function setupEventListeners() {
                     const details = await carregarDetalhesCluster(id);
                     if (details) {
                         currentClusterDetails = details;
-                        await copyClusterToClipboard(details);
+                        await copyClusterToClipboard(details, overrideResumo);
                         return;
                     }
                 } catch (_) {}
                 showErrorMessage('Cluster não encontrado');
                 return;
             }
-            await copyClusterToClipboard(cluster);
+            await copyClusterToClipboard(cluster, overrideResumo);
         });
     }
     if (modalLikeBtn) {
@@ -1150,9 +1164,10 @@ function extrairFonteELink(cluster) {
     return { fonte, link };
 }
 
-function buildClipboardPayload(cluster) {
+function buildClipboardPayload(cluster, overrideResumoText) {
     const titulo = cluster.titulo_final || cluster.titulo_cluster || 'Sem título';
-    const resumo = cluster.resumo_final || cluster.resumo_cluster || 'Sem resumo';
+    const resumoBase = cluster.resumo_final || cluster.resumo_cluster || 'Sem resumo';
+    const resumo = (overrideResumoText && String(overrideResumoText).trim()) ? String(overrideResumoText).trim() : resumoBase;
     const { fonte, link } = extrairFonteELink(cluster);
     // Captura autor/página se existirem na primeira fonte
     let fonteDetalhe = fonte;
@@ -1166,18 +1181,18 @@ function buildClipboardPayload(cluster) {
     const dataStr = formatarDataBR(cluster.timestamp || cluster.created_at);
 
     const text = `${titulo} / ${fonteDetalhe} / ${dataStr}\n*Resumo:* ${resumo}${link ? `\n${link}` : ''}`;
-
+    const resumoHtml = String(resumo).replace(/\n/g, '<br>');
     const html = `<div>
   <div>${titulo} / ${fonteDetalhe} / ${dataStr}</div>
-  <div><b>Resumo:</b> ${resumo}</div>
+  <div><b>Resumo:</b> ${resumoHtml}</div>
   ${link ? `<div><a href="${link}">${link}</a></div>` : ``}
 </div>`;
 
     return { text, html };
 }
 
-async function copyClusterToClipboard(cluster) {
-    const { text, html } = buildClipboardPayload(cluster);
+async function copyClusterToClipboard(cluster, overrideResumoText) {
+    const { text, html } = buildClipboardPayload(cluster, overrideResumoText);
 
     let success = false;
 
@@ -1235,20 +1250,29 @@ document.addEventListener('click', async (e) => {
     const btn = e.target.closest('.btn-copy');
     if (!btn) return;
     const id = btn.getAttribute('data-cluster-id');
+    // Tenta pegar o resumo visível no card
+    let overrideResumo = null;
+    try {
+        const card = btn.closest('.card-cluster');
+        const resumoEl = card ? card.querySelector('.card-resumo') : null;
+        if (resumoEl) {
+            overrideResumo = String(resumoEl.innerText || resumoEl.textContent || '').trim();
+        }
+    } catch (_) {}
     let cluster = (clustersCarregados || []).find(c => String(c.id) === String(id));
     if (!cluster) {
         // Tenta carregar detalhes direto da API como fallback
         try {
             const details = await carregarDetalhesCluster(id);
             if (details) {
-                await copyClusterToClipboard(details);
+                await copyClusterToClipboard(details, overrideResumo);
                 return;
             }
         } catch (_) {}
         showErrorMessage('Cluster não encontrado');
         return;
     }
-    await copyClusterToClipboard(cluster);
+    await copyClusterToClipboard(cluster, overrideResumo);
 });
 
 // =============================
