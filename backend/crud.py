@@ -180,6 +180,173 @@ def get_artigos_by_cluster(db: Session, cluster_id: int) -> List[ArtigoBruto]:
     ).all()
 
 
+def list_sourcers_by_date_and_tipo(db: Session, target_date, tipo_fonte: str) -> List[Dict[str, Any]]:
+    """Lista fontes normalizadas por data/tipo, com contagem (a partir de ArtigoBruto)."""
+    def _q(tf: str):
+        q = db.query(ArtigoBruto.jornal, ArtigoBruto.url_original, ArtigoBruto.metadados).filter(
+            func.date(ArtigoBruto.created_at) == target_date
+        )
+        if tf:
+            if tf == 'internacional':
+                q = q.filter(ArtigoBruto.tipo_fonte == 'internacional')
+            elif tf == 'nacional':
+                q = q.filter(ArtigoBruto.tipo_fonte.in_(['nacional', 'brasil_fisico', 'brasil_online']))
+            elif tf in ('brasil_fisico', 'brasil_online'):
+                q = q.filter(ArtigoBruto.tipo_fonte == tf)
+        return q
+
+    rows = _q(tipo_fonte).all()
+    if not rows and tipo_fonte in ('brasil_fisico', 'brasil_online'):
+        rows = _q('nacional').all()
+
+    def _normalize_source(jornal: Optional[str], url: Optional[str], metadados: Optional[Dict[str, Any]]) -> Optional[str]:
+        # Prioridade: campo estruturado -> metadados.jornal -> metadados.fonte_original -> metadados.fonte -> domínio da URL
+        nome = (jornal or '').strip()
+        if nome:
+            return nome
+        if isinstance(metadados, dict):
+            m_j = (metadados.get('jornal') or '').strip()
+            if m_j:
+                return m_j
+            m_f = (metadados.get('fonte_original') or '').strip()
+            if m_f:
+                return m_f
+            m_f2 = (metadados.get('fonte') or '').strip()
+            if m_f2:
+                return m_f2
+        if url:
+            try:
+                from urllib.parse import urlparse
+                netloc = urlparse(url).netloc
+                return netloc.lower() if netloc else None
+            except Exception:
+                return None
+        return None
+
+    def _canonicalize(nome_raw: Optional[str]) -> Optional[str]:
+        if not nome_raw:
+            return None
+        s = ' '.join(str(nome_raw).replace('‐', '-').replace('–', '-').split()).strip()
+        import re
+        s = re.sub(r"\b\d{5,}\b", "", s).strip()
+        lixo = {"n/a", "na", "nd", "?", "-", "ela", "ines", "ines249"}
+        if s.lower() in lixo or len(s) < 3:
+            return None
+        up = s.upper()
+        if "GLOBO" in up:
+            return "O Globo"
+        if ("ESTADO" in up and ("PAULO" in up or "S. PAULO" in up or "S.PAULO" in up)) or "ESTADÃO" in up or "ESTADAO" in up:
+            return "O Estado de S. Paulo"
+        if up.startswith("SP O ESTADO"):
+            return "O Estado de S. Paulo"
+        if up.startswith("BARRA O GLOBO"):
+            return "O Globo"
+        try:
+            return s if s.istitle() else s.title()
+        except Exception:
+            return s
+
+    counts: Dict[str, int] = {}
+    for jornal, url, metadados in rows:
+        s = _normalize_source(jornal, url, metadados)
+        can = _canonicalize(s)
+        if not can:
+            continue
+        counts[can] = counts.get(can, 0) + 1
+
+    ordered = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0].lower()))
+    return [{"nome": k, "qtd": v} for k, v in ordered]
+
+
+def list_raw_articles_by_source_date_tipo(db: Session, source: str, target_date, tipo_fonte: str) -> List[Dict[str, Any]]:
+    """Retorna artigos brutos da "source" (jornal/metadados/domínio), dia/tipo, sem filtrar por prioridade/tag."""
+    def _query_for_tipo(tf: str):
+        q = db.query(ArtigoBruto).filter(func.date(ArtigoBruto.created_at) == target_date)
+        if tf:
+            if tf == 'internacional':
+                q = q.filter(ArtigoBruto.tipo_fonte == 'internacional')
+            elif tf == 'nacional':
+                q = q.filter(ArtigoBruto.tipo_fonte.in_(['nacional', 'brasil_fisico', 'brasil_online']))
+            elif tf in ('brasil_fisico', 'brasil_online'):
+                q = q.filter(ArtigoBruto.tipo_fonte == tf)
+        return q
+
+    rows = _query_for_tipo(tipo_fonte).order_by(ArtigoBruto.created_at.asc()).all()
+    if not rows and tipo_fonte in ('brasil_fisico', 'brasil_online'):
+        rows = _query_for_tipo('nacional').order_by(ArtigoBruto.created_at.asc()).all()
+
+    def _normalize_source(jornal: Optional[str], url: Optional[str], metadados: Optional[Dict[str, Any]]) -> Optional[str]:
+        nome = (jornal or '').strip()
+        if nome:
+            return nome
+        if isinstance(metadados, dict):
+            m_j = (metadados.get('jornal') or '').strip()
+            if m_j:
+                return m_j
+            m_f = (metadados.get('fonte_original') or '').strip()
+            if m_f:
+                return m_f
+        if url:
+            try:
+                from urllib.parse import urlparse
+                netloc = urlparse(url).netloc
+                return netloc.lower() if netloc else None
+            except Exception:
+                return None
+        return None
+
+    # Canoniza alvo para combinar com a mesma regra de agrupamento
+    def _canonicalize(nome_raw: Optional[str]) -> Optional[str]:
+        if not nome_raw:
+            return None
+        s = ' '.join(str(nome_raw).replace('‐', '-').replace('–', '-').split()).strip()
+        import re
+        s = re.sub(r"\b\d{5,}\b", "", s).strip()
+        lixo = {"n/a", "na", "nd", "?", "-", "ela", "ines", "ines249"}
+        if s.lower() in lixo or len(s) < 3:
+            return None
+        up = s.upper()
+        if "GLOBO" in up:
+            return "O Globo"
+        if ("ESTADO" in up and ("PAULO" in up or "S. PAULO" in up or "S.PAULO" in up)) or "ESTADÃO" in up or "ESTADAO" in up:
+            return "O Estado de S. Paulo"
+        if up.startswith("SP O ESTADO"):
+            return "O Estado de S. Paulo"
+        if up.startswith("BARRA O GLOBO"):
+            return "O Globo"
+        try:
+            return s if s.istitle() else s.title()
+        except Exception:
+            return s
+
+    alvo = _canonicalize((source or '').strip()) or ''
+    resultado: List[Dict[str, Any]] = []
+    for a in rows:
+        s = _normalize_source(a.jornal, a.url_original, a.metadados)
+        can = _canonicalize(s) or ''
+        if can != alvo:
+            continue
+        # Aplica filtro mínimo de conteúdo
+        conteudo = a.texto_bruto or a.texto_processado or ""
+        if not isinstance(conteudo, str) or len(conteudo.strip()) < 100:
+            continue
+        resultado.append({
+            "id": a.id,
+            "titulo": a.titulo_extraido or "Sem título",
+            "texto_bruto": a.texto_bruto or a.texto_processado or "",
+            "jornal": a.jornal or (can or "Fonte desconhecida"),
+            "autor": a.autor,
+            "pagina": a.pagina,
+            "data_publicacao": a.data_publicacao.isoformat() if a.data_publicacao else None,
+            "url_original": a.url_original,
+            "prioridade": a.prioridade,
+            "tag": a.tag,
+            "cluster_id": a.cluster_id,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+        })
+    return resultado
+
+
 def get_textos_brutos_por_cluster_id(db: Session, cluster_id: int) -> List[Dict[str, Any]]:
     """
     Busca os textos brutos originais e metadados essenciais de todos os artigos

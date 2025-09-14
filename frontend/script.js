@@ -53,6 +53,7 @@ const listaFontesContainer = document.getElementById('lista-fontes-container');
 // Filtros
 const filtrosPrioridadeContainer = document.getElementById('filtros-prioridade');
 const filtrosCategoriaContainer = document.getElementById('filtros-categoria');
+const selectSourcers = document.getElementById('select-sourcers');
 const btnCriarFeed = document.getElementById('btn-criar-feed');
 
 // =======================================
@@ -163,6 +164,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // DEPOIS: Carrega o feed completo
             await carregarFeed();
+
+            // Carrega lista de sourcers disponíveis para a data/aba
+            await carregarSourcersDisponiveis();
         } catch (error) {
             console.error('❌ Erro na inicialização:', error);
         }
@@ -440,6 +444,9 @@ function setupNewsTabsListeners() {
             
             // Recarrega o feed com o novo tipo
             await carregarFeed();
+
+            // Recarrega sourcers da aba atual
+            await carregarSourcersDisponiveis();
         });
     });
 }
@@ -456,7 +463,8 @@ function setupEventListeners() {
         currentDate = e.target.value;
         atualizarDataTexto();
         await carregarContadoresSimples(currentDate);
-        carregarFeed();
+        await carregarFeed();
+        await carregarSourcersDisponiveis();
     });
 
     // Abas Brasil/Internacional
@@ -476,6 +484,18 @@ function setupEventListeners() {
     
     // Filtros de Categoria
     if (filtrosCategoriaContainer) filtrosCategoriaContainer.addEventListener('change', filterAndRender);
+
+    // Sourcers select
+    if (selectSourcers) selectSourcers.addEventListener('change', async (e) => {
+        const value = (e.target && e.target.value) ? String(e.target.value).trim() : '';
+        if (value) {
+            await carregarRawPorSourcer(value);
+        } else {
+            // Volta ao feed padrão de clusters
+            await carregarContadoresSimples(currentDate);
+            await carregarFeed();
+        }
+    });
 
     // Modal
     if (modalCloseBtn) modalCloseBtn.addEventListener('click', closeModal);
@@ -835,6 +855,11 @@ async function carregarFeed() {
         console.log('🚀 carregarFeed chamado para data:', currentDate);
         // Atualiza métricas específicas da data
         await carregarMetricas(currentDate);
+        // Se um sourcer estiver selecionado, mostra raw; senão feed padrão
+        if (selectSourcers && selectSourcers.value) {
+            await carregarRawPorSourcer(selectSourcers.value);
+            return;
+        }
         // Usa o novo sistema de carregamento progressivo
         await carregarClustersPorPrioridade(currentDate, myToken);
 
@@ -876,6 +901,118 @@ function renderizarClusters() {
             feedContainer.appendChild(card);
         });
     }
+}
+
+// =======================================
+// SOURCERS: carregamento e renderização de RAW
+// =======================================
+async function carregarSourcersDisponiveis() {
+    try {
+        const url = `/api/sourcers?data=${currentDate}&tipo_fonte=${tipoFonteAtivo}`;
+        const resp = await fetch(url);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        // Backend agora retorna objetos { nome, qtd }
+        const lista = Array.isArray(data.sourcers) ? data.sourcers : [];
+        if (selectSourcers) {
+            const current = selectSourcers.value;
+            selectSourcers.innerHTML = '<option value="">— Todas as fontes —</option>' +
+                lista.map(obj => {
+                    const nome = typeof obj === 'string' ? obj : (obj && obj.nome ? obj.nome : '');
+                    const qtd = typeof obj === 'object' && obj && obj.qtd ? Number(obj.qtd) : '';
+                    const label = qtd ? `${nome} (${qtd})` : nome;
+                    return `<option value="${escapeHtml(nome)}">${escapeHtml(label)}</option>`;
+                }).join('');
+            // preserva seleção se possível
+            selectSourcers.value = current || '';
+        }
+    } catch (e) {
+        console.warn('Falha ao carregar sourcers', e);
+    }
+}
+
+async function carregarRawPorSourcer(source) {
+    try {
+        // UI: limpar e mostrar loading simples
+        if (feedContainer) feedContainer.innerHTML = '<div class="card-sintese">Carregando artigos da fonte selecionada...</div>';
+        const url = `/api/raw-by-source?source=${encodeURIComponent(source)}&data=${currentDate}&tipo_fonte=${tipoFonteAtivo}`;
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        const artigos = Array.isArray(data.artigos) ? data.artigos : [];
+        renderizarRawArtigos(artigos, source);
+        // métricas continuam sendo do dia (já atualizadas em carregarMetricas)
+    } catch (e) {
+        console.error('Erro ao carregar RAW por sourcer', e);
+        mostrarErro('Erro ao carregar artigos desta fonte');
+    }
+}
+
+function renderizarRawArtigos(artigos, source) {
+    if (!feedContainer) return;
+    feedContainer.innerHTML = '';
+    if (!artigos || artigos.length === 0) {
+        const msg = document.createElement('div');
+        msg.className = 'card-sintese';
+        msg.textContent = `Nenhum artigo encontrado para a fonte "${source}" nesta data.`;
+        feedContainer.appendChild(msg);
+        return;
+    }
+
+    // Cabeçalho informativo
+    const head = document.createElement('div');
+    head.className = 'card-sintese';
+    head.innerHTML = `<div class="card-header"><h2 class="card-titulo">Artigos brutos — ${escapeHtml(source)}</h2></div><p class="card-resumo">Exibindo todas as notícias desta fonte, sem filtro por prioridade/tag.</p>`;
+    feedContainer.appendChild(head);
+
+    artigos.forEach(a => {
+        const card = document.createElement('article');
+        card.className = 'card-cluster';
+        card.innerHTML = `
+            <div class="card-header">
+                <div class="card-title-area">
+                    <h3 class="card-titulo">${escapeHtml(a.titulo || 'Sem título')}</h3>
+                </div>
+                <div class="card-contador-fontes" title="Fonte">
+                    <span>📰</span>
+                    <span class="contador">${escapeHtml(a.jornal || 'Fonte desconhecida')}</span>
+                </div>
+            </div>
+            <p class="card-resumo" style="white-space:pre-wrap;">${escapeHtml((a.texto_bruto || '').slice(0, 800))}${(a.texto_bruto && a.texto_bruto.length > 800) ? '…' : ''}</p>
+            <div class="card-footer">
+                <div class="card-footer-left">
+                    <span class="card-timestamp">${escapeHtml(formatarDataPossivel(a.data_publicacao || a.created_at))}</span>
+                    <div class="card-tags">
+                        ${a.tag ? `<span class="tag">${escapeHtml(a.tag)}</span>` : ''}
+                        ${a.prioridade ? `<span class="tag">${escapeHtml(a.prioridade)}</span>` : ''}
+                    </div>
+                </div>
+                <div class="card-footer-right">
+                    ${a.url_original ? `<a class="btn btn-terciario" href="${a.url_original}" target="_blank">Abrir original</a>` : ''}
+                </div>
+            </div>
+        `;
+        feedContainer.appendChild(card);
+    });
+}
+
+function escapeHtml(str) {
+    try {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    } catch { return ''; }
+}
+
+function formatarDataPossivel(isoStr) {
+    if (!isoStr) return '';
+    try {
+        const d = new Date(isoStr);
+        return new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo' }).format(d);
+    } catch { return ''; }
 }
 
 // Função removida - agora usa carregamento progressivo por prioridade

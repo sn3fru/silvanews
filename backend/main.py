@@ -53,7 +53,8 @@ try:
         list_prompt_tags, create_prompt_tag, update_prompt_tag, delete_prompt_tag,
         list_prompt_prioridade_itens_grouped, create_prompt_prioridade_item, update_prompt_prioridade_item, delete_prompt_prioridade_item,
         list_prompt_templates, upsert_prompt_template, delete_prompt_template, get_prompts_compilados,
-        get_cluster_counts_by_date_and_tipo_fonte
+        get_cluster_counts_by_date_and_tipo_fonte,
+        list_sourcers_by_date_and_tipo, list_raw_articles_by_source_date_tipo
     )
     from .processing import processar_artigo_pipeline, gerar_resumo_cluster, inicializar_processamento
     from .utils import gerar_hash_unico, formatar_timestamp_relativo, get_date_brasil, parse_date_brasil, extrair_json_da_resposta, get_gemini_model
@@ -77,7 +78,8 @@ except ImportError:
         list_prompt_tags, create_prompt_tag, update_prompt_tag, delete_prompt_tag,
         list_prompt_prioridade_itens_grouped, create_prompt_prioridade_item, update_prompt_prioridade_item, delete_prompt_prioridade_item,
         list_prompt_templates, upsert_prompt_template, delete_prompt_template, get_prompts_compilados, get_textos_brutos_por_cluster_id,
-        get_cluster_counts_by_date_and_tipo_fonte
+        get_cluster_counts_by_date_and_tipo_fonte,
+        list_sourcers_by_date_and_tipo, list_raw_articles_by_source_date_tipo
     )
     from backend.processing import processar_artigo_pipeline, gerar_resumo_cluster, inicializar_processamento
     from backend.utils import gerar_hash_unico, formatar_timestamp_relativo, get_date_brasil, parse_date_brasil, extrair_json_da_resposta, get_gemini_model
@@ -399,6 +401,75 @@ async def get_feed(
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
+@app.get("/api/sourcers")
+async def api_list_sourcers(
+    data: Optional[str] = None,
+    tipo_fonte: Optional[str] = 'nacional',
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Lista fontes (jornais) disponíveis para a data e tipo selecionados.
+    Default: data=hoje (GMT-3 lógico via get_date_brasil), tipo_fonte='nacional' (compat inclui fisico+online).
+    """
+    try:
+        if data:
+            try:
+                target_date = datetime.strptime(data, "%Y-%m-%d").date()
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Formato de data inválido. Use YYYY-MM-DD")
+        else:
+            target_date = get_date_brasil()
+
+        # Normaliza tipo_fonte para chaves válidas do CRUD (mantém compatibilidade)
+        tipo_norm = (tipo_fonte or 'nacional').strip().lower()
+        if tipo_norm not in ('nacional', 'internacional', 'brasil_fisico', 'brasil_online'):
+            tipo_norm = 'nacional'
+
+        fontes = list_sourcers_by_date_and_tipo(db, target_date, tipo_norm)
+        # retorna lista de objetos com nome e qtd, e também uma lista de strings para compat futura
+        return {"data": data or target_date.isoformat(), "tipo_fonte": tipo_norm, "sourcers": fontes, "sourcers_legacy": [f.get("nome") for f in fontes]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        create_log(db, "ERROR", "api", f"Erro em GET /api/sourcers: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+@app.get("/api/raw-by-source")
+async def api_list_raw_by_source(
+    source: str,
+    data: Optional[str] = None,
+    tipo_fonte: Optional[str] = 'nacional',
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Lista artigos brutos do dia e tipo selecionados para UMA fonte específica.
+    Não filtra por prioridade ou tag; retorna tudo que há no banco dessa fonte.
+    """
+    try:
+        if not source or not source.strip():
+            raise HTTPException(status_code=400, detail="Parâmetro 'source' é obrigatório")
+
+        if data:
+            try:
+                target_date = datetime.strptime(data, "%Y-%m-%d").date()
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Formato de data inválido. Use YYYY-MM-DD")
+        else:
+            target_date = get_date_brasil()
+
+        tipo_norm = (tipo_fonte or 'nacional').strip().lower()
+        if tipo_norm not in ('nacional', 'internacional', 'brasil_fisico', 'brasil_online'):
+            tipo_norm = 'nacional'
+
+        itens = list_raw_articles_by_source_date_tipo(db, source.strip(), target_date, tipo_norm)
+        return {"data": target_date.isoformat(), "tipo_fonte": tipo_norm, "source": source.strip(), "artigos": itens}
+    except HTTPException:
+        raise
+    except Exception as e:
+        create_log(db, "ERROR", "api", f"Erro em GET /api/raw-by-source: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
 @app.get("/api/cluster/{cluster_id}")
 async def get_cluster_details(
     cluster_id: int,
@@ -673,6 +744,16 @@ async def criar_novo_artigo(
                 data={"id_artigo": artigo_existente.id}
             )
         
+        # Preenche 'jornal' a partir de metadados se possível antes de criar
+        try:
+            md = artigo_data.metadados or {}
+            j = md.get('jornal') or md.get('fonte_original') or md.get('fonte')
+            if j and hasattr(artigo_data, 'metadados'):
+                # também grava um alias coerente
+                artigo_data.metadados['jornal'] = j
+        except Exception:
+            pass
+
         # Cria novo artigo (apenas carga bruta; processamento é etapa posterior)
         novo_artigo = create_artigo_bruto(db, artigo_data)
         
@@ -688,9 +769,10 @@ async def criar_novo_artigo(
             if hasattr(novo_artigo, 'jornal') and novo_artigo.jornal:
                 jornal = novo_artigo.jornal
             if not jornal and isinstance(novo_artigo.metadados, dict):
-                jornal = (novo_artigo.metadados or {}).get('jornal') or (novo_artigo.metadados or {}).get('fonte_original')
+                jornal = (novo_artigo.metadados or {}).get('jornal') or (novo_artigo.metadados or {}).get('fonte_original') or (novo_artigo.metadados or {}).get('fonte')
             tf = _infer_tf(jornal) if jornal else 'nacional'
             if hasattr(novo_artigo, 'tipo_fonte'):
+                # Compat: mapeia antigo nacional → brasil_fisico por padrão para PDFs sem URL
                 novo_artigo.tipo_fonte = 'internacional' if tf == 'internacional' else 'nacional'
             db.commit()
             db.refresh(novo_artigo)
