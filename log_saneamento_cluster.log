@@ -474,3 +474,21 @@ Cluster 24459: ignorados=[25007] | justificativa=O artigo 25007 foi ignorado por
 Cluster 24490: ignorados=[25199] | justificativa=O artigo 25199 foi ignorado por tratar de política monetária nos EUA, um tema diferente do foco no comércio internacional da China.
 Cluster 24506: ignorados=[25006] | justificativa=O artigo 25006 é redundante e não agrega informações relevantes.
 Cluster 24476: ignorados=[25006] | justificativa=O artigo 25006 foi ignorado por ser um título incompleto e sem contexto adicional.
+Cluster 24530: ignorados=[25274, 25324, 25429, 25435] | justificativa=Os artigos 25429 e 25435 foram ignorados por tratarem de temas políticos gerais e da relação Brasil-EUA, respectivamente, sem impacto financeiro direto ou conexão clara com a tese central.
+Cluster 24540: ignorados=[25439] | justificativa=A notícia 25439 não é pertinente ao tema central da política de Marco Rubio na América Latina.
+Cluster 24564: ignorados=[25261] | justificativa=Todos os artigos eram pertinentes.
+Cluster 24721: ignorados=[25511, 25514, 25515, 25520, 25521] | justificativa=Os demais artigos foram considerados irrelevantes para o tema central da notícia 25518.
+Cluster 24722: ignorados=[25513] | justificativa=O artigo 25513 é uma menção breve e superficial ao acordo, sem informações adicionais relevantes.
+Cluster 24774: ignorados=[25691] | justificativa=O artigo 25691 foi ignorado por se tratar de uma análise literária do poema 'Que país é este?' de Affonso Romano de Sant'Anna, tangencialmente relacionado ao julgamento, mas sem impacto direto na tese principal.
+Cluster 24790: ignorados=[25742] | justificativa=Artigo 25742 é muito curto e não agrega informações relevantes.
+Cluster 24728: ignorados=[25277] | justificativa=O artigo 25277 foi ignorado por se tratar de um ensaio fotográfico sobre os bastidores do julgamento, sem informações relevantes para a análise.
+Cluster 24836: ignorados=[25361, 25369] | justificativa=O artigo 25361 foi ignorado por tratar principalmente da relação entre a política e a economia, com foco no câmbio e nas expectativas do mercado, mencionando a condenação de Bolsonaro apenas como um evento de contexto político, sem aprofundar nas implicações jurídicas ou financeiras diretas da decisão.
+Cluster 24898: ignorados=[25655, 25656, 25657, 25658, 25662] | justificativa=Todos os artigos eram pertinentes.
+Cluster 24577: ignorados=[25297] | justificativa=O artigo 25297 foi ignorado por se tratar de leilão de equipamentos de ginástica, informática, mobiliário e outros bens, não relacionado ao leilão de imóveis do Banco do Brasil.
+Cluster 24884: ignorados=[25742] | justificativa=O artigo 25742 foi ignorado por ser um fragmento incompleto da notícia.
+Cluster 24535: ignorados=[25349, 25694] | justificativa=Todos os artigos eram pertinentes.
+Cluster 24634: ignorados=[25385] | justificativa=O artigo 25385 foi ignorado por ser genérico e não adicionar informações relevantes sobre o evento principal.
+Cluster 24571: ignorados=[25292, 25387] | justificativa=Os artigos 25292 e 25387 foram ignorados por se tratarem de anúncios genéricos de leilões, sem relação direta com o leilão específico do Banco do Brasil.
+Cluster 24772: ignorados=[25385] | justificativa=O artigo 25385 foi considerado menos relevante por focar primariamente na importância da COP30 e nas emissões de gases, enquanto os demais artigos abordam diretamente os desafios e riscos relacionados à organização e participação no evento.
+Cluster 24721: ignorados=[25511, 25514, 25515, 25520, 25521] | justificativa=Os artigos 25511, 25514, 25515, 25520 e 25521 foram ignorados por tratarem de política monetária americana e política interna francesa, sem relação direta com o rebaixamento da nota de crédito.
+Cluster 24724: ignorados=[25509] | justificativa=O artigo 25509 foi ignorado por tratar de investimentos em defesa europeia de forma genérica, sem conexão direta com as incursões russas.

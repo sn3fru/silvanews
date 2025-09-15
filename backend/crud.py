@@ -228,7 +228,12 @@ def list_sourcers_by_date_and_tipo(db: Session, target_date, tipo_fonte: str) ->
             return None
         s = ' '.join(str(nome_raw).replace('‐', '-').replace('–', '-').split()).strip()
         import re
-        s = re.sub(r"\b\d{5,}\b", "", s).strip()
+        # remove datas e sufixos (números longos, datas dd.mm.yyyy, mês por extenso)
+        s = re.sub(r"\b\d{4,}\b", "", s)
+        s = re.sub(r"\b\d{1,2}[\./-]\d{1,2}[\./-]\d{2,4}\b", "", s, flags=re.IGNORECASE)
+        s = re.sub(r"\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre)\b", "", s, flags=re.IGNORECASE)
+        s = re.sub(r"\b(segunda|terca|terça|quarta|quinta|sexta|sábado|sabado|domingo|janeiro|fevereiro|março|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\b", "", s, flags=re.IGNORECASE)
+        s = re.sub(r"\s{2,}", " ", s).strip()
         lixo = {"n/a", "na", "nd", "?", "-", "ela", "ines", "ines249"}
         if s.lower() in lixo or len(s) < 3:
             return None
@@ -241,6 +246,14 @@ def list_sourcers_by_date_and_tipo(db: Session, target_date, tipo_fonte: str) ->
             return "O Estado de S. Paulo"
         if up.startswith("BARRA O GLOBO"):
             return "O Globo"
+        if "VALOR" in up and "ECON" in up:
+            return "Valor Econômico"
+        if "FOLHA" in up and ("S.PAULO" in up or "S. PAULO" in up or "SAO PAULO" in up or "SÃO PAULO" in up):
+            return "Folha de S.Paulo"
+        if "WALL STREET JOURNAL" in up:
+            return "The Wall Street Journal"
+        if "LES ECHOS" in up:
+            return "Les Echos"
         try:
             return s if s.istitle() else s.title()
         except Exception:

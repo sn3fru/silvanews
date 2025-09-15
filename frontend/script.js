@@ -555,10 +555,15 @@ function setupEventListeners() {
 
 
 
-    // Botão criar feed
-    if (btnCriarFeed) btnCriarFeed.addEventListener('click', () => {
-        showNotification('Funcionalidade em desenvolvimento', 'info');
-    });
+    // Toggle sidebar (mobile/desktop)
+    const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
+    if (btnToggleSidebar) {
+        btnToggleSidebar.addEventListener('click', () => {
+            try {
+                document.body.classList.toggle('sidebar-closed');
+            } catch (_) {}
+        });
+    }
 
     // Modal de configuração de prompts
     const modalPromptsConfig = document.getElementById('modal-prompts-config');
@@ -3334,12 +3339,8 @@ function inserirCardEstagiario() {
     card.innerHTML = `
         <div class="card-header" style="align-items: flex-start;">
             <div class="card-title-area" style="flex: 1;">
-                <h3 class="card-titulo" style="display: inline;">🤖 Estagiário — Em construção 🚧</h3>
+                <h3 class="card-titulo" style="display: inline;">Estagiário</h3>
                 <span class="card-resumo" style="display: inline; margin-left: 1rem; font-size: 0.9rem; color: var(--cor-texto-secundario);">Faça uma pergunta sobre as notícias do dia.</span>
-            </div>
-            <div class="card-contador-fontes" title="Agente de apoio">
-                <span>🗨️</span>
-                <span class="contador">chat</span>
             </div>
         </div>
         <div class="estagiario-chat" style="margin-top: 0.5rem;">

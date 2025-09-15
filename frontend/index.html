@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
-<body>
+<body class="sidebar-closed">
     <script>
     // Proteção simples por login (localStorage)
     (function(){
@@ -53,12 +53,11 @@
             </section>
 
             <section class="secao-filtro">
-                <h2>Mesas</h2>
+                <h2>Configs</h2>
                 <nav class="feeds-personalizados">
-                    <a href="#" class="feed-link ativo">Special Situations</a>
-                    <a href="#" class="feed-link">Enforce</a>
+                    <a href="#" class="feed-link ativo">Prompts</a>
+                    <a href="/frontend/settings.html" class="feed-link">Dados</a>
                 </nav>
-                <button id="btn-criar-feed" class="btn btn-terciario">+ Criar Novo Feed</button>
             </section>
 
             <section class="secao-filtro">
@@ -72,8 +71,10 @@
         <main class="conteudo-principal">
             <!-- Seletor de Data e Métricas -->
             <div class="seletor-data">
+                <div class="header-actions">
+                    <button id="btn-toggle-sidebar" class="btn btn-terciario" title="Mostrar/ocultar filtros">☰ Filtros</button>
+                </div>
                 <div class="data-info">
-                    <span class="data-label">Notícias de:</span>
                     <div class="data-navegacao">
                         <button id="data-anterior" class="data-nav-btn" title="Dia anterior">←</button>
                         <button id="data-atual" class="data-btn">
@@ -100,9 +101,7 @@
                         <span class="metrica-valor" id="metric-com-resumo">--</span>
                     </div>
                 </div>
-                <div class="header-actions">
-                    <a href="/frontend/settings.html" class="btn btn-secondary">⚙️ Settings</a>
-                </div>
+                
                 <input type="date" id="data-input" class="data-input oculto">
             </div>
 
