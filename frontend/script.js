@@ -557,11 +557,36 @@ function setupEventListeners() {
 
     // Toggle sidebar (mobile/desktop)
     const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
+    const headerActions = document.querySelector('.header-actions');
+    const sidebarEl = document.querySelector('.painel-controle');
+
+    function moveToggleButtonIfNeeded() {
+        if (!btnToggleSidebar || !headerActions || !sidebarEl) return;
+        const isMobile = window.innerWidth <= 768;
+        const sidebarOpen = !document.body.classList.contains('sidebar-closed');
+        if (isMobile && sidebarOpen) {
+            // move para o topo da sidebar
+            try { sidebarEl.insertBefore(btnToggleSidebar, sidebarEl.children[0] || null); } catch (_) {}
+        } else {
+            // move de volta para o header
+            try { headerActions.insertBefore(btnToggleSidebar, headerActions.children[0] || null); } catch (_) {}
+        }
+    }
+
     if (btnToggleSidebar) {
         btnToggleSidebar.addEventListener('click', () => {
             try {
                 document.body.classList.toggle('sidebar-closed');
+                moveToggleButtonIfNeeded();
             } catch (_) {}
+        });
+        // posiciona corretamente no load
+        moveToggleButtonIfNeeded();
+        // reposiciona ao redimensionar
+        window.addEventListener('resize', () => {
+            // debounce leve
+            clearTimeout(window.__toggleBtnResizeTimer);
+            window.__toggleBtnResizeTimer = setTimeout(moveToggleButtonIfNeeded, 100);
         });
     }
 

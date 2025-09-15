@@ -658,6 +658,7 @@ hr { border: none; border-top: 1px solid var(--cor-borda); margin: 1.5rem 0; }
     .container { flex-direction: column; height: 100vh; overflow: hidden; }
     
     .painel-controle { width: 100%; min-width: auto; border-right: none; border-bottom: 1px solid var(--cor-borda); }
+    .painel-controle #btn-toggle-sidebar { margin-bottom: 0.5rem; width: auto; }
     
     .conteudo-principal { width: 100%; min-height: 0; }
     
