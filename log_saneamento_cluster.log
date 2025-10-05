@@ -492,3 +492,422 @@ Cluster 24571: ignorados=[25292, 25387] | justificativa=Os artigos 25292 e 25387
 Cluster 24772: ignorados=[25385] | justificativa=O artigo 25385 foi considerado menos relevante por focar primariamente na importância da COP30 e nas emissões de gases, enquanto os demais artigos abordam diretamente os desafios e riscos relacionados à organização e participação no evento.
 Cluster 24721: ignorados=[25511, 25514, 25515, 25520, 25521] | justificativa=Os artigos 25511, 25514, 25515, 25520 e 25521 foram ignorados por tratarem de política monetária americana e política interna francesa, sem relação direta com o rebaixamento da nota de crédito.
 Cluster 24724: ignorados=[25509] | justificativa=O artigo 25509 foi ignorado por tratar de investimentos em defesa europeia de forma genérica, sem conexão direta com as incursões russas.
+Cluster 25289: ignorados=[26501] | justificativa=O artigo 26501 é apenas um fragmento de texto sem contexto e não contribui para a análise.
+Cluster 25285: ignorados=[26493] | justificativa=O artigo 26493 não está relacionado ao tema principal.
+Cluster 25319: ignorados=[26581, 26587, 26594, 26595] | justificativa=Os artigos 26581, 26587, 26594 e 26595 foram ignorados por serem fragmentos de texto sem contexto ou tabelas de dados sem relação direta com o tema principal.
+Cluster 25317: ignorados=[26578] | justificativa=O artigo 26578 foi ignorado por ser apenas uma descrição de uma foto, sem informações relevantes para a análise.
+Cluster 25323: ignorados=[26604] | justificativa=O artigo 26604 é um ruído sem informação relevante.
+Cluster 25326: ignorados=[26312, 26318] | justificativa=Artigos 26312 e 26318 são anúncios publicitários e não fornecem informações relevantes para a análise.
+Cluster 25340: ignorados=[26756] | justificativa=O artigo 26756 é apenas um título resumido e, portanto, não foi utilizado diretamente na análise.
+Cluster 25446: ignorados=[26336] | justificativa=O artigo 26336 foi ignorado por apresentar apenas informações metodológicas sobre o ranking, sem dados concretos sobre o desempenho das empresas.
+Cluster 25327: ignorados=[26622] | justificativa=O artigo 26622 foi ignorado por ser apenas um cabeçalho incompleto.
+Cluster 25553: ignorados=[26751] | justificativa=O artigo 26751 é uma opinião e não agrega valor à análise factual.
+Cluster 25587: ignorados=[25784] | justificativa=O artigo 25784 foi ignorado por conter um briefing de diversas notícias, sem foco no evento principal.
+Cluster 25584: ignorados=[25798] | justificativa=O artigo 25798 foi ignorado por tratar principalmente de tensões em campi universitários após um incidente de violência, sem conexão direta com as repercussões políticas do assassinato de Charlie Kirk.
+Cluster 25617: ignorados=[25843] | justificativa=Artigo 25843 é muito curto e não agrega informações relevantes.
+Cluster 25638: ignorados=[25808] | justificativa=O artigo 25808 foi ignorado por tratar de uma regra geral da SEC sobre procurações, não focando na ação específica da Exxon Mobil.
+Cluster 24954: ignorados=[26154] | justificativa=Todos os artigos eram pertinentes.
+Cluster 24957: ignorados=[26707] | justificativa=O artigo 26707 é sobre a possível reação dos EUA à condenação de Bolsonaro, o que não se encaixa no tema central de tensões entre EUA e Venezuela.
+Cluster 24956: ignorados=[25877, 26025] | justificativa=Os artigos 25877 e 26025 foram ignorados por não estarem diretamente relacionados à greve na construção civil e seu impacto nas obras da COP30. O artigo 25877 discute a importância do cerrado para a Amazônia, enquanto o artigo 26025 aborda a rejeição de Belém como sede da COP30 devido a dificuldades logísticas.
+Cluster 24963: ignorados=[25956] | justificativa=O artigo 25956 foi ignorado por se tratar de um ensaio sobre a distinção entre amigos e inimigos na política, sem relação direta com o evento principal.
+Cluster 24997: ignorados=[25828] | justificativa=Artigo 25828 ignorado por ser apenas um link.
+Cluster 25000: ignorados=[25864] | justificativa=O artigo 25864 é redundante e não agrega informações relevantes.
+Cluster 25003: ignorados=[25924] | justificativa=Todos os artigos eram pertinentes.
+Cluster 24985: ignorados=[26013, 26036, 26088, 26142, 26143] | justificativa=Artigos 26013, 26088, 26036, 26142 e 26143 foram ignorados por não serem pertinentes ao tema principal.
+Cluster 25352: ignorados=[26718] | justificativa=O artigo 26718 não é pertinente ao tema central.
+Cluster 25353: ignorados=[25924, 25961] | justificativa=O artigo 25924 foca primariamente na agenda de Lula na ONU, sendo tangencial ao atraso dos vistos. O artigo 25961 menciona o atraso dos vistos, mas o foco principal é uma suposta ameaça de sanções ao Brasil, o que não se confirma nos demais artigos.
+Cluster 25354: ignorados=[25864, 26772] | justificativa=O artigo 26772 foi ignorado por tratar de um assunto diferente (apostas ilegais).
+Cluster 25484: ignorados=[26479] | justificativa=Artigo 26479 foi considerado redundante.
+Cluster 25357: ignorados=[25877, 26025, 26775] | justificativa=Os artigos 26025, 26775 e 25877 foram ignorados por não serem pertinentes ao fato gerador principal da greve na construção civil em Belém e seu impacto nas obras da COP30. O artigo 26025 trata da rejeição de Belém como sede da COP30, o artigo 26775 trata de problemas em uma usina hidrelétrica e o artigo 25877 discute a importância do cerrado para a Amazônia.
+Cluster 25486: ignorados=[26506] | justificativa=Artigo 26506 não relacionado ao tema principal.
+Cluster 25279: ignorados=[26489] | justificativa=O artigo 26489 complementa as informações dos artigos 26487 e 26488, mas não adiciona informações novas relevantes para a tese principal.
+Cluster 25433: ignorados=[26368] | justificativa=Todos os artigos eram pertinentes.
+Cluster 25314: ignorados=[26572] | justificativa=O artigo 26572 foi ignorado por não estar relacionado ao tema principal.
+Cluster 25335: ignorados=[26649] | justificativa=O artigo 26649 foi ignorado por conter apenas texto ilegível ('PLANOS DE SAÚDE 326 ines249').
+Cluster 25336: ignorados=[26702] | justificativa=O artigo 26702 foi ignorado por não ser relevante para o tema central.
+Cluster 25342: ignorados=[26485] | justificativa=O artigo 26485 não é pertinente ao tema central.
+Cluster 24962: ignorados=[26493] | justificativa=O artigo 26493 não é pertinente ao tema central.
+Cluster 24963: ignorados=[25956, 26751] | justificativa=O artigo 25956 é uma análise filosófica sobre a polarização política e não se encaixa no tema central. O artigo 26751 é uma opinião sobre a anistia e não traz informações relevantes para a análise.
+Cluster 25350: ignorados=[26325] | justificativa=Artigo 26325 foi ignorado por tratar de drawback e exportações, sem relação direta com o evento principal.
+Cluster 25354: ignorados=[25868, 25876, 25877, 25937, 26025, 26718, 26772, 26775] | justificativa=Os artigos 25876, 25937, 26025, 26772, 26775, 25868 e 25877 foram ignorados por tratarem de temas distintos: filantropia, greve na construção civil em Belém, COP30, apostas ilegais, usina hidrelétrica e cerrado, respectivamente.
+Cluster 25358: ignorados=[26516] | justificativa=O artigo 26516 não é pertinente ao tema central.
+Cluster 25511: ignorados=[26615, 26647, 26730, 26731, 26749, 26752, 26770, 26777] | justificativa=Artigos 26615, 26647, 26731, 26730, 26749, 26777, 26752, 26770 foram ignorados por não se encaixarem no tema central de desempenho do setor financeiro e reestruturação do funcionalismo público no Brasil.
+Cluster 25286: ignorados=[26763] | justificativa=O artigo 26763 foi ignorado por tratar de um investimento em uma empresa de organização de casamentos, um evento diferente da aquisição no setor de educação superior.
+Cluster 25428: ignorados=[26478, 26479, 26480, 26481] | justificativa=Os artigos 26480, 26479, 26478 e 26481 foram ignorados por tratarem de informações sobre a CBMM e o mercado de nióbio, não relacionados ao tema central sobre a anistia a Bolsonaro.
+Cluster 25317: ignorados=[26578, 26580] | justificativa=Artigos 26578 e 26580 foram ignorados por serem imagens/publicidade sem conteúdo jornalístico relevante para a análise.
+Cluster 25449: ignorados=[26341] | justificativa=Artigo 26341 foi ignorado por conter apenas definições genéricas e não dados relevantes para a análise.
+Cluster 25459: ignorados=[26590] | justificativa=O artigo 26590 é uma peça de marketing institucional genérica, sem informações factuais relevantes para a análise da situação da Sabesp.
+Cluster 25337: ignorados=[26117] | justificativa=O artigo 26117 foi ignorado por tratar de legislação sobre limites de barulho em eventos na cidade de São Paulo, não estando relacionado ao tema principal dos demais artigos.
+Cluster 25717: ignorados=[26907] | justificativa=O artigo 26907 é uma análise opinativa e não um relato factual do evento principal.
+Cluster 25724: ignorados=[27012] | justificativa=Artigo 27012 foi ignorado por tratar de saúde pública geral (vacinação infantil), sem tese de investimento relacionada.
+Cluster 25715: ignorados=[27109] | justificativa=O artigo 27109 foi ignorado por ser um artigo de opinião e não uma notícia factual.
+Cluster 25719: ignorados=[26979, 27087] | justificativa=Os artigos 26979 e 27087 foram ignorados por tratarem de assuntos distintos (ações militares na Venezuela e agronegócio brasileiro, respectivamente).
+Cluster 25723: ignorados=[27008, 27056, 27194] | justificativa=Artigos 27008, 27056 e 27194 foram ignorados por tratarem de temas genéricos sobre IA, filosofia da IA e fundos de investimento em IA, sem relação direta com o evento principal.
+Cluster 25781: ignorados=[27013] | justificativa=O artigo 27013 foi ignorado por se tratar de um estudo localizado no Brasil, enquanto o foco principal é a tendência de aumento da mortalidade por quedas nos EUA.
+Cluster 25712: ignorados=[26965, 26995, 26996, 26997, 26998, 26999, 27211, 27544, 27549] | justificativa=Todos os artigos eram pertinentes.
+Cluster 25867: ignorados=[27137] | justificativa=Artigo 27137 foi ignorado por ser um fragmento sem contexto.
+Cluster 25876: ignorados=[27487] | justificativa=O artigo 27487 foi ignorado por conter notícias diversas e não relacionadas ao tema central.
+Cluster 25874: ignorados=[26926] | justificativa=O artigo 26926 foi ignorado por apresentar um compilado de crises genéricas, sem foco direto no evento principal.
+Cluster 25879: ignorados=[27043] | justificativa=O artigo 27043 foi ignorado por tratar principalmente da reação política à PEC, e não do conteúdo ou impacto da PEC em si.
+Cluster 25997: ignorados=[27491] | justificativa=O artigo 27491 foi ignorado por ser um título incompleto e sem contexto adicional.
+Cluster 25888: ignorados=[27135] | justificativa=O artigo 27135 foi ignorado por ser apenas um código de referência.
+Cluster 26018: ignorados=[27138] | justificativa=O artigo 27138 é muito curto e não agrega informações relevantes ao tema principal.
+Cluster 26136: ignorados=[26836] | justificativa=O artigo 26836 não está relacionado ao tema principal.
+Cluster 26162: ignorados=[26860] | justificativa=O artigo 26860 foi ignorado por tratar de negociações comerciais entre Coreia do Sul e EUA, um tema distinto da investigação sobre o tratamento de trabalhadores.
+Cluster 25825: ignorados=[27043] | justificativa=O artigo 27043 foi utilizado para contextualizar a votação da PEC, mas seu foco principal é a reação do Centrão e o impacto na votação da anistia, sendo menos central para a análise da PEC em si.
+Cluster 25719: ignorados=[26979, 27087] | justificativa=Artigos 26979 e 27087 foram ignorados por tratarem de assuntos distintos (Venezuela e agronegócio, respectivamente).
+Cluster 25975: ignorados=[26877] | justificativa=O artigo 26877 foi ignorado pois menciona informações incorretas sobre a sucessão de CEO e chairman, não se alinhando com o restante das notícias.
+Cluster 25936: ignorados=[26943] | justificativa=O artigo 26943 foi ignorado por tratar de um assunto diferente (construção de fábrica de biocarvão) e, portanto, não pertencer ao mesmo fato gerador.
+Cluster 25713: ignorados=[26926] | justificativa=Todos os artigos eram pertinentes.
+Cluster 26094: ignorados=[27410] | justificativa=O artigo com ID 27410 foi ignorado por tratar de um evento sobre tributação e governança fiscal, não relacionado ao tema principal do agronegócio.
+Cluster 26098: ignorados=[26993] | justificativa=O artigo 26993 foi ignorado por tratar de um acidente aéreo e investigação de fadiga da tripulação, um evento sem relação com a disputa de direitos autorais envolvendo o SBT e a Sony Music.
+Cluster 26069: ignorados=[27379, 27380, 27388, 27389, 27392, 27394, 27399, 27402, 27408, 27416, 27536] | justificativa=Os artigos 27536, 27389, 27392, 27379, 27388, 27380, 27402, 27399, 27408, 27416 e 27394 foram ignorados por não apresentarem teses de investimento relevantes para a mesa de Special Situations.
+Cluster 25910: ignorados=[27139] | justificativa=O artigo 27139 continha apenas uma linha e não agregava informações relevantes.
+Cluster 25885: ignorados=[27109] | justificativa=O artigo 27109 foi ignorado por ser um artigo de opinião, e não uma notícia factual.
+Cluster 26298: ignorados=[27931, 27984] | justificativa=Os artigos 27931 e 27984 foram ignorados por tratarem de temas políticos sem impacto financeiro direto relevante para a mesa de Special Situations.
+Cluster 26295: ignorados=[27985] | justificativa=O artigo 27985 foi ignorado por se tratar de propaganda de um congresso de educação parental, não relacionado ao tema central.
+Cluster 26296: ignorados=[27978] | justificativa=O artigo 27978 foi ignorado por tratar de recomendação de investimentos em renda fixa e bolsa, não sendo diretamente relacionado à decisão do Copom e do Fed.
+Cluster 26300: ignorados=[27939] | justificativa=O artigo 27939 foi ignorado por tratar de uma opinião genérica sobre o risco de o Brasil se tornar um narcoestado, sem conexão direta com o evento principal.
+Cluster 26306: ignorados=[27678] | justificativa=O artigo 27678 foi ignorado por tratar de um processo contra o NYT e, embora mencione o assassinato de Charlie Kirk, o foco principal não está relacionado à suspensão do apresentador.
+Cluster 26301: ignorados=[27946, 28174] | justificativa=O artigo 27946 e 28174 foram ignorados por tratarem de assuntos distintos (impeachment de ministros do STF e acolhimento de venezuelanos, respectivamente).
+Cluster 26309: ignorados=[28229] | justificativa=O artigo 28229 foi ignorado por tratar de um crime comum (assassinato de um ex-delegado) sem relação direta com teses de investimento.
+Cluster 26313: ignorados=[27622, 27743] | justificativa=Os artigos 27622 e 27743 foram considerados irrelevantes para o fato gerador principal.
+Cluster 26329: ignorados=[27989] | justificativa=O artigo 27989 foi ignorado por tratar de um assunto diferente (tarifa social de luz).
+Cluster 26336: ignorados=[27999] | justificativa=O artigo 27999 foi ignorado por tratar de ações de metálicas, um setor diferente do foco do artigo 28000, que trata de frigoríficos.
+Cluster 26449: ignorados=[28162] | justificativa=O artigo 28162 foi ignorado por tratar de um diálogo entre ministros sem relação direta com o tema principal.
+Cluster 26468: ignorados=[27718] | justificativa=Todos os artigos eram pertinentes.
+Cluster 26478: ignorados=[28216] | justificativa=O artigo 28216 foi ignorado por focar primariamente em declarações de Celso Amorim sobre diversos temas, incluindo a condenação de Bolsonaro e críticas à política comercial dos EUA, sendo tangencial à escalada de tensão EUA-Venezuela.
+Cluster 26476: ignorados=[28281, 28283] | justificativa=O artigo 28281 e 28283 foram ignorados pois focam primariamente na política interna do FED e na nomeação de diretores, sem impacto direto e imediato na economia brasileira ou em teses de investimento acionáveis.
+Cluster 26533: ignorados=[27647] | justificativa=O artigo 27647 é uma pergunta genérica sobre inovação, sem relação direta com o evento principal.
+Cluster 26557: ignorados=[27719] | justificativa=Artigo 27719 ignorado por ser manchete isolada sem contexto.
+Cluster 26486: ignorados=[27689] | justificativa=O artigo 27689 foi ignorado por tratar de um tema diferente, referente a letalidade no setor de mineração, e não sobre a operação da PF.
+Cluster 26570: ignorados=[27711, 27712] | justificativa=Os artigos 27711 e 27712 tratam de turismo no Piauí, mas não se relacionam diretamente com a suspensão de voos para o Parque Nacional da Serra da Capivara, foco do artigo 27714.
+Cluster 26581: ignorados=[27741] | justificativa=O artigo 27741 foi ignorado por tratar de ruído político sem impacto financeiro direto.
+Cluster 26579: ignorados=[27782, 27783, 27784, 27786, 28238] | justificativa=Os artigos 28238, 27782, 27783, 27784 e 27786 foram ignorados por tratarem de pesquisas de opinião, cartas de leitores e análises genéricas sobre o ex-presidente, sem relação direta com a tramitação das PECs.
+Cluster 26584: ignorados=[27765] | justificativa=O artigo 27765 foi ignorado por focar em declarações de um ministro israelense sobre o potencial imobiliário de Gaza, o que não se alinha diretamente com a tese principal sobre as restrições comerciais e sanções da UE.
+Cluster 26341: ignorados=[27689] | justificativa=O artigo 27689 foi ignorado por tratar de um tema diferente (setor da mineração como o mais letal) e não estar relacionado ao esquema de corrupção investigado.
+Cluster 26317: ignorados=[28133] | justificativa=O artigo 28133 foi ignorado por tratar de um plano de fórum comércio-clima na OMC, tangencialmente relacionado ao impacto econômico da COP30 no Pará, que é o foco principal dos demais artigos.
+Cluster 26584: ignorados=[27765] | justificativa=O artigo 27765 foi ignorado por focar primariamente na fala de um ministro israelense sobre o potencial imobiliário de Gaza, desviando do tema central das sanções comerciais propostas pela UE.
+Cluster 26449: ignorados=[28162] | justificativa=O artigo 28162 foi ignorado por tratar de um diálogo entre ministros sem relação direta com o tema central do julgamento.
+Cluster 26295: ignorados=[27985, 28238] | justificativa=O artigo 27985 não era pertinente ao tema central.
+Cluster 26298: ignorados=[27931, 27965, 27984] | justificativa=Os artigos 27965, 27931 e 27984 foram ignorados por tratarem de assuntos distintos: ECA Digital, anistia para condenados do 8/1 e declarações de Lula sobre Trump, respectivamente.
+Cluster 26621: ignorados=[27978] | justificativa=O artigo 27978 foi ignorado por tratar de recomendação de investimentos, não sendo o foco principal do evento.
+Cluster 26313: ignorados=[27622, 27743, 28215] | justificativa=Os artigos 27622, 27743 e 28215 foram considerados irrelevantes para o tema central.
+Cluster 26320: ignorados=[27730, 27744, 27985, 27989, 28238] | justificativa=O artigo 27989 e 27985 não eram pertinentes ao tema central.
+Cluster 26581: ignorados=[27741] | justificativa=O artigo 27741 foi ignorado por tratar principalmente de um desabafo de Davi Alcolumbre sobre obstruções da oposição, tangenciando o tema principal sem contribuir diretamente para a análise do evento central.
+Cluster 26298: ignorados=[27931, 27965, 27984] | justificativa=Os artigos 27965, 27931 e 27984 foram ignorados por tratarem de outros assuntos (ECA Digital, anistia de condenados do 8/1 e declarações de Lula sobre Trump, respectivamente).
+Cluster 26587: ignorados=[28151] | justificativa=Todos os artigos eram pertinentes.
+Cluster 26944: ignorados=[28528] | justificativa=O artigo 28528 foca primariamente em aspectos políticos e sociais da visita de Trump, com ênfase em controvérsias e críticas, não apresentando uma tese de investimento clara ou um evento financeiro acionável. Portanto, foi ignorado.
+Cluster 26957: ignorados=[28347] | justificativa=Artigo 28347 foi ignorado por tratar de decisão judicial sobre CPMI do INSS, sem relação direta com o tema central.
+Cluster 26994: ignorados=[28501, 28666] | justificativa=Os artigos 28666 e 28501 foram ignorados por tratarem de uma disputa sobre a remoção de Lisa Cook do Fed, um evento distinto da pressão sobre a mídia.
+Cluster 26882: ignorados=[28481, 28728] | justificativa=Os artigos 28481 e 28728 foram ignorados por tratarem de política e não possuírem relevância para a mesa de Special Situations.
+Cluster 26889: ignorados=[28492] | justificativa=O artigo 28492 é apenas uma breve biografia do ministro e não contribui para a análise do evento principal.
+Cluster 26893: ignorados=[28430] | justificativa=O artigo 28430 foi ignorado por tratar de política digital internacional, sem relação direta com as ameaças à mídia nos EUA.
+Cluster 26898: ignorados=[28472, 28665, 28841, 28844, 28850, 28866] | justificativa=Artigos 28665, 28866, 28841, 28844 e 28850 foram ignorados por tratarem de temas distintos como PEC da Blindagem, análise política sobre Eduardo Bolsonaro e avaliação do Ministro da Justiça sobre a PEC da Blindagem, não relacionados diretamente ao debate sobre a anistia dos condenados por atos golpistas.
+Cluster 26922: ignorados=[28745] | justificativa=O artigo 28745 é apenas um título solto e não agrega informações relevantes.
+Cluster 26925: ignorados=[28751] | justificativa=O artigo 28751 foi ignorado por tratar de sondagem de investidores por outras empresas do setor de cosméticos, não estando diretamente relacionado à venda da Avon Internacional pela Natura.
+Cluster 27035: ignorados=[28568, 28905] | justificativa=O artigo 28905 e 28568 foram ignorados por serem artigos de opinião sem relação direta com o evento principal.
+Cluster 27095: ignorados=[28450] | justificativa=O artigo 28450 foi ignorado por conter apenas títulos genéricos e não se relacionar diretamente com o tema central do projeto de lei.
+Cluster 27149: ignorados=[28627] | justificativa=O artigo 28627 foi ignorado por tratar de outro advogado e outro assunto dentro da mesma CPI, sem conexão direta com o fato principal.
+Cluster 27156: ignorados=[28729, 28835, 28842, 28902] | justificativa=Os artigos 28902, 28842 e 28835 foram ignorados por serem artigos de opinião ou de baixa relevância para a tese central.
+Cluster 27159: ignorados=[28901] | justificativa=O artigo 28901 foi ignorado por conter apenas uma opinião pessoal e linguagem inadequada para análise.
+Cluster 27170: ignorados=[28871] | justificativa=O artigo 28871 foi ignorado por se tratar de perguntas e respostas sobre o tema, não trazendo informações novas ou relevantes para a análise.
+Cluster 27190: ignorados=[28747] | justificativa=O artigo 28747 é redundante e não agrega informações relevantes.
+Cluster 27209: ignorados=[28906] | justificativa=O artigo 28906 é uma coluna de opinião sem relevância para o fato gerador principal.
+Cluster 27218: ignorados=[28746] | justificativa=O artigo 28746 é apenas um título resumido do artigo 28759 e não agrega informações adicionais.
+Cluster 27232: ignorados=[28894] | justificativa=O artigo 28894 descreve eventos similares passados, mas não está diretamente relacionado ao evento principal em análise.
+Cluster 27251: ignorados=[28391] | justificativa=Artigo 28391 contém informação redundante e menos detalhada.
+Cluster 26925: ignorados=[28751] | justificativa=Todos os artigos eram pertinentes.
+Cluster 26897: ignorados=[28906] | justificativa=O artigo 28906 foi ignorado por se tratar de uma coluna de opinião satírica, sem informações factuais relevantes para a análise do acordo de investimento.
+Cluster 26898: ignorados=[28472, 28665, 28841, 28844, 28850, 28866] | justificativa=Os artigos 28665, 28866, 28841, 28844, 28850 e 28472 foram ignorados por tratarem de temas periféricos como PEC da Blindagem, ausência de parlamentar e análise política geral, não diretamente relacionados à tese central da anistia e seus desdobramentos.
+Cluster 27091: ignorados=[28835, 28842, 28902] | justificativa=Os artigos 28902, 28842 e 28835 foram ignorados por serem artigos de opinião ou de baixa relevância para a tese central.
+Cluster 26933: ignorados=[28899, 28904, 28905] | justificativa=Os artigos 28899, 28905 e 28904 foram ignorados por serem cartas de leitores/opinião sem impacto direto em teses de investimento.
+Cluster 27017: ignorados=[28502] | justificativa=O artigo 28502 foi ignorado por tratar de uma medida de apoio do BNDES em resposta às tarifas, e não do evento principal em si.
+Cluster 26994: ignorados=[28501, 28666] | justificativa=Os artigos 28666 e 28501 foram ignorados por tratarem de um assunto diferente (tentativa de Trump de remover Lisa Cook do Fed).
+Cluster 26931: ignorados=[28828] | justificativa=O artigo 28828 foi ignorado por ser uma opinião jurídica genérica, sem detalhamento ou tese financeira clara.
+Cluster 27091: ignorados=[28844, 28850, 28866] | justificativa=O artigo 28866, 28844 e 28850 foram ignorados por tratarem de temas distintos da anistia aos golpistas.
+Cluster 26939: ignorados=[28868] | justificativa=O artigo 28868 foi ignorado pois foca na 'porta giratória' na ANM, um tema relacionado mas distinto do foco principal da operação e do esquema de corrupção em si.
+Cluster 27310: ignorados=[29005] | justificativa=O artigo 29005 trata de um assassinato sem relação com o mercado financeiro ou empresas, sendo um crime comum.
+Cluster 27298: ignorados=[28941] | justificativa=Artigo 28941 foi ignorado por conter informações diversas e não relacionadas diretamente à demissão do ministro.
+Cluster 27297: ignorados=[29036, 29059] | justificativa=Os artigos 29059 e 29036 foram ignorados por tratarem de temas periféricos: o primeiro foca em críticas de Lula ao congresso e o segundo em uma proposta de anistia a golpistas, tangenciando o tema central da PEC da Blindagem.
+Cluster 27300: ignorados=[28955, 28961] | justificativa=Os artigos 28955 e 28961 não são pertinentes ao tema principal.
+Cluster 27307: ignorados=[28971] | justificativa=O artigo 28971 não é pertinente ao tema central.
+Cluster 27327: ignorados=[28946] | justificativa=O artigo 28946 foi ignorado por se tratar de ruído político sem impacto econômico direto.
+Cluster 27415: ignorados=[28936] | justificativa=Artigo 28936 não tem relação com o artigo 28977.
+Cluster 27344: ignorados=[28965] | justificativa=O artigo 28965 foi ignorado por tratar de um tema diferente (investigação sobre condições análogas à escravidão na JBS).
+Cluster 27300: ignorados=[28955, 28961] | justificativa=O artigo 28955 sobre declarações de Lula a evangélicos e o artigo 28961 sobre ampliação de limite de empréstimos para estados e municípios não são pertinentes ao tema principal.
+Cluster 27359: ignorados=[29081] | justificativa=O artigo 29081 sobre o Irã não está diretamente relacionado ao conflito Israel-Palestina e, portanto, foi ignorado.
+Cluster 27507: ignorados=[29342] | justificativa=O artigo 29342 não é pertinente ao tema central.
+Cluster 27524: ignorados=[29326] | justificativa=O artigo 29326 foi ignorado por tratar de investimentos em startups, um tema distinto do foco em fundos sustentáveis do artigo 29345.
+Cluster 27519: ignorados=[29320] | justificativa=Artigo 29320 ignorado por focar em detalhes técnicos do projeto, sem impacto financeiro imediato.
+Cluster 27501: ignorados=[29330] | justificativa=O artigo 29330 foi ignorado por tratar de um assunto diferente (ausência de Haddad na ONU).
+Cluster 27572: ignorados=[29258] | justificativa=O artigo 29258 foi ignorado por tratar de temas de entretenimento e fofoca, sem relevância para a mesa de Special Situations.
+Cluster 27506: ignorados=[29284] | justificativa=O artigo 29284 foi ignorado por ser um dado isolado sobre a distribuição de apoiadores de Bolsonaro, sem relação direta com o evento principal.
+Cluster 27681: ignorados=[29425, 29427, 29428, 29429] | justificativa=Todos os artigos eram pertinentes.
+Cluster 27689: ignorados=[29398] | justificativa=O artigo 29398 foi ignorado por se tratar de uma carta de leitores sem relação direta com o evento principal.
+Cluster 27500: ignorados=[29190] | justificativa=O artigo 29190 foi ignorado por ser um artigo de opinião genérico sobre protestos, sem relação direta com a PEC da Blindagem.
+Cluster 27513: ignorados=[29281] | justificativa=O artigo 29281 foi ignorado por ser apenas o nome de um colunista.
+Cluster 27676: ignorados=[29406] | justificativa=O artigo 29406 não é relevante para o tema central.
+Cluster 27518: ignorados=[29334] | justificativa=O artigo 29334 foi ignorado por tratar de uma visão subjetiva sobre a China e não apresentar fatos concretos sobre a disputa comercial entre China e EUA.
+Cluster 27590: ignorados=[29190] | justificativa=O artigo 29190 foi ignorado por se tratar de um artigo de opinião sobre manifestações populares, sem relação direta com a PEC da Blindagem.
+Cluster 27756: ignorados=[29684, 29711] | justificativa=Artigos 29711 e 29684 foram ignorados por tratarem de temas de saúde e ciência geral, sem relação com o escopo de Special Situations.
+Cluster 27774: ignorados=[29676] | justificativa=O artigo 29676 foi ignorado por tratar de disputa entre emissoras de TV, sem impacto financeiro direto relevante para a mesa de Special Situations.
+Cluster 27785: ignorados=[29603] | justificativa=O artigo 29603 não era pertinente ao tema central dos protestos no Brasil.
+Cluster 27833: ignorados=[29691, 29788] | justificativa=Apenas o artigo 29704 é pertinente ao tema central do discurso de Lula na ONU e suas possíveis implicações geopolíticas e econômicas. Os demais artigos abordam temas tangenciais ou irrelevantes para a tese principal.
+Cluster 27908: ignorados=[29508] | justificativa=O artigo 29508 foi ignorado por tratar de política e manchetes, sem relação direta com o tema central de segurança pública e sistema prisional.
+Cluster 27906: ignorados=[29656, 29681, 29682, 29797, 29828, 29875, 29919] | justificativa=Os artigos 29797, 29875, 29656, 29681, 29682, 29919 e 29828 foram considerados irrelevantes para o tema central de expansão da iniciativa privada no saneamento básico.
+Cluster 27991: ignorados=[29545] | justificativa=O artigo 29545 foi ignorado pois trata de um estudo sobre os custos gerais de vistos nos EUA, e não diretamente sobre a mudança específica no H-1B ou a resposta do Reino Unido.
+Cluster 28006: ignorados=[29587] | justificativa=O artigo 29587 é apenas um título e não agrega informações relevantes.
+Cluster 28011: ignorados=[29579] | justificativa=O artigo 29579 foi ignorado por ser uma carta de um gerente relatando suas dificuldades em motivar sua equipe a retornar ao escritório, sem apresentar dados ou informações relevantes sobre o movimento geral de retorno ao escritório.
+Cluster 28010: ignorados=[29572] | justificativa=O artigo 29572 foi ignorado por tratar de um podcast de estilo de vida, sendo irrelevante para a análise financeira.
+Cluster 28012: ignorados=[29568] | justificativa=Todos os artigos eram pertinentes.
+Cluster 28033: ignorados=[29577] | justificativa=O artigo 29577 é uma carta de leitor opinativa e não contribui diretamente para a análise do evento principal.
+Cluster 28042: ignorados=[29891] | justificativa=O artigo 29891 é uma carta ao editor com uma opinião sobre estratégia militar, não um evento concreto.
+Cluster 28053: ignorados=[29933] | justificativa=O artigo 29933 é muito genérico e não agrega valor à análise principal.
+Cluster 27810: ignorados=[29603] | justificativa=O artigo 29603 foi ignorado por tratar de crise política na França, não relacionada ao tema central dos protestos no Brasil.
+Cluster 27757: ignorados=[29691] | justificativa=O artigo 29691 foi ignorado por tratar especificamente do reconhecimento do Estado Palestino por outros países, sendo tangencial ao foco principal do cluster.
+Cluster 27757: ignorados=[29691, 29788] | justificativa=O artigo 29691 e 29788 foram ignorados por tratarem de temas periféricos ao evento central: o primeiro sobre o reconhecimento do Estado Palestino e o segundo sobre a crise na ONU, não diretamente ligados ao discurso de Lula e ao antagonismo com Trump.
+Cluster 28276: ignorados=[30280, 30287, 30288, 30289, 30295, 30296, 30392] | justificativa=Todos os artigos eram pertinentes.
+Cluster 28191: ignorados=[29970, 29985, 30000, 30188] | justificativa=Os artigos 29970, 29985, 30188 e 30000 não são pertinentes ao tema central.
+Cluster 28282: ignorados=[30328, 30331, 30383, 30418] | justificativa=Artigos 30328, 30331, 30383 e 30418 foram ignorados por focarem primariamente nas sanções dos EUA à esposa de Moraes e nas reações políticas, desviando-se do foco principal da denúncia da PGR contra Eduardo Bolsonaro.
+Cluster 28214: ignorados=[30162] | justificativa=O artigo 30162 foi ignorado por tratar de um tema diferente (acordo de armas nucleares) e, portanto, não pertencer ao mesmo cluster de notícias.
+Cluster 28241: ignorados=[30180] | justificativa=O artigo 30180 foi ignorado por tratar de um assunto diferente, o visto cancelado de Gonet.
+Cluster 28146: ignorados=[30279] | justificativa=Artigo 30279 ignorado por se tratar de ata de reunião do Conselho de Administração do Banco Bradesco S.A., referente à eleição de diretores, o que configura ruído corporativo de rotina.
+Cluster 28093: ignorados=[30081] | justificativa=O artigo 30081 foi ignorado por ser uma versão truncada e incompleta da notícia, sem informações adicionais relevantes.
+Cluster 28172: ignorados=[30165] | justificativa=Todos os artigos eram pertinentes.
+Cluster 28170: ignorados=[30215] | justificativa=O artigo 30215 foi ignorado por tratar de um evento sobre energia e tecnologia, não relacionado à capitalização da Cosan.
+Cluster 28101: ignorados=[29969] | justificativa=Artigo 29969 foi ignorado por tratar de tema jurídico sem tese financeira direta (mototáxis em SP).
+Cluster 28109: ignorados=[30181] | justificativa=O artigo 30181 foi ignorado por ser uma frase solta sem contexto claro sobre o evento principal.
+Cluster 28136: ignorados=[30227] | justificativa=O artigo 30227 foi ignorado por ser uma declaração genérica sobre sustentabilidade, sem relação direta com o evento específico da COP30.
+Cluster 28138: ignorados=[30157, 30198, 30268] | justificativa=Todos os artigos eram pertinentes.
+Cluster 28256: ignorados=[30463] | justificativa=O artigo 30463 foi ignorado por tratar de um incidente de segurança pública sem relação direta com o evento principal.
+Cluster 28263: ignorados=[30247, 30549, 30551] | justificativa=Artigos 30247, 30549 e 30551 foram ignorados por tratarem de temas relacionados à projeção fiscal de longo prazo, arcabouço fiscal e imposto de renda, respectivamente, não estando diretamente relacionados à discussão da MP 1303 e corte de benefícios fiscais para o cumprimento das metas de 2026.
+Cluster 28260: ignorados=[30192] | justificativa=O artigo 30192 foi ignorado por se tratar de uma notícia de fofoca sem relevância para a análise.
+Cluster 28286: ignorados=[30307] | justificativa=O artigo 30307 foi ignorado por tratar de geopolítica e economia global de forma genérica, sem relação direta com a crise militar em questão.
+Cluster 28284: ignorados=[30485] | justificativa=O artigo 30485 é um título repetido e não agrega informações adicionais.
+Cluster 28296: ignorados=[30363, 30500] | justificativa=Artigos 30363 e 30500 foram ignorados por serem sobre eventos específicos e um projeto local, respectivamente, não contribuindo diretamente para o tema central da organização do setor privado para a COP30.
+Cluster 28300: ignorados=[30488, 30491, 30493] | justificativa=Os artigos 30488, 30491 e 30493 foram ignorados por tratarem de assuntos políticos e judiciais sem impacto financeiro direto relevante para a mesa de Special Situations.
+Cluster 28377: ignorados=[30587] | justificativa=O artigo 30587 não se refere diretamente ao evento principal, mas sim a ataques cibernéticos em geral, sendo menos relevante para o foco específico.
+Cluster 28403: ignorados=[30100] | justificativa=O artigo 30100 foi ignorado por tratar de ruído político sem impacto econômico direto.
+Cluster 28415: ignorados=[30402] | justificativa=O artigo 30402 foi ignorado pois apenas menciona a sanção como um evento que pode afetar um projeto de lei, sem detalhar o evento em si.
+Cluster 28452: ignorados=[30356] | justificativa=O artigo 30356 foi ignorado por tratar de um evento subsequente (AGE para dispensar poison pill) à capitalização, que é o foco principal.
+Cluster 28542: ignorados=[30631] | justificativa=O artigo 30631 foi ignorado pois foca no mercado de pílulas para perda de peso em geral, e não especificamente na aquisição da Metsera pela Pfizer.
+Cluster 28539: ignorados=[30043] | justificativa=O artigo 30043 foi ignorado pois se refere a um estudo já existente e não ao evento principal deflagrado pela declaração da administração Trump.
+Cluster 28554: ignorados=[30699, 30701] | justificativa=Os artigos 30699 e 30701 foram ignorados por serem resumos de mercado e não focarem no evento principal.
+Cluster 28558: ignorados=[30622] | justificativa=Todos os artigos eram pertinentes.
+Cluster 28564: ignorados=[30074] | justificativa=O artigo 30074 é apenas o título do artigo 30039, portanto foi ignorado.
+Cluster 28588: ignorados=[30637] | justificativa=O artigo 30637 é um editorial de opinião sobre a reação política à morte de Charlie Kirk, sem impacto financeiro direto.
+Cluster 28591: ignorados=[30628] | justificativa=O artigo 30628 foi ignorado por tratar de um assunto completamente diferente (peixes com manchas incomuns) e não estar relacionado ao evento principal.
+Cluster 28609: ignorados=[30666] | justificativa=O artigo 30666 foi ignorado por ser um título solto sem contexto adicional.
+Cluster 28261: ignorados=[30442] | justificativa=Artigo 30442 foi ignorado por focar em protestos na Itália, sendo tangencial ao evento principal.
+Cluster 28262: ignorados=[30227, 30259] | justificativa=Os artigos 30227 e 30259 foram ignorados por serem genéricos e de baixa relevância para a tese central sobre a COP30.
+Cluster 28167: ignorados=[29970, 29985, 30000, 30188] | justificativa=Os artigos 29970, 29985 e 30000 foram ignorados por tratarem de temas jurídicos sem tese financeira direta (morte por erro médico, suspensão de dívida rural e suspensão de leilão por falha em registro de pagamento, respectivamente). O artigo 30188 foi ignorado por ser vago e sem contexto.
+Cluster 28170: ignorados=[30215] | justificativa=Todos os artigos eram pertinentes.
+Cluster 28300: ignorados=[30488, 30491, 30493, 30517, 30519] | justificativa=Os artigos 30488, 30491, 30493, 30517 e 30519 foram ignorados por tratarem de temas políticos genéricos e/ou não diretamente relacionados ao evento principal (PEC da Blindagem).
+Cluster 28456: ignorados=[30190] | justificativa=O artigo 30190 foi ignorado pois apenas informa que o governo estadual não se manifestou.
+Cluster 28101: ignorados=[29969, 30092, 30119, 30120, 30402] | justificativa=Artigos 30092, 30120, 30402 e 30119 foram ignorados por tratarem de temas tangenciais ou irrelevantes ao evento principal (opinião de leitores, especulação sobre votação no Congresso, decisão do STF sobre buscas no Congresso). Artigo 29969 foi ignorado por tratar de tema completamente diferente (mototáxis em SP).
+Cluster 28170: ignorados=[30215] | justificativa=O artigo 30215 foi ignorado por tratar de um evento sobre energia e tecnologia, sem relação direta com a capitalização da Cosan.
+Cluster 28541: ignorados=[30628] | justificativa=O artigo 30628 foi ignorado por tratar de um assunto completamente diferente (peixes com manchas).
+Cluster 28527: ignorados=[30192] | justificativa=Artigos 30192 foi ignorado por se tratar de noticia de fofoca.
+Cluster 28668: ignorados=[31046] | justificativa=Todos os artigos eram pertinentes.
+Cluster 28684: ignorados=[30739, 30772, 30776, 30792, 30808, 30809, 30811, 30813, 30814, 30817, 30818, 30819, 30822, 30824, 30825, 30828, 30829, 30833, 30834, 30835, 30836, 30837, 30838, 30839, 30840, 30842, 30843, 30845, 30846, 30848, 30852, 30853, 30855, 30856, 30857, 30858, 30859, 30860, 30861, 30862, 30863, 30864, 30866, 30874, 30889, 30891, 30894, 30896, 30899, 30901, 30903, 30904, 30907, 30913, 30915, 30916, 30917, 30918, 30920, 30921, 30922, 30924, 30925, 30926, 30932, 30934, 30941, 30944, 30945, 30955, 30956, 30957, 30960, 30961, 30964, 30966, 30972, 30973, 30974, 30976, 30977, 30979, 30980, 30981, 30982, 30984, 30985, 30986, 30989, 30990, 30991, 30995, 31002, 31004, 31009, 31010, 31011, 31021, 31028, 31029, 31031, 31032, 31033, 31038, 31050, 31054, 31059, 31062] | justificativa=Todos os artigos eram pertinentes.
+Cluster 28665: ignorados=[30728, 30734, 30810, 30816, 30826, 30841, 30885, 30949, 30951, 30967, 30968, 30969] | justificativa=Os artigos 30885, 30967, 30968, 30969, 30816, 30810, 30949, 30951, 30826, 30841 e 30734 foram ignorados por tratarem de assuntos distintos do encontro entre Lula e Trump na ONU, como política interna brasileira, saúde pública, política argentina e outros temas não relacionados diretamente ao evento central.
+Cluster 28666: ignorados=[30936, 30937, 30943] | justificativa=Os artigos 30936, 30937 e 30943 foram ignorados por tratarem de temas distintos: o primeiro sobre a denúncia de Eduardo Bolsonaro, o segundo sobre o julgamento de Jair Bolsonaro e o terceiro sobre reforma eleitoral.
+Cluster 28690: ignorados=[30900, 30939] | justificativa=O artigo 30939 foi ignorado por ser uma carta de leitor sem relevância para o fato gerador principal. O artigo 30900 foi ignorado por tratar de uma declaração isolada sobre paracetamol e autismo, sem conexão direta com os demais eventos.
+Cluster 28680: ignorados=[31061] | justificativa=O artigo 31061 não é pertinente ao tema principal.
+Cluster 28683: ignorados=[31005, 31008] | justificativa=Artigos 31005 e 31008 foram ignorados por tratarem de política monetária e ICMS sobre nafta, respectivamente, não relacionados diretamente à taxação de LCI/LCA.
+Cluster 28809: ignorados=[31741] | justificativa=Todos os artigos eram pertinentes.
+Cluster 28818: ignorados=[31445] | justificativa=O artigo 31445 foi ignorado por tratar de um tema diferente (OMC) do foco principal (metas climáticas da China).
+Cluster 28808: ignorados=[31562] | justificativa=O artigo 31562 foi ignorado por ser apenas um cabeçalho sem conteúdo informativo adicional.
+Cluster 28810: ignorados=[31147, 31313] | justificativa=Artigos 31313 e 31147 foram ignorados por tratarem de temas distintos (OTAN e política interna americana, respectivamente).
+Cluster 28807: ignorados=[31150] | justificativa=O artigo 31150 foi ignorado por tratar de um tema diferente (reforma do imposto de renda) e não se encaixar no fato gerador principal.
+Cluster 28811: ignorados=[31362, 31411] | justificativa=Os artigos 31362 e 31411 tratam de temas distintos (Selic e taxa sobre exportações) e não se encaixam no tema principal da taxação de LCI e LCA.
+Cluster 28834: ignorados=[31307] | justificativa=O artigo 31307 foi ignorado por tratar de tema diferente (emendas parlamentares na LDO).
+Cluster 28852: ignorados=[31441] | justificativa=O artigo 31441 não está diretamente relacionado ao tema central, que é a negociação em torno do cronograma de emendas na LDO 2026. O artigo 31441 trata da aprovação de um projeto de lei complementar que retira algumas despesas temporárias com saúde e educação do limite do arcabouço fiscal, o que é um tema distinto.
+Cluster 28882: ignorados=[31200] | justificativa=Artigo 31200 foi ignorado por tratar de incorporação de empresa de tecnologia, destoando do tema financeiro dos demais.
+Cluster 28964: ignorados=[31485] | justificativa=O artigo 31485 foi ignorado por tratar de um tema diferente (Moratória da Soja).
+Cluster 28959: ignorados=[31261, 31264] | justificativa=Artigos 31261 e 31264 são redundantes e menos informativos que os demais.
+Cluster 28960: ignorados=[31262] | justificativa=O artigo 31262 é apenas um título repetido, sem conteúdo adicional, e foi ignorado.
+Cluster 28962: ignorados=[31436, 31557, 31560, 31561] | justificativa=Os artigos 31436, 31557 e 31560 foram ignorados por tratarem de assuntos distintos do encontro entre Lula e Trump, como política interna brasileira e a guerra na Ucrânia.
+Cluster 29026: ignorados=[31399] | justificativa=O artigo 31399 é um título genérico e não agrega informações relevantes ao contexto principal abordado no artigo 31535.
+Cluster 29044: ignorados=[31450] | justificativa=O artigo 31450 foi ignorado por se tratar de uma análise geral sobre criptomoedas e não estar diretamente relacionado à proposta de regularização de ativos virtuais no Brasil.
+Cluster 29114: ignorados=[31631] | justificativa=O artigo 31631 foi ignorado por se tratar de uma opinião política sem relevância para teses de investimento.
+Cluster 29157: ignorados=[31721, 31725] | justificativa=O artigo 31721 e 31725 foram ignorados por não serem pertinentes ao tema principal.
+Cluster 29156: ignorados=[31732] | justificativa=O artigo 31732 foi ignorado por tratar de uma análise geral da situação política brasileira, sem foco direto no evento principal da PEC da Blindagem.
+Cluster 29181: ignorados=[31797] | justificativa=O artigo 31797 foi ignorado por apresentar uma análise opinativa sobre a tributação de empresas que automatizam processos, desviando do foco principal do julgamento no STF.
+Cluster 29184: ignorados=[31803] | justificativa=O artigo 31803 foi ignorado por tratar de um projeto da Braskem com outra empresa, sem relação com a reestruturação da You, Inc.
+Cluster 29209: ignorados=[31099] | justificativa=O artigo 31099 foi ignorado por se tratar de uma anedota contada pelo Ministro Gilmar Mendes e não diretamente relacionada ao julgamento em si.
+Cluster 29234: ignorados=[31230] | justificativa=O artigo 31230 foi ignorado por ser uma análise opinativa sobre o discurso de Trump, sem relação direta com o encontro ou declarações entre Lula e Trump.
+Cluster 29268: ignorados=[31151] | justificativa=O artigo 31151 foi ignorado por ser uma carta de leitor opinativa, sem informações factuais relevantes para a análise.
+Cluster 29026: ignorados=[31399] | justificativa=O artigo 31399 foi ignorado por ser genérico e não agregar informações relevantes ao tema central.
+Cluster 28964: ignorados=[31485] | justificativa=O artigo 31485 foi ignorado por tratar de um assunto diferente (Moratória da Soja).
+Cluster 28810: ignorados=[31147, 31181, 31230, 31287, 31313, 31436, 31557, 31721, 31753] | justificativa=Os artigos 31181, 31313, 31147, 31436 e 31557 foram ignorados por tratarem de outros assuntos (Lula e Putin, Otan e Rússia, política interna americana, PEC da Blindagem e Ucrânia/Zelensky) e não se encaixarem no fato gerador principal.
+Cluster 28811: ignorados=[31307, 31362, 31411] | justificativa=Os artigos 31307, 31362 e 31411 foram ignorados por tratarem de assuntos distintos da tributação de LCIs e LCAs, como emendas parlamentares, taxa Selic e tarifas de exportação.
+Cluster 28827: ignorados=[31086, 31714] | justificativa=Todos os artigos eram pertinentes.
+Cluster 29184: ignorados=[31803] | justificativa=Todos os artigos eram pertinentes.
+Cluster 28810: ignorados=[31140, 31147, 31181, 31230, 31290, 31313, 31557, 31561, 31721, 31725, 31753, 31786] | justificativa=Artigos 31181, 31557, 31721, 31725 e 31753 foram ignorados por não serem diretamente relacionados ao encontro entre Lula e Trump e suas implicações econômicas. O artigo 31313 foi ignorado por tratar de outro assunto (Trump e a OTAN). O artigo 31147 foi ignorado por ser uma análise genérica sobre a democracia.
+Cluster 28811: ignorados=[31307, 31362, 31411] | justificativa=Todos os artigos eram pertinentes.
+Cluster 28813: ignorados=[31177] | justificativa=O artigo 31177 foi ignorado por conter informações sobre outros assuntos além do tema principal (Enel e Aneel).
+Cluster 28814: ignorados=[31425] | justificativa=O artigo 31425 é uma peça publicitária do BNDES e não contribui para a análise do evento principal.
+Cluster 28818: ignorados=[31445] | justificativa=Todos os artigos eram pertinentes.
+Cluster 29897: ignorados=[32539] | justificativa=O artigo 32539 não é pertinente ao tema central.
+Cluster 29384: ignorados=[32174] | justificativa=O artigo 32174 foi ignorado por não se enquadrar no escopo do edital de convocação do SINDPESP.
+Cluster 29398: ignorados=[32436] | justificativa=O artigo 32436 foi ignorado por ser apenas um título genérico sem conteúdo informativo adicional.
+Cluster 29439: ignorados=[32243] | justificativa=O artigo 32243 foi ignorado por tratar de outro assunto (isenção do Imposto de Renda) que não se relaciona diretamente com a PEC da Blindagem.
+Cluster 29446: ignorados=[32109, 32121] | justificativa=Os artigos 32109 e 32121 tratam de projeções do PIB e não estão diretamente relacionados à intervenção do BC no mercado de câmbio.
+Cluster 29444: ignorados=[32321, 32322] | justificativa=Os artigos 32321 e 32322 tratam de dados econômicos dos EUA e eleições, respectivamente, sendo menos relevantes para a decisão do Copom e a política monetária brasileira.
+Cluster 29514: ignorados=[32133] | justificativa=Artigo 32133 foi ignorado por conter apenas avisos de pregões eletrônicos e ata de assembleia, não relacionados ao tema principal.
+Cluster 29528: ignorados=[32154] | justificativa=O artigo 32154 foi ignorado por tratar de um tema de saúde sem tese financeira direta.
+Cluster 29531: ignorados=[32149] | justificativa=O artigo 32149 refere-se a outra empresa (MS Administração e Participações S.A.) e, portanto, não é relevante para o evento principal.
+Cluster 29594: ignorados=[32399] | justificativa=O artigo 32399 foi ignorado por ser uma opinião sobre o Estado Palestino, sem relação direta com os eventos em Gaza.
+Cluster 29592: ignorados=[31848] | justificativa=O artigo 31848 trata de metas de eficiência e estratégia da empresa, não estando diretamente relacionado à eleição do novo diretor.
+Cluster 29627: ignorados=[32501] | justificativa=O artigo 32501 foi ignorado por listar filmes chineses disponíveis em streaming, sem relação direta com os desafios de distribuição discutidos nos demais artigos.
+Cluster 29703: ignorados=[32266] | justificativa=O artigo 32266 foi ignorado por ser uma frase solta sem contexto adicional.
+Cluster 29725: ignorados=[32277] | justificativa=O artigo 32277 foi utilizado para complementar o contexto, mas não foi central para a tese principal.
+Cluster 29733: ignorados=[32414] | justificativa=O artigo 32414 foi ignorado por ser uma análise opinativa sobre a política fiscal e não apresentar dados concretos ou eventos acionáveis.
+Cluster 29773: ignorados=[32422] | justificativa=O artigo 32422 trata de política interna brasileira e não se relaciona diretamente com o encontro entre Lula e Trump, sendo portanto ignorado.
+Cluster 29497: ignorados=[31908] | justificativa=Artigo 31908 é um título solto sem conteúdo relevante.
+Cluster 29983: ignorados=[32014] | justificativa=O artigo 32014 foi ignorado por se tratar de uma declaração genérica sobre o dia mundial das notícias, sem impacto financeiro direto.
+Cluster 29986: ignorados=[32055] | justificativa=Artigo 32055 é uma carta ao editor sobre estratégia diplomática, não um evento concreto.
+Cluster 29473: ignorados=[31844] | justificativa=Artigo 31844 foi ignorado por tratar de IA de forma genérica, sem foco em oportunidades de investimento ou distress.
+Cluster 29609: ignorados=[32233, 32266] | justificativa=Os artigos 32233 e 32266 foram ignorados pois tratam de negociações em andamento e expectativas sobre o encontro entre Lula e Trump, respectivamente, não sendo diretamente relacionados ao anúncio e detalhes das tarifas.
+Cluster 29773: ignorados=[32422] | justificativa=Todos os artigos eram pertinentes.
+Cluster 29554: ignorados=[32067] | justificativa=O artigo 32067 foi ignorado por ser apenas uma legenda de foto, sem informações relevantes adicionais.
+Cluster 29572: ignorados=[32307] | justificativa=O artigo 32307 não é pertinente ao tema central.
+Cluster 29831: ignorados=[31919, 31979] | justificativa=O artigo 31919 e 31979 foram ignorados por tratarem de uma investigação comercial específica entre China e EUA no setor de semicondutores, não diretamente relacionada à governança global de IA.
+Cluster 29773: ignorados=[32422] | justificativa=O artigo 32422 foi ignorado por tratar principalmente de política interna brasileira (relações entre Senado e Câmara) e não se encaixa no tema central do encontro Lula-Trump e suas implicações econômicas.
+Cluster 29837: ignorados=[32017] | justificativa=O artigo 32017 sobre o aumento do IVA na Rússia não é relevante para o tema principal.
+Cluster 29936: ignorados=[32610] | justificativa=O artigo 32610 não está relacionado ao evento principal.
+Cluster 30001: ignorados=[32016] | justificativa=O artigo 32016 foi ignorado por ser uma análise opinativa sobre um discurso político, sem impacto financeiro direto.
+Cluster 29886: ignorados=[32061] | justificativa=O artigo 32061 foi ignorado por tratar de shadow banks, um tema diferente do foco nos vistos H-1B.
+Cluster 29854: ignorados=[31912] | justificativa=O artigo 31912 é apenas um título repetido e não agrega informações.
+Cluster 30072: ignorados=[32720] | justificativa=O artigo 32720 foi ignorado por ser uma opinião sem relevância para o contexto principal.
+Cluster 30152: ignorados=[32897] | justificativa=O artigo 32897 foi ignorado por tratar de tarifas farmacêuticas, um tema distinto do indiciamento de James Comey.
+Cluster 30203: ignorados=[32882, 33006] | justificativa=Artigos 33006 e 32882 foram ignorados por tratarem de temas laterais (relator do processo contra Eduardo e promessa de imparcialidade) sem impacto financeiro direto.
+Cluster 30206: ignorados=[32887, 32888] | justificativa=Artigo 32887 foi ignorado por focar em temas administrativos e aborto, desviando do foco principal sobre a saída de Barroso e questões de impeachment. Artigo 32888 foi ignorado por focar em convites para Barroso nos EUA, desviando do foco principal sobre a saída de Barroso e questões de impeachment.
+Cluster 30221: ignorados=[32732] | justificativa=Todos os artigos eram pertinentes.
+Cluster 30151: ignorados=[32860] | justificativa=O artigo 32860 é apenas um título sem conteúdo.
+Cluster 30057: ignorados=[32711] | justificativa=O artigo 32711 foi ignorado por focar na opinião de um ator sobre a COP30, sem apresentar informações concretas sobre o evento ou seus desafios financeiros e de organização.
+Cluster 30132: ignorados=[32832, 32834, 32836] | justificativa=Os artigos 32832, 32834 e 32836 focam principalmente na expansão de hospitais e serviços de saúde na Barra da Tijuca, o que, embora relevante para o desenvolvimento da região, não se alinha diretamente com o tema central do cluster, que é a expansão do mercado imobiliário de luxo. Portanto, foram considerados menos pertinentes para a análise.
+Cluster 30063: ignorados=[32699] | justificativa=O artigo 32699 sobre a Ambipar foi ignorado por não ser relevante para o tema da fusão entre Gol e Azul.
+Cluster 30377: ignorados=[33118] | justificativa=O artigo 33118 foi ignorado por tratar de tema político (anistia) sem impacto financeiro direto relevante.
+Cluster 30443: ignorados=[33576, 33596] | justificativa=Artigos 33596 e 33576 não são pertinentes ao tema principal.
+Cluster 30530: ignorados=[33147, 33287] | justificativa=O artigo 33287 foi ignorado por ser uma publicidade de um hospital oncológico.
+Cluster 30534: ignorados=[33160] | justificativa=O artigo 33160 foi ignorado por se tratar de uma opinião sobre a violência e a impunidade, sem relação direta com a reintegração dos policiais.
+Cluster 30547: ignorados=[33189] | justificativa=O artigo 33189 não é relevante para o tema central.
+Cluster 30581: ignorados=[33350] | justificativa=O artigo 33350 foi ignorado por focar primariamente no comportamento de Trump na ONU, e não nas relações bilaterais EUA-Brasil.
+Cluster 30644: ignorados=[33438, 33439, 33440, 33445, 33456] | justificativa=Os artigos 33439, 33438, 33445 e 33456 foram ignorados por tratarem de temas genéricos sobre educação (ensino médio, matemática, brincar na escola, IA no Piauí) sem relação direta com a educação antirracista e inclusiva.
+Cluster 30674: ignorados=[33735, 33737] | justificativa=O artigo 33737 e 33735 foram ignorados por conterem apenas dados isolados e informações genéricas sobre a guerra, sem contribuir para a tese central sobre a possível pausa e suas implicações.
+Cluster 30673: ignorados=[33607] | justificativa=O artigo 33607 é apenas um título e foi ignorado.
+Cluster 30696: ignorados=[33503] | justificativa=O artigo 33503 foca na pesquisa sobre a correlação entre Tylenol e autismo, mas não aborda a crise gerada pela declaração de Trump, tornando-o menos relevante para o evento principal.
+Cluster 30717: ignorados=[33656] | justificativa=O artigo 33656 é um título incompleto e, portanto, foi ignorado.
+Cluster 30716: ignorados=[33644] | justificativa=O artigo 33644 é um título incompleto e não fornece contexto adicional ao artigo 33757.
+Cluster 30713: ignorados=[33610, 33612] | justificativa=Os artigos 33610 e 33612 não eram pertinentes ao tema central.
+Cluster 30715: ignorados=[33615] | justificativa=O artigo 33615 foi ignorado por ser apenas uma chamada para o artigo principal.
+Cluster 30670: ignorados=[33606, 33618, 33621, 33629, 33646, 33694, 33703, 33732] | justificativa=Os artigos 33629, 33646, 33621, 33606, 33694, 33732, 33618 e 33703 foram ignorados por não serem relevantes para a situação econômica e política da Colômbia.
+Cluster 30822: ignorados=[33611] | justificativa=O artigo 33611 é apenas um título e não agrega informações relevantes.
+Cluster 30820: ignorados=[33674] | justificativa=O artigo 33674 foi ignorado por tratar principalmente do desempenho das ações da Alibaba e sua expansão para novos mercados, sendo tangencialmente relacionado ao tema principal.
+Cluster 30762: ignorados=[33551] | justificativa=O artigo 33551 foi ignorado por tratar de política e religião sem impacto econômico direto.
+Cluster 30818: ignorados=[33503] | justificativa=O artigo 33503 foi ignorado por tratar de uma análise científica sobre a correlação entre Tylenol e autismo, sem foco direto no evento principal da crise gerada pela declaração de Trump e suas implicações financeiras e regulatórias para a Kenvue.
+Cluster 30377: ignorados=[33118] | justificativa=Artigo 33118 foi ignorado por tratar de tema diferente (isenção de IR relacionada a anistia).
+Cluster 30673: ignorados=[33607] | justificativa=Todos os artigos eram pertinentes.
+Cluster 31267: ignorados=[34371] | justificativa=O artigo 34371 é um anúncio publicitário e não contribui para a análise.
+Cluster 30850: ignorados=[33918, 33923, 33963, 33987] | justificativa=Os artigos 33918, 33923, 33963 e 33987 são referentes a outros assuntos (geração de energia solar, atas de assembleias e jogos) e, portanto, foram ignorados.
+Cluster 30857: ignorados=[33935, 33984, 33986] | justificativa=Os artigos 33984, 33986 e 33935 foram ignorados por tratarem de assuntos não relacionados ao tema central da BR-319 e seus impactos ambientais e fundiários.
+Cluster 30890: ignorados=[34014, 34051] | justificativa=Os artigos 34051 e 34014 não são pertinentes ao tema principal, pois tratam de demonstrações financeiras da Stellantis Financiamentos e não se relacionam com a crise da Ambipar.
+Cluster 30926: ignorados=[34173] | justificativa=O artigo 34173 foi ignorado por se tratar de um leilão de antiguidades, fora do escopo de ativos distressed relevantes para a mesa.
+Cluster 30939: ignorados=[34158] | justificativa=O artigo 34158 foi ignorado por não ser relevante para o tema principal.
+Cluster 31014: ignorados=[34312] | justificativa=O artigo 34312 não se encaixa no contexto geral das outras notícias, pois apresenta um problema de matemática isolado, sem relação direta com as dicas e estratégias para vestibulandos abordadas nos demais artigos.
+Cluster 31136: ignorados=[34135] | justificativa=O artigo 34135 foi ignorado por tratar de temas diversos e não relacionados ao foco principal das demais notícias.
+Cluster 31181: ignorados=[33838] | justificativa=O artigo 33838 continha múltiplos tópicos não relacionados ao principal.
+Cluster 31173: ignorados=[34364, 34378, 34397, 34406] | justificativa=Artigos 34397, 34406, 34364 e 34378 foram ignorados por tratarem de temas como história política, moda, política externa e entretenimento, respectivamente, sem relação com o evento principal.
+Cluster 31204: ignorados=[34430, 34466] | justificativa=Os artigos 34430 e 34466 são mais genéricos sobre o uso da IA pelo Google e não detalham a parceria estratégica com a Westinghouse, foco principal dos artigos 34447 e 34448.
+Cluster 31250: ignorados=[33881] | justificativa=O artigo 33881 foi ignorado por tratar de considerações gerais de CEOs em relação a Trump, sem apresentar um impacto econômico direto ou tese de investimento acionável.
+Cluster 30902: ignorados=[34035] | justificativa=O artigo 34035 é redundante e não agrega informações relevantes.
+Cluster 30847: ignorados=[34014, 34051] | justificativa=Os artigos 34051 e 34014 são referentes a Stellantis Financiamentos e não tem relação com o evento principal.
+Cluster 31001: ignorados=[33886] | justificativa=O artigo 33886 foi ignorado por tratar de um tema diferente (venda ilegal de geração solar com subsídio).
+Cluster 30857: ignorados=[33935, 33984, 33986] | justificativa=Os artigos 33935, 33984 e 33986 não são pertinentes ao tema central da BR-319 e seus impactos ambientais e fundiários.
+Cluster 31300: ignorados=[34634, 34682] | justificativa=Os artigos 34634 e 34682 foram considerados irrelevantes para o tema central, que é a imposição de tarifas sobre filmes estrangeiros.
+Cluster 31319: ignorados=[34813] | justificativa=O artigo 34813 foi ignorado por tratar da posse de Fachin na presidência do STF, não estando diretamente relacionado aos eventos envolvendo Daniel Silveira e Eduardo Bolsonaro.
+Cluster 31361: ignorados=[34786] | justificativa=Artigo 34786 foi ignorado por focar em seca no Nordeste, enquanto os demais tratam de eventos climáticos extremos globais e seus impactos financeiros.
+Cluster 31340: ignorados=[34721] | justificativa=O artigo 34721 foi ignorado por tratar de um possível shutdown do governo americano, um evento distinto da situação da Ambipar.
+Cluster 31334: ignorados=[34555] | justificativa=Artigo 34555 ignorado por tratar principalmente da criação de empregos formais e da crítica do ministro do Trabalho à taxa Selic, não se alinhando diretamente com o foco na desaceleração econômica e seu impacto nas contas públicas.
+Cluster 31337: ignorados=[34659, 34676] | justificativa=Artigos 34659 e 34676 foram considerados irrelevantes para o fato gerador principal.
+Cluster 31336: ignorados=[34666] | justificativa=O artigo 34666 foi ignorado por tratar de previsões eleitorais genéricas, sem impacto financeiro direto ou gatilhos de investimento acionáveis.
+Cluster 31347: ignorados=[34762] | justificativa=O artigo 34762 foi ignorado por tratar de agenda climática de forma genérica, sem conexão direta com a tese de investimento em minerais críticos.
+Cluster 31380: ignorados=[34960] | justificativa=Todos os artigos eram pertinentes.
+Cluster 31382: ignorados=[34519] | justificativa=Artigo 34519 ignorado por ser apenas um título truncado e sem conteúdo informativo adicional.
+Cluster 31424: ignorados=[34611] | justificativa=Todos os artigos eram pertinentes.
+Cluster 31439: ignorados=[34720] | justificativa=O artigo 34720 foi ignorado por tratar de política monetária, sem relação direta com a situação da empresa Aché.
+Cluster 31458: ignorados=[34744] | justificativa=O artigo 34744 foi ignorado por tratar especificamente da segurança de usinas nucleares compactas (SMRs), um tema tangencial ao foco principal do cluster, que é a exploração de minerais críticos para a transição energética.
+Cluster 31465: ignorados=[34901] | justificativa=O artigo 34901 foi ignorado pois foca primariamente na necessidade de uma política nacional de cibersegurança, tangenciando o tema principal do cluster.
+Cluster 31492: ignorados=[34870] | justificativa=Artigo 34870 não continha informações relevantes sobre o evento principal.
+Cluster 31638: ignorados=[34821] | justificativa=O artigo 34821 foi ignorado por tratar de outros vetos presidenciais sem relação direta com a Lei da Ficha Limpa.
+Cluster 31656: ignorados=[34806] | justificativa=O artigo 34806 é apenas um título repetido e não agrega informações.
+Cluster 31403: ignorados=[34517] | justificativa=O artigo 34517 foi ignorado por ser apenas o título repetido.
+Cluster 31548: ignorados=[34830] | justificativa=Todos os artigos eram pertinentes.
+Cluster 31300: ignorados=[34634, 34682] | justificativa=Artigos 34634 e 34682 foram ignorados por tratarem de assuntos distintos (plano de paz para Gaza e tarifa sobre madeira, respectivamente).
+Cluster 31317: ignorados=[34821] | justificativa=O artigo 34821 foi ignorado por tratar de outros vetos presidenciais, não relacionados à Lei da Ficha Limpa.
+Cluster 31319: ignorados=[34545, 34813, 34816] | justificativa=O artigo 34545 trata da progressão de regime de Daniel Silveira, um evento distinto. O artigo 34813 trata da posse de Fachin no STF, sem relação direta com o tema central. O artigo 34816 trata da progressão de regime de Daniel Silveira, um evento distinto.
+Cluster 31458: ignorados=[34744, 34747] | justificativa=Artigos 34744 e 34747 foram ignorados por tratarem de temas distintos (segurança de usinas nucleares compactas e transição energética na siderurgia, respectivamente).
+Cluster 31334: ignorados=[34555] | justificativa=O artigo 34555 foi ignorado por tratar da criação de empregos formais em agosto, um tema distinto da desaceleração econômica e seus impactos no orçamento de 2026.
+Cluster 31340: ignorados=[34721] | justificativa=O artigo 34721 sobre o temor de paralisação do governo americano não é pertinente ao tema principal.
+Cluster 31469: ignorados=[34806] | justificativa=O artigo 34806 é apenas um título e não agrega informações relevantes.
+Cluster 31350: ignorados=[34852] | justificativa=O artigo 34852 foi ignorado por ser uma carta de opinião, não uma notícia factual.
+Cluster 31716: ignorados=[35273, 35537] | justificativa=Os artigos 35537 e 35273 foram ignorados por tratarem de assuntos distintos (análise política geral e calendário do futebol, respectivamente) e não relacionados à crise do metanol.
+Cluster 31768: ignorados=[35198] | justificativa=O artigo 35198 foi ignorado por tratar da posse de Edson Fachin no STF, um evento político rotineiro sem impacto financeiro direto relevante para a mesa de Special Situations.
+Cluster 31764: ignorados=[35049] | justificativa=O artigo 35049 foi ignorado por tratar de um impasse orçamentário e paralisação de serviços federais nos EUA, um evento distinto do foco principal do cluster.
+Cluster 31782: ignorados=[35069] | justificativa=O artigo 35069 foi ignorado por tratar de um tema diferente (proposta de código de ética para o STF).
+Cluster 31816: ignorados=[35110, 35116] | justificativa=O artigo 35110 sobre a Gardena Empreendimentos e Participações S.A. e o artigo 35116 sobre a Prefeitura Municipal de Ouro Verde não são pertinentes ao tema central de leilões de alienação fiduciária de imóveis.
+Cluster 31879: ignorados=[35261] | justificativa=Artigo 35261 é um cabeçalho sem conteúdo relevante.
+Cluster 31882: ignorados=[35265] | justificativa=Artigo 35265 ignorado por ser apenas uma referência de página.
+Cluster 32019: ignorados=[35203] | justificativa=O artigo 35203 foi ignorado por ser um fragmento incompleto de notícia.
+Cluster 31786: ignorados=[35198] | justificativa=Todos os artigos eram pertinentes.
+Cluster 31772: ignorados=[35203, 35310] | justificativa=Os artigos 35203 e 35310 foram ignorados por serem fragmentos de notícias sem informações relevantes para a análise consolidada.
+Cluster 32078: ignorados=[35305] | justificativa=Todos os artigos eram pertinentes.
+Cluster 32080: ignorados=[35264] | justificativa=O artigo 35264 é apenas um título e não agrega informações relevantes.
+Cluster 31735: ignorados=[35265] | justificativa=O artigo 35265 não continha informações relevantes para a análise.
+Cluster 32520: ignorados=[35972] | justificativa=O artigo 35972 foi ignorado por ser excessivamente curto e não agregar informações relevantes além do título, que já está presente no artigo 35980.
+Cluster 32539: ignorados=[36135] | justificativa=O artigo 36135 foi ignorado por ser apenas uma citação isolada, sem contexto adicional.
+Cluster 32536: ignorados=[36029] | justificativa=O artigo 36029 é apenas um título, sem conteúdo relevante para análise.
+Cluster 32549: ignorados=[36128, 36132] | justificativa=Os artigos 36128 e 36132, embora relacionados a investigações de fraude no INSS, focam em uma advogada específica e suas movimentações financeiras, não estando diretamente ligados ao esquema principal investigado pela CPI conforme descrito nos outros artigos. Portanto, foram considerados menos relevantes para a tese central.
+Cluster 32612: ignorados=[35744] | justificativa=O artigo 35744 foi ignorado por ser uma opinião isolada sem impacto direto no mercado ou regulação.
+Cluster 32618: ignorados=[36225] | justificativa=O artigo 36225 foi ignorado por se tratar de uma correção de informações passadas, sem impacto direto no evento atual.
+Cluster 32658: ignorados=[36276] | justificativa=O artigo 36276 é apenas um título e não fornece informações adicionais.
+Cluster 32198: ignorados=[35762] | justificativa=Todos os artigos eram pertinentes.
+Cluster 32268: ignorados=[35905] | justificativa=O artigo 35905 é uma propaganda e não agrega informações relevantes para a análise.
+Cluster 32274: ignorados=[36144] | justificativa=O artigo 36144 não está relacionado ao tema principal.
+Cluster 32278: ignorados=[36105] | justificativa=Artigo 36105 foi ignorado por tratar de Festival de Cinema e direção de filmes por atrizes, sem relação direta com os Estúdios Globo.
+Cluster 32287: ignorados=[35971, 35973] | justificativa=Apenas o artigo 35984 continha informações financeiras relevantes. Os demais artigos (35971 e 35973) foram considerados irrelevantes para a análise de mercado e indicadores financeiros.
+Cluster 32315: ignorados=[36022] | justificativa=Todos os artigos eram pertinentes.
+Cluster 32240: ignorados=[36172] | justificativa=O artigo 36172 foi ignorado por tratar de campanha de vacinação, não relacionado ao tema principal.
+Cluster 32318: ignorados=[36065] | justificativa=O artigo 36065 sobre a Reforma Administrativa não era pertinente ao tema central.
+Cluster 32326: ignorados=[36069] | justificativa=O artigo 36069 foi ignorado por tratar de avaliação de mercado da OpenAI, um tema não relacionado ao ataque cibernético.
+Cluster 32361: ignorados=[35782, 36185] | justificativa=Artigos 36185 e 35782 foram ignorados por tratarem de temas distintos (agenda para o STF e projeto que limita decisões do STF, respectivamente).
+Cluster 32393: ignorados=[35844] | justificativa=O artigo 35844 foi utilizado apenas para confirmar a recomendação médica de evitar o consumo de álcool, sendo redundante em relação ao artigo 35769.
+Cluster 32404: ignorados=[35653] | justificativa=O artigo 35653 foi ignorado por tratar de uma brincadeira entre ministros do STF sobre futebol, sem relevância para a tese principal.
+Cluster 32192: ignorados=[35972] | justificativa=O artigo 35972 foi ignorado por conter apenas a palavra 'Investimentos C2', sem informações relevantes.
+Cluster 32240: ignorados=[36172] | justificativa=O artigo 36172 foi ignorado por tratar de campanha de vacinação, não relacionado ao tema central de intoxicação por metanol.
+Cluster 32192: ignorados=[35972] | justificativa=O artigo 35972 foi ignorado por conter apenas 'Investimentos C2', sem informações relevantes.
+Cluster 32361: ignorados=[35653, 35782, 36185] | justificativa=Os artigos 36185, 35782 e 35653 foram ignorados por tratarem de temas distintos: agenda para o STF, projeto de lei sobre decisões do STF e menção ao Corinthians em julgamento, respectivamente.
+Cluster 32396: ignorados=[35640] | justificativa=O artigo 35640 foi ignorado por focar em um diálogo específico e anedótico entre um advogado e o Ministro Alexandre de Moraes, sem adicionar informações relevantes para a análise geral do caso.
+Cluster 32318: ignorados=[36031, 36032, 36065, 36123] | justificativa=Os artigos 36032, 36065 e 36031 não eram diretamente relacionados ao tema central da aprovação da reforma do IR e foram ignorados.
+Cluster 32773: ignorados=[36326] | justificativa=O artigo 36326 foi ignorado por ser um comentário genérico sobre a crise de confiança, sem informações adicionais relevantes sobre o evento principal.
+Cluster 32780: ignorados=[36606] | justificativa=O artigo 36606 foi ignorado por não ter relação com o tema principal.
+Cluster 32795: ignorados=[36597] | justificativa=O artigo 36597 foi ignorado por tratar de fraude no INSS, um tema distinto dos demais artigos que focam em venda de decisões no STJ e lavagem de dinheiro do PCC.
+Cluster 32804: ignorados=[36349] | justificativa=O artigo 36349 foi ignorado por tratar de um projeto cultural sem relevância financeira direta.
+Cluster 32846: ignorados=[36329] | justificativa=O artigo 36329 foi ignorado por tratar de política sem impacto econômico direto.
+Cluster 32854: ignorados=[36554, 36555, 36556] | justificativa=Os artigos 36555, 36556 e 36554 foram ignorados por conterem anúncios de serviços diversos, não relacionados ao mercado financeiro ou a situações especiais de investimento.
+Cluster 32868: ignorados=[36365] | justificativa=O artigo 36365 não está relacionado ao tema principal, focando em isenções fiscais para o agronegócio e não na proposta de taxação de super-ricos.
+Cluster 32901: ignorados=[36609] | justificativa=O artigo 36609 foi ignorado por tratar da deportação de ativistas de uma flotilha, um evento distinto do plano de paz proposto por Trump.
+Cluster 32909: ignorados=[36655] | justificativa=O artigo 36655 foi ignorado por se tratar de um leilão de veículos, máquinas e outros bens, não se enquadrando no foco principal de leilões de imóveis.
+Cluster 32919: ignorados=[36449, 36588] | justificativa=Artigos 36588 e 36449 foram considerados menos relevantes por serem genéricos e não trazerem informações novas sobre o andamento da reforma.
+Cluster 32917: ignorados=[36643] | justificativa=Todos os artigos eram pertinentes.
+Cluster 32951: ignorados=[36463] | justificativa=Artigo 36463 foi ignorado por focar na opinião de Zema sobre Tarcísio, sendo menos central para o fato gerador principal.
+Cluster 32899: ignorados=[36597, 36646] | justificativa=Todos os artigos eram pertinentes.
+Cluster 32773: ignorados=[36326] | justificativa=O artigo 36326 foi ignorado por ser muito curto e não adicionar informações relevantes ao contexto geral.
+Cluster 32735: ignorados=[36609] | justificativa=O artigo 36609 foi ignorado por tratar da deportação de ativistas de uma flotilha, um evento distinto do acordo de paz em discussão.
+Cluster 32899: ignorados=[36623, 36625] | justificativa=Os artigos 36625 e 36623 foram ignorados por tratarem de crimes comuns (jogo do bicho) sem conexão direta com o setor financeiro ou teses de investimento relevantes para a mesa de Special Situations.
+Cluster 32774: ignorados=[36588] | justificativa=O artigo 36588 foi ignorado por ser uma frase solta sem contexto.
+Cluster 32880: ignorados=[36387, 36388, 36654, 36655, 36657, 36658] | justificativa=Os artigos 36658, 36387, 36388, 36654, 36657 e 36655 são editais de leilão genéricos e não estão relacionados ao evento específico do leilão dos bens de Romário.
+Cluster 32732: ignorados=[36477] | justificativa=O artigo 36477 foi ignorado por tratar principalmente das tensões entre países emergentes e desenvolvidos na COP, não focando no atraso das obras em Belém.

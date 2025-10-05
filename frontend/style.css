@@ -683,9 +683,25 @@ hr { border: none; border-top: 1px solid var(--cor-borda); margin: 1.5rem 0; }
     .header-actions { order: -1; justify-content: flex-start; align-items: stretch; }
     .header-actions .btn-terciario, .header-actions .btn-secondary { width: auto; }
     
-    .header-actions {
-        order: -1;
-    }
+    /* Oculta métricas no mobile */
+    .metricas-container { display: none; }
+
+    /* Cards ocupando quase toda a largura */
+    .feed-noticias { padding: 0 0.5rem; }
+    .card-cluster { margin-bottom: 0.75rem; }
+
+    /* Footer em duas linhas para caber botões */
+    .card-footer { flex-direction: column; align-items: stretch; gap: 0.5rem; }
+    .card-footer-right { justify-content: flex-start; gap: 0.5rem; flex-wrap: wrap; }
+    .btn-expand-summary { display: none; }
+
+    /* Remover like/dislike no mobile para dar espaço ao título */
+    .card-actions-feedback { display: none !important; }
+    .btn-thumb { display: none !important; }
+
+    /* Abas compactas no mobile */
+    .news-tabs-container { padding: 0 0.5rem; margin-top: 0.5rem; }
+    .news-tab-btn { padding: 0.5rem 0.75rem; font-size: 0.9rem; }
 }
 
 /* =======================================
