@@ -559,17 +559,36 @@ function setupEventListeners() {
     const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
     const headerActions = document.querySelector('.header-actions');
     const sidebarEl = document.querySelector('.painel-controle');
+    const dataNavegacao = document.querySelector('.data-navegacao');
 
     function moveToggleButtonIfNeeded() {
         if (!btnToggleSidebar || !headerActions || !sidebarEl) return;
         const isMobile = window.innerWidth <= 768;
         const sidebarOpen = !document.body.classList.contains('sidebar-closed');
         if (isMobile && sidebarOpen) {
-            // move para o topo da sidebar
+            // move botão toggle para o topo da sidebar
             try { sidebarEl.insertBefore(btnToggleSidebar, sidebarEl.children[0] || null); } catch (_) {}
+            // move controle de data para logo após o botão toggle na sidebar
+            if (dataNavegacao) {
+                try { 
+                    const firstChild = sidebarEl.children[0];
+                    if (firstChild && firstChild.nextSibling) {
+                        sidebarEl.insertBefore(dataNavegacao, firstChild.nextSibling);
+                    } else {
+                        sidebarEl.appendChild(dataNavegacao);
+                    }
+                } catch (_) {}
+            }
         } else {
             // move de volta para o header
             try { headerActions.insertBefore(btnToggleSidebar, headerActions.children[0] || null); } catch (_) {}
+            // move controle de data de volta para o header (dentro de .data-info)
+            if (dataNavegacao) {
+                const dataInfo = document.querySelector('.data-info');
+                if (dataInfo) {
+                    try { dataInfo.appendChild(dataNavegacao); } catch (_) {}
+                }
+            }
         }
     }
 

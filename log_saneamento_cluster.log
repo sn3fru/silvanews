@@ -911,3 +911,18 @@ Cluster 32899: ignorados=[36623, 36625] | justificativa=Os artigos 36625 e 36623
 Cluster 32774: ignorados=[36588] | justificativa=O artigo 36588 foi ignorado por ser uma frase solta sem contexto.
 Cluster 32880: ignorados=[36387, 36388, 36654, 36655, 36657, 36658] | justificativa=Os artigos 36658, 36387, 36388, 36654, 36657 e 36655 são editais de leilão genéricos e não estão relacionados ao evento específico do leilão dos bens de Romário.
 Cluster 32732: ignorados=[36477] | justificativa=O artigo 36477 foi ignorado por tratar principalmente das tensões entre países emergentes e desenvolvidos na COP, não focando no atraso das obras em Belém.
+Cluster 33225: ignorados=[36997] | justificativa=O artigo 36997 foi ignorado por ser um resumo esquemático dos outros artigos, sem informação adicional relevante.
+Cluster 33257: ignorados=[36734] | justificativa=Artigo 36734 foi ignorado por ser ruído político e não apresentar informações relevantes para a análise.
+Cluster 33270: ignorados=[36949] | justificativa=O artigo 36949 é um fragmento do artigo 36951, portanto, as informações relevantes já estão contidas no artigo 36951.
+Cluster 33364: ignorados=[37023] | justificativa=Artigo 37023 foi considerado irrelevante por ser apenas um título.
+Cluster 33374: ignorados=[37013] | justificativa=O artigo 37013 foi ignorado por conter títulos de notícias diversas e não pertinentes ao tema central.
+Cluster 33375: ignorados=[37026] | justificativa=O artigo 37026 foi ignorado por ser um briefing genérico sem informações adicionais relevantes.
+Cluster 33376: ignorados=[37078] | justificativa=O artigo 37078 foi ignorado por ser vago e não agregar informações relevantes ao tema principal.
+Cluster 33399: ignorados=[37153, 37154] | justificativa=O artigo 37153 e 37154 tratam de outro assunto (indústria aeroespacial) e foram ignorados.
+Cluster 33422: ignorados=[37174] | justificativa=O artigo 37174 é um gráfico sem contexto suficiente para ser relevante.
+Cluster 33414: ignorados=[37025] | justificativa=Artigo 37025 foi ignorado por não estar relacionado ao tema principal.
+Cluster 33349: ignorados=[37025] | justificativa=O artigo 37025 foi ignorado por ser uma referência genérica a Kosovo, sem relação direta com o plano de paz em Gaza.
+Cluster 33358: ignorados=[37173, 37174] | justificativa=Os artigos 37174 e 37173 são gráficos complementares e foram considerados no contexto geral, mas não possuem texto principal para análise individual.
+Cluster 33200: ignorados=[36907] | justificativa=O artigo 36907 foi ignorado por conter apenas dados quantitativos já presentes em outros artigos.
+Cluster 33143: ignorados=[36707] | justificativa=O artigo 36707 foca na disputa eleitoral de 2022 e possíveis cenários futuros, sem abordar diretamente o risco de deslegitimação das eleições de 2026, que é o tema central do artigo 36710.
+Cluster 33069: ignorados=[36916] | justificativa=O artigo 36916 foi ignorado por tratar de repercussões geopolíticas genéricas, sem tese de investimento acionável.

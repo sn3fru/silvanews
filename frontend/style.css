@@ -682,6 +682,8 @@ hr { border: none; border-top: 1px solid var(--cor-borda); margin: 1.5rem 0; }
     .seletor-data { grid-template-columns: 1fr; gap: 0.5rem; padding: 0.5rem; }
     .header-actions { order: -1; justify-content: flex-start; align-items: stretch; }
     .header-actions .btn-terciario, .header-actions .btn-secondary { width: auto; }
+    /* Oculta controles de data no topo (serão acessados via Filtros) */
+    .data-info { display: none; }
     
     /* Oculta métricas no mobile */
     .metricas-container { display: none; }
@@ -692,12 +694,46 @@ hr { border: none; border-top: 1px solid var(--cor-borda); margin: 1.5rem 0; }
 
     /* Footer em duas linhas para caber botões */
     .card-footer { flex-direction: column; align-items: stretch; gap: 0.5rem; }
-    .card-footer-right { justify-content: flex-start; gap: 0.5rem; flex-wrap: wrap; }
-    .btn-expand-summary { display: none; }
+    .card-footer-right { 
+        display: flex;
+        justify-content: space-evenly; 
+        align-items: center;
+        gap: 0.5rem; 
+        flex-wrap: nowrap; 
+        width: 100%; 
+    }
+    .card-footer-right .btn { 
+        flex: 1 1 auto; 
+        text-align: center;
+        min-width: 0;
+    }
+    /* Mostrar Expandir ao lado de Detalhes na linha de botões */
+    .btn-expand-summary { display: inline-flex; }
+    .card-contador-fontes { display: none !important; }
 
     /* Remover like/dislike no mobile para dar espaço ao título */
     .card-actions-feedback { display: none !important; }
     .btn-thumb { display: none !important; }
+
+    /* Ocultar card do Estagiário no mobile */
+    .estagiario-card { display: none !important; }
+
+    /* Data nav dentro da sidebar no mobile */
+    .painel-controle .data-navegacao { 
+        margin: 1rem 0;
+        padding: 0.75rem;
+        background: rgba(255, 255, 255, 0.5);
+        border-radius: 8px;
+        display: flex;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+    
+    .painel-controle .data-navegacao .data-nav-btn,
+    .painel-controle .data-navegacao .data-btn {
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+    }
 
     /* Abas compactas no mobile */
     .news-tabs-container { padding: 0 0.5rem; margin-top: 0.5rem; }
