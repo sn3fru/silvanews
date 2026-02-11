@@ -47,7 +47,8 @@ from backend.crud import (
 from backend.models import Noticia, NoticiaResumida, ResumoFinal
 from backend.processing import (
     gerar_embedding, bytes_to_embedding, calcular_similaridade_cosseno,
-    processar_artigo_pipeline, gerar_resumo_cluster, find_or_create_cluster
+    processar_artigo_pipeline, gerar_resumo_cluster, find_or_create_cluster,
+    gerar_embedding_v2, cosine_similarity_bytes,
 )
 from backend.prompts import PROMPT_AGRUPAMENTO_V1, PROMPT_ANALISE_E_SINTESE_CLUSTER_V1, TAGS_SPECIAL_SITUATIONS
 from backend.prompts import _P1_BULLETS, _P2_BULLETS, _P3_BULLETS, GUIA_TAGS_FORMATADO
@@ -61,6 +62,12 @@ from backend.utils import (
     gerar_titulo_fallback_curto,
     titulo_e_generico,
 )
+from backend.agents.graph_crud import (
+    link_artigo_to_entities,
+    get_context_for_cluster,
+    get_similar_articles_by_embedding,
+)
+from backend.agents.nodes import PROMPT_ENTITY_EXTRACTION
 
 # Carrega variáveis de ambiente
 env_file = backend_dir / ".env"
@@ -589,8 +596,8 @@ def processar_artigos_pendentes(limite: int = 10, day_str: Optional[str] = None)
 
         print(f"📊 {len(artigos_pendentes)} artigos pendentes | Total: {total_artigos} | Processados: {artigos_processados} | Erros: {artigos_erro} | Clusters: {clusters_existentes_count}")
 
-        # ETAPA 1 — paralela
-        print(f"\n🔄 ETAPA 1: processar_artigo_sem_cluster (workers={min(8, max(2, (os.cpu_count() or 4)))})")
+        # ETAPA 1 — paralela (v2: inclui embedding_v2 + NER + grafo)
+        print(f"\n🔄 ETAPA 1: processar_artigo_sem_cluster + Graph-RAG v2 (workers={min(8, max(2, (os.cpu_count() or 4)))})")
 
         def _worker_proc(id_artigo: int) -> bool:
             _db = SessionLocal()
@@ -629,8 +636,8 @@ def processar_artigos_pendentes(limite: int = 10, day_str: Optional[str] = None)
             print("❌ Nenhum artigo processado com sucesso. Abortando.")
             return False
 
-        # ETAPA 2 — síncrona
-        print(f"\n🔄 ETAPA 2: Agrupamento - target_day={target_day}")
+        # ETAPA 2 — síncrona (v2: inclui dicas de similaridade semantica)
+        print(f"\n🔄 ETAPA 2: Agrupamento + dicas v2 (similaridade) - target_day={target_day}")
 
         clusters_existentes_hoje = db.query(ClusterEvento).filter(
             func.date(ClusterEvento.created_at) == target_day,
@@ -650,15 +657,15 @@ def processar_artigos_pendentes(limite: int = 10, day_str: Optional[str] = None)
             return False
         print("✅ ETAPA 2 concluída: Agrupamento realizado com sucesso")
 
-        # ETAPA 3 — paralela (Análise e Síntese Unificada)
+        # ETAPA 3 — paralela (v2: inclui contexto historico do grafo)
         clusters_hoje = db.query(ClusterEvento).filter(
             ClusterEvento.status == 'ativo',
             func.date(ClusterEvento.created_at) == target_day,
             ClusterEvento.resumo_cluster.is_(None)
         ).all()
 
-        print(f"\n🔄 ETAPA 3: Análise e Síntese Unificada - {len(clusters_hoje)} clusters pendentes")
-        print(f"📝 Usando prompt: PROMPT_ANALISE_E_SINTESE_CLUSTER_V1")
+        print(f"\n🔄 ETAPA 3: Analise + Sintese + Contexto Grafo v2 - {len(clusters_hoje)} clusters pendentes")
+        print(f"📝 Usando prompt: PROMPT_ANALISE_E_SINTESE_CLUSTER_V1 + CONTEXTO_HISTORICO")
 
         def _worker_classificar_unificado(cid: int) -> bool:
             _db = SessionLocal()
@@ -705,9 +712,9 @@ def processar_artigos_pendentes(limite: int = 10, day_str: Optional[str] = None)
             except Exception as e:
                 print(f"⚠️ Erro ao calcular histograma: {e}")
 
-        # ETAPA 4 — síncrona
-        print(f"\n🔄 ETAPA 4: consolidacao_final_clusters(day_str={target_day}, debug=True)")
-        print(f"📝 Usando prompt: PROMPT_CONSOLIDACAO_CLUSTERS_V1")
+        # ETAPA 4 — síncrona (v2: inclui similaridade entre clusters via embedding_v2)
+        print(f"\n🔄 ETAPA 4: Consolidacao + similaridade v2 (day_str={target_day})")
+        print(f"📝 Usando prompt: PROMPT_CONSOLIDACAO_CLUSTERS_V1 + DICAS_SIMILARIDADE")
 
         ok_cons = consolidacao_final_clusters(SessionLocal(), client, debug=True, day_str=target_day)
         if not ok_cons:
@@ -862,6 +869,37 @@ def classificar_e_resumir_cluster(db: Session, cluster_id: int, client, stats: d
             P3_BULLETS=_P3_BULLETS,
             GUIA_TAGS_FORMATADO=GUIA_TAGS_FORMATADO
         )
+        
+        # Injecao conservadora de regras aprendidas do feedback (Feature 4C)
+        try:
+            from backend.prompts import get_feedback_rules
+            feedback_rules = get_feedback_rules()
+            if feedback_rules:
+                prompt_completo += f"\n\n--- ADDENDUM: {feedback_rules}\n---"
+        except Exception:
+            pass
+
+        # v2: Injecao de CONTEXTO HISTORICO do Grafo de Conhecimento
+        # Busca eventos recentes envolvendo as mesmas entidades + artigos semanticamente similares
+        try:
+            contexto_grafo = get_context_for_cluster(db, cluster_id, days_graph=7, days_vector=30)
+            if contexto_grafo:
+                prompt_completo += (
+                    "\n\n--- CONTEXTO HISTORICO (Graph-RAG v2.0) ---\n"
+                    "Os seguintes eventos recentes envolvem as mesmas entidades ou sao semanticamente similares.\n"
+                    "Se relevante, CONECTE o evento atual ao contexto abaixo no seu resumo.\n"
+                    "Exemplo: 'Este e o terceiro anuncio deste tipo nesta semana' ou 'Apos a decisao do STF na semana passada...'.\n"
+                    "Se NAO houver conexao relevante, IGNORE esta secao.\n\n"
+                    f"{contexto_grafo}\n"
+                    "--- FIM DO CONTEXTO HISTORICO ---\n"
+                )
+        except Exception:
+            # PROTECAO: Se get_context_for_cluster falhou com erro SQL,
+            # a transacao pode estar corrompida. Rollback limpa a sessao.
+            try:
+                db.rollback()
+            except Exception:
+                pass
 
         response = client.generate_content(prompt_completo, generation_config={'temperature': 0.1, 'top_p': 0.9, 'max_output_tokens': 4096})
 
@@ -888,7 +926,16 @@ def classificar_e_resumir_cluster(db: Session, cluster_id: int, client, stats: d
             tipo_fonte_cluster = getattr(cluster, 'tipo_fonte', 'nacional')
             cluster.tag = mapear_tag_prompt_para_modelo(dados.get('tag'), tipo_fonte_cluster)
             cluster.resumo_cluster = dados.get('resumo_final')
-            db.commit()
+            try:
+                db.commit()
+            except Exception as commit_err:
+                # Commit falhou (encoding, constraint, etc) - rollback e marcar como erro
+                print(f"  ⚠️ Commit falhou para cluster {cluster_id}: {str(commit_err)[:120]}")
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+                return marcar_cluster_como_erro(db, cluster_id, f"Commit falhou: {str(commit_err)[:150]}")
 
             # Log opcional de saneamento
             try:
@@ -916,10 +963,21 @@ def classificar_e_resumir_cluster(db: Session, cluster_id: int, client, stats: d
 
     except Exception as e:
         stats['etapa3_erros_execucao'] = stats.get('etapa3_erros_execucao', 0) + 1
+        try:
+            db.rollback()
+        except Exception:
+            pass
         return marcar_cluster_como_erro(db, cluster_id, str(e))
 
 def marcar_cluster_como_erro(db: Session, cluster_id: int, motivo: str) -> bool:
     try:
+        # CRITICO: Limpa qualquer transacao corrompida antes de operar
+        # Isso evita o erro cascata "InFailedSqlTransaction" quando chamado
+        # apos um db.commit() que falhou em classificar_e_resumir_cluster
+        try:
+            db.rollback()
+        except Exception:
+            pass
         cluster = get_cluster_by_id(db, cluster_id)
         if not cluster:
             return False
@@ -987,12 +1045,80 @@ def consolidacao_final_clusters(db: Session, client, debug: bool = True, day_str
 
         from backend.crud import merge_clusters, update_cluster_title, update_cluster_priority, update_cluster_tags
 
+        # ---------------------------------------------------------------
+        # v2: Calcular similaridade entre clusters via embedding_v2
+        # THRESHOLD ALTO (0.92): so sugere merge quando clusters sao quase identicos
+        # Threshold baixo (0.75 anterior) gerava falsos positivos ao juntar
+        # clusters de temas diferentes mas do mesmo dominio (governo/economia).
+        # ---------------------------------------------------------------
+        dicas_merge_v2 = ""
+        try:
+            # Coleta embedding_v2 representativo por cluster (media dos artigos)
+            import numpy as np
+            cluster_embs = {}  # cluster_id -> embedding_bytes
+            for c in clusters:
+                artigos_cl = get_artigos_by_cluster(db, c.id)
+                embs = [a.embedding_v2 for a in artigos_cl if a.embedding_v2]
+                if embs:
+                    # Usa a media dos embeddings dos artigos do cluster
+                    arrays = [np.frombuffer(e, dtype=np.float32) for e in embs]
+                    media = np.mean(arrays, axis=0).astype(np.float32)
+                    norm = np.linalg.norm(media)
+                    if norm > 0:
+                        media = media / norm
+                    cluster_embs[c.id] = media.tobytes()
+            
+            if len(cluster_embs) >= 2:
+                pares_merge = []
+                ids_com_emb = list(cluster_embs.keys())
+                for idx_a in range(len(ids_com_emb)):
+                    for idx_b in range(idx_a + 1, len(ids_com_emb)):
+                        id_a, id_b = ids_com_emb[idx_a], ids_com_emb[idx_b]
+                        sim = cosine_similarity_bytes(cluster_embs[id_a], cluster_embs[id_b])
+                        if sim >= 0.92:
+                            # Busca titulos
+                            titulo_a = next((c.titulo_cluster for c in clusters if c.id == id_a), "?")
+                            titulo_b = next((c.titulo_cluster for c in clusters if c.id == id_b), "?")
+                            pares_merge.append(
+                                f"- Clusters {id_a} e {id_b} tem {sim:.0%} de similaridade semantica"
+                            )
+                
+                if pares_merge:
+                    dicas_merge_v2 = (
+                        "\n\n--- INFORMACAO ADICIONAL: SIMILARIDADE SEMANTICA (v2) ---\n"
+                        "Os clusters abaixo tem alta similaridade semantica (>92%).\n"
+                        "ATENCAO: Similaridade semantica NAO significa mesmo fato gerador.\n"
+                        "So faca MERGE se os clusters tratam do MESMO EVENTO/FATO concreto.\n"
+                        "NAO faca merge apenas porque o tema e parecido (ex: dois assuntos de governo).\n"
+                        + "\n".join(pares_merge[:10])
+                        + "\n---\n"
+                    )
+                    if debug:
+                        print(f"  [v2] {len(pares_merge)} pares de clusters similares identificados")
+        except Exception as e:
+            if debug:
+                print(f"  [v2] Similaridade de clusters indisponivel: {str(e)[:80]}")
+
         # ONE-SHOT: tenta enviar todos os clusters de uma vez com max tokens; se falhar, fallback para lotes (código abaixo)
         # Evita KeyError de chaves JSON no format(); substitui placeholder manualmente
         prompt_all = str(PROMPT_CONSOLIDACAO_CLUSTERS_V1).replace(
             '{CLUSTERS_DO_DIA}',
             json.dumps(itens, indent=2, ensure_ascii=False)
         )
+        # Injeta dicas de similaridade v2 (sem alterar o template do prompt)
+        if dicas_merge_v2:
+            prompt_all += dicas_merge_v2
+        
+        # Injecao conservadora de regras aprendidas do feedback (Feature 4C)
+        # Mesma logica usada na Etapa 3, aplicada aqui para consolidacao
+        try:
+            from backend.prompts import get_feedback_rules
+            feedback_rules = get_feedback_rules()
+            if feedback_rules:
+                prompt_all += f"\n\n--- ADDENDUM (FEEDBACK DOS ANALISTAS): {feedback_rules}\n---"
+        except Exception:
+            pass
+        
         if debug:
             print(f"🧩 Consolidação one-shot: enviando {len(itens)} clusters")
         try:
@@ -1075,18 +1201,31 @@ def consolidacao_final_clusters(db: Session, client, debug: bool = True, day_str
                                 elif any(t == 'brasil_online' for t in tipos_dest):
                                     destino_obj.tipo_fonte = 'brasil_online'
                                 db.commit()
-                            except Exception:
-                                pass
+                            except Exception as commit_err:
+                                # Rollback para nao envenenar a sessao para proximas iteracoes
+                                try:
+                                    db.rollback()
+                                except Exception:
+                                    pass
                     except Exception:
+                        # Rollback para garantir sessao limpa na proxima iteracao
+                        try:
+                            db.rollback()
+                        except Exception:
+                            pass
                         continue
                 if debug:
                     print(f"✅ Consolidação final (one-shot) aplicada. merges={merges_aplicados_total}, keeps={keeps_total}")
                 # Reprocessa (Etapa 3) os clusters destino para atualizar resumo/tag/prioridade
+                # Usa sessao fresca por cluster para evitar contaminacao cruzada
                 for cid in destinos_reprocessar:
+                    _reprocess_db = SessionLocal()
                     try:
-                        _ = classificar_e_resumir_cluster(db, cid, client, stats={})
+                        _ = classificar_e_resumir_cluster(_reprocess_db, cid, client, stats={})
                     except Exception:
-                        continue
+                        pass
+                    finally:
+                        _reprocess_db.close()
                 return True
 
         # One-shot não produziu sugestões: aplica fallback estrito por título/tag em TODOS os itens
@@ -1517,12 +1656,29 @@ def processar_lote_incremental(db: Session, client, artigos_lote: List[ArtigoBru
         # Mapeamento de ID para artigo original
         mapa_id_para_artigo = {i: artigo for i, artigo in enumerate(artigos_lote)}
         
+        # ---------------------------------------------------------------
+        # v2: Dicas de similaridade DESABILITADAS na ETAPA 2 (agrupamento incremental)
+        # -------------------------------------------------------------------
+        # MOTIVO: Embeddings de dominio (economia/governo/mercado) produzem falsos
+        # positivos com threshold < 0.92, levando o LLM a agrupar artigos com
+        # entidades em comum mas FATOS GERADORES diferentes (ex: "BRB+Master" com
+        # "Angra 3" porque ambos sao governo/economia).
+        # O agrupamento deve ser puramente baseado no julgamento do LLM sobre o
+        # FATO GERADOR, que era o comportamento correto da v1.
+        # As dicas v2 continuam ativas na ETAPA 4 (consolidacao) com threshold alto.
+        # -------------------------------------------------------------------
+        dicas_similaridade = ""
+        
         # Monta o prompt incremental
         from backend.prompts import PROMPT_AGRUPAMENTO_INCREMENTAL_V2
         prompt_completo = PROMPT_AGRUPAMENTO_INCREMENTAL_V2.format(
             NOVAS_NOTICIAS=json.dumps(novas_noticias, indent=2, ensure_ascii=False),
             CLUSTERS_EXISTENTES=json.dumps(clusters_existentes_data, indent=2, ensure_ascii=False)
         )
+        # Injeta dicas de similaridade v2 (sem alterar o template do prompt)
+        if dicas_similaridade:
+            prompt_completo += dicas_similaridade
+        
         print(f"📤 Enviando lote {numero_lote}: {len(novas_noticias)} notícias para análise...")
         
         # Chama a API para análise incremental
@@ -1636,18 +1792,21 @@ def processar_lote_incremental(db: Session, client, artigos_lote: List[ArtigoBru
                                     cluster_tf = artigo_tf
                                 if artigo_tf != cluster_tf:
                                     print(f"  ↪ skip anexar: tipo_fonte mismatch artigo={artigo_tf} cluster={cluster_tf} (cluster_id={cluster_existente.id})")
-                                    # trata como novo cluster
+                                    # Fallback: trata como novo cluster (o if abaixo captura)
                                     tipo = "novo_cluster"
                                 else:
                                     associate_artigo_to_cluster(db, artigo.id, cluster_existente.id)
                                     anexacoes += 1
                                     continue
                             else:
-                                print(f"  ❌ Cluster {cluster_id_bruto} não encontrado (nem como ID nem como índice)")
+                                print(f"  ❌ Cluster {cluster_id_bruto} não encontrado → criando novo cluster")
+                                tipo = "novo_cluster"
                         else:
-                            print(f"  ⚠️ cluster_id_existente não definido para anexação")
+                            print(f"  ⚠️ cluster_id_existente não definido → criando novo cluster")
+                            tipo = "novo_cluster"
                     
-                    elif tipo == "novo_cluster":
+                    # CORRECAO: if (nao elif) para capturar fallbacks de "anexar" que mudaram tipo
+                    if tipo == "novo_cluster":
                         # Cria novo cluster; se título genérico, gera fallback curto para evitar "sem título"
                         tema_raw = cls.get("tema_principal") or ""
                         tema_principal = tema_raw
@@ -1656,51 +1815,51 @@ def processar_lote_incremental(db: Session, client, artigos_lote: List[ArtigoBru
                             if titulo_e_generico(tema_principal):
                                 tema_principal = f"Evento {artigo.id}"
 
-                            # Calcula embedding do artigo
-                            embedding_medio = None
-                            if artigo.embedding:
-                                embedding_medio = artigo.embedding
-                            
-                            # Detecta tipo de fonte do artigo
-                            # Se o artigo não tiver tipo_fonte, infere por 'jornal' ou 'fonte_original'
-                            tipo_fonte = getattr(artigo, 'tipo_fonte', None)
-                            if not tipo_fonte:
-                                try:
-                                    from backend.utils import inferir_tipo_fonte_por_jornal as _infer_tf
-                                except Exception:
-                                    from utils import inferir_tipo_fonte_por_jornal as _infer_tf
-                                jornal = (getattr(artigo, 'jornal', None) or '')
-                                tipo_fonte = _infer_tf(jornal)
-                            
-                            # Define tipo_fonte do novo cluster seguindo a regra de precedência
-                            # 1) internacional se artigo internacional
-                            # 2) brasil_fisico se artigo físico
-                            # 3) brasil_online caso contrário
-                            if tipo_fonte == 'internacional':
-                                tipo_fonte_cluster = 'internacional'
-                            elif tipo_fonte == 'brasil_fisico':
-                                tipo_fonte_cluster = 'brasil_fisico'
-                            else:
-                                tipo_fonte_cluster = 'brasil_online'
+                        # Calcula embedding do artigo
+                        embedding_medio = None
+                        if artigo.embedding:
+                            embedding_medio = artigo.embedding
+                        
+                        # Detecta tipo de fonte do artigo
+                        # Se o artigo não tiver tipo_fonte, infere por 'jornal' ou 'fonte_original'
+                        tipo_fonte = getattr(artigo, 'tipo_fonte', None)
+                        if not tipo_fonte:
+                            try:
+                                from backend.utils import inferir_tipo_fonte_por_jornal as _infer_tf
+                            except Exception:
+                                from utils import inferir_tipo_fonte_por_jornal as _infer_tf
+                            jornal = (getattr(artigo, 'jornal', None) or '')
+                            tipo_fonte = _infer_tf(jornal)
+                        
+                        # Define tipo_fonte do novo cluster seguindo a regra de precedência
+                        # 1) internacional se artigo internacional
+                        # 2) brasil_fisico se artigo físico
+                        # 3) brasil_online caso contrário
+                        if tipo_fonte == 'internacional':
+                            tipo_fonte_cluster = 'internacional'
+                        elif tipo_fonte == 'brasil_fisico':
+                            tipo_fonte_cluster = 'brasil_fisico'
+                        else:
+                            tipo_fonte_cluster = 'brasil_online'
 
-                            # Cria cluster
-                            from backend.models import ClusterEventoCreate
-                            cluster_data = ClusterEventoCreate(
-                                titulo_cluster=tema_principal,
-                                resumo_cluster=None,  # Será preenchido na ETAPA 3
-                                tag="PENDING",  # Será definido na ETAPA 3
-                                prioridade="PENDING",  # Será definido na ETAPA 3
-                                embedding_medio=embedding_medio,
-                                tipo_fonte=tipo_fonte_cluster
-                            )
+                        # Cria cluster
+                        from backend.models import ClusterEventoCreate
+                        cluster_data = ClusterEventoCreate(
+                            titulo_cluster=tema_principal,
+                            resumo_cluster=None,  # Será preenchido na ETAPA 3
+                            tag="PENDING",  # Será definido na ETAPA 3
+                            prioridade="PENDING",  # Será definido na ETAPA 3
+                            embedding_medio=embedding_medio,
+                            tipo_fonte=tipo_fonte_cluster
+                        )
 
-                            cluster = create_cluster(db, cluster_data)
-                            associate_artigo_to_cluster(db, artigo.id, cluster.id)
-                            novos_clusters += 1
-                            tprev = (artigo.titulo_extraido or artigo.texto_processado or "").replace("\n"," ")[:100]
-                            # Só mostra novos clusters internacionais ou em debug
-                            if debug and tipo_fonte == 'internacional':
-                                print(f"  🌍 novo-cluster: '{tema_principal[:80]}' com '{tprev[:50]}...'")
+                        cluster = create_cluster(db, cluster_data)
+                        associate_artigo_to_cluster(db, artigo.id, cluster.id)
+                        novos_clusters += 1
+                        tprev = (artigo.titulo_extraido or artigo.texto_processado or "").replace("\n"," ")[:100]
+                        # Só mostra novos clusters internacionais ou em debug
+                        if debug and tipo_fonte == 'internacional':
+                            print(f"  🌍 novo-cluster: '{tema_principal[:80]}' com '{tprev[:50]}...'")
                     
                     else:
                         print(f"  ⚠️ Tipo de classificação inválido: {tipo}")
@@ -1802,6 +1961,11 @@ def agrupar_noticias_com_prompt(db: Session, client, day_str: Optional[str] = No
                     noticias_lote_para_prompt.append(noticia_data)
                     mapa_id_lote_para_artigo[i] = artigo  # Mapeia o ID do lote para o objeto artigo completo
 
+                # v2: Dicas de similaridade DESABILITADAS na ETAPA 2 (agrupamento por lote)
+                # Mesmo motivo: embeddings de dominio geram falsos positivos que levam
+                # o LLM a misturar fatos geradores diferentes no mesmo cluster.
+                dicas_lote = ""
+
                 # Monta o prompt completo para o lote
                 prompt_completo = f"""
 {PROMPT_AGRUPAMENTO_V1}
@@ -1810,6 +1974,7 @@ NOTÍCIAS PARA AGRUPAR (LOTE {rotulo} {num_lote}/{len(lotes_local)}):
 {json.dumps(noticias_lote_para_prompt, indent=2, ensure_ascii=False)}
 
 IMPORTANTE: Retorne APENAS o JSON válido para este lote.
+{dicas_lote}
 """
 
                 print(f"📤 ENVIANDO Lote {rotulo} {num_lote} para a API...")
@@ -2023,13 +2188,23 @@ def processar_artigos_em_lote(limite: int = 10) -> bool:
                     import numpy as np
                     embedding_medio = np.mean(embeddings, axis=0).tobytes()
                 
+                # Detecta tipo_fonte do grupo
+                tipos_artigos = [getattr(a, 'tipo_fonte', 'brasil_online') or 'brasil_online' for a in grupo]
+                if any(t == 'internacional' for t in tipos_artigos):
+                    tipo_fonte_grupo = 'internacional'
+                elif any(t == 'brasil_fisico' for t in tipos_artigos):
+                    tipo_fonte_grupo = 'brasil_fisico'
+                else:
+                    tipo_fonte_grupo = 'brasil_online'
+                
                 # Cria cluster com dados básicos
                 cluster_data = ClusterEventoCreate(
                     titulo_cluster=f"Cluster {i} - {len(grupo)} notícias",
                     resumo_cluster=None,  # Será preenchido se necessário
                     tag=grupo[0].tag,
                     prioridade=prioridade_grupo,
-                    embedding_medio=embedding_medio
+                    embedding_medio=embedding_medio,
+                    tipo_fonte=tipo_fonte_grupo
                 )
                 
                 # Cria o cluster
@@ -2071,6 +2246,98 @@ def processar_artigos_em_lote(limite: int = 10) -> bool:
         return False
     finally:
         db.close()
+
+# ==============================================================================
+# ENRIQUECIMENTO GRAPH-RAG v2.0 (integrado ao pipeline principal)
+# ==============================================================================
+
+def enriquecer_artigo_v2(db: Session, id_artigo: int, noticia_data: dict, client) -> dict:
+    """
+    Enriquecimento Graph-RAG v2 para um artigo individual.
+    Chamado dentro da ETAPA 1 (processar_artigo_sem_cluster) para cada artigo.
+    
+    Executa 3 sub-etapas:
+      A) Gera embedding_v2 (768d Gemini) e salva no artigo
+      B) Extrai entidades via LLM (Gemini Flash)
+      C) Resolve entidades e persiste no grafo de conhecimento
+    
+    Degradacao graciosa: se qualquer sub-etapa falhar, as seguintes continuam.
+    
+    Returns:
+        Dict com stats: {embedding_ok, entities_count, edges_count}
+    """
+    stats = {"embedding_ok": False, "entities_count": 0, "edges_count": 0}
+    
+    titulo = noticia_data.get('titulo', '')
+    texto = noticia_data.get('texto_completo', '')
+    
+    # ---------------------------------------------------------------
+    # SUB-ETAPA A: Gerar embedding_v2 (Gemini 768d) - ~100ms
+    # ---------------------------------------------------------------
+    embedding_bytes = None
+    try:
+        texto_emb = f"{titulo} {texto}"
+        embedding_bytes = gerar_embedding_v2(texto_emb)
+        if embedding_bytes:
+            artigo = db.query(ArtigoBruto).filter(ArtigoBruto.id == id_artigo).first()
+            if artigo and not artigo.embedding_v2:
+                artigo.embedding_v2 = embedding_bytes
+                db.commit()
+                stats["embedding_ok"] = True
+    except Exception as e:
+        print(f"  [v2-emb] Artigo {id_artigo}: {str(e)[:80]}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+    
+    # ---------------------------------------------------------------
+    # SUB-ETAPA B: Extrair entidades via LLM (Gemini Flash) - ~1-2s
+    # ---------------------------------------------------------------
+    valid_entities = []
+    try:
+        texto_ner = f"Titulo: {titulo}\n\n{texto[:4000]}"
+        prompt = PROMPT_ENTITY_EXTRACTION.format(texto=texto_ner)
+        
+        response = client.generate_content(
+            prompt,
+            generation_config={'temperature': 0.2, 'max_output_tokens': 2048}
+        )
+        
+        from backend.utils import extrair_json_da_resposta as _extrair_json
+        resultado = _extrair_json(response.text)
+        
+        if resultado and isinstance(resultado, dict):
+            entities_raw = resultado.get("entities", [])
+            for e in entities_raw:
+                if isinstance(e, dict) and e.get("name") and len(e["name"].strip()) >= 2:
+                    valid_entities.append({
+                        "name": e["name"].strip(),
+                        "type": e.get("type", "ORG").upper(),
+                        "role": e.get("role", "MENTIONED").upper(),
+                        "sentiment": float(e.get("sentiment", 0.0)),
+                        "context": str(e.get("context", ""))[:200],
+                    })
+            stats["entities_count"] = len(valid_entities)
+    except Exception as e:
+        print(f"  [v2-ner] Artigo {id_artigo}: {str(e)[:80]}")
+    
+    # ---------------------------------------------------------------
+    # SUB-ETAPA C: Resolver entidades e persistir no grafo - ~50ms
+    # ---------------------------------------------------------------
+    if valid_entities:
+        try:
+            edges = link_artigo_to_entities(db, id_artigo, valid_entities)
+            stats["edges_count"] = len(edges)
+        except Exception as e:
+            print(f"  [v2-graph] Artigo {id_artigo}: {str(e)[:80]}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+    
+    return stats
+
 
 def processar_artigo_sem_cluster(db: Session, id_artigo: int, client) -> bool:
     """
@@ -2216,6 +2483,20 @@ def processar_artigo_sem_cluster(db: Session, id_artigo: int, client) -> bool:
         # Atualiza dados processados e marca como "pronto_agrupar"
         update_artigo_dados_sem_status(db, id_artigo, dados_processados, embedding_artigo)
 
+        # ETAPA 4.5 (v2): Enriquecimento Graph-RAG
+        # Gera embedding_v2 (768d), extrai entidades via LLM, persiste no grafo.
+        # Degradacao graciosa: se falhar, o artigo continua normalmente.
+        v2_stats = {"embedding_ok": False, "entities_count": 0, "edges_count": 0}
+        try:
+            v2_stats = enriquecer_artigo_v2(db, id_artigo, noticia_data, client)
+            if v2_stats.get("embedding_ok") or v2_stats.get("entities_count"):
+                # Log apenas quando algo de v2 funcionou (silencioso caso contrario)
+                if tipo_fonte_original == 'internacional':
+                    print(f"🌍 Artigo {id_artigo}: internacional + v2 (emb={v2_stats['embedding_ok']}, ent={v2_stats['entities_count']}, edges={v2_stats['edges_count']})")
+        except Exception as e:
+            # v2 nunca bloqueia o pipeline principal
+            print(f"  [v2] Artigo {id_artigo}: falha nao-critica - {str(e)[:80]}")
+
         # Marca como pronto para agrupamento (status mais curto)
         update_artigo_status(db, id_artigo, "pronto_agrupar")
 
@@ -2224,9 +2505,9 @@ def processar_artigo_sem_cluster(db: Session, id_artigo: int, client) -> bool:
         create_log(db, "INFO", "processor",
                   f"Artigo {id_artigo} pronto para agrupamento")
 
-        # Só mostra erros ou casos especiais
-        if tipo_fonte_original == 'internacional':
-            print(f"🌍 Artigo {id_artigo}: internacional processado")
+        # Só mostra erros ou casos especiais (se v2 nao imprimiu)
+        if tipo_fonte_original == 'internacional' and not (v2_stats.get("embedding_ok") or v2_stats.get("entities_count")):
+            print(f"🌍 Artigo {id_artigo}: internacional processado (v2 indisponivel)")
 
         return True
 
@@ -2333,17 +2614,75 @@ def main():
         print("ℹ️ Etapa 3 é executada automaticamente após a Etapa 2 neste orquestrador.")
 
     if stage in ('4', 'all') and sucesso:
-        print(f"\n🔄 ETAPA 4: consolidacao_final_clusters()")
-        print(f"📝 Usando prompt: PROMPT_CONSOLIDACAO_CLUSTERS_V1")
-        print(f"📝 PROMPT_PRIORIZACAO_EXECUTIVA_V1: DESABILITADO (função retorna True apenas)")
-        ok2 = consolidacao_final_clusters(SessionLocal(), client)
-        sucesso = ok2
+        # ETAPA 4 ja e executada dentro de processar_artigos_pendentes()
+        # Chamar novamente aqui seria redundante e desperdicaria tokens do LLM.
+        # So executa se stage='4' isoladamente (debug).
+        if stage == '4':
+            print(f"\n🔄 ETAPA 4: consolidacao_final_clusters()")
+            print(f"📝 Usando prompt: PROMPT_CONSOLIDACAO_CLUSTERS_V1")
+            ok2 = consolidacao_final_clusters(SessionLocal(), client)
+            sucesso = ok2
+        else:
+            print("ℹ️ Etapa 4 já foi executada dentro do fluxo incremental.")
     
     if sucesso:
         print("\n🎉 Processamento completo concluído com sucesso!")
         print("💡 Verifique o frontend para ver os clusters e resumos gerados")
     else:
         print("\n❌ Processamento falhou")
+    
+    # =====================================================================
+    # v2.0 - MODO SOMBRA DESATIVADO (Graph-RAG agora integrado ao pipeline)
+    # 
+    # A partir da v2.0 integrada, o enriquecimento Graph-RAG (embeddings,
+    # entidades, grafo, contexto historico) acontece DENTRO das ETAPAs 1-4:
+    #   ETAPA 1: gera embedding_v2 + extrai entidades + persiste no grafo
+    #   ETAPA 2: usa similaridade cosseno para dicas de agrupamento
+    #   ETAPA 3: injeta contexto historico do grafo no prompt de resumo
+    #   ETAPA 4: usa similaridade entre clusters para sugestoes de merge
+    #
+    # O modo sombra original fica disponivel para debug/comparacao:
+    #   V2_SHADOW_MODE=1 python process_articles.py
+    # =====================================================================
+    if os.getenv("V2_SHADOW_MODE", "0") == "1":
+        print("\n[v2.0 SHADOW] Modo sombra ativado manualmente (V2_SHADOW_MODE=1)")
+        try:
+            from backend.workflow import run_batch_workflow
+            db_shadow = SessionLocal()
+            try:
+                hoje = get_date_brasil_str()
+                artigos_hoje = (
+                    db_shadow.query(ArtigoBruto.id)
+                    .filter(
+                        ArtigoBruto.status == 'processado',
+                        func.date(ArtigoBruto.processed_at) == hoje,
+                    )
+                    .order_by(ArtigoBruto.processed_at.desc())
+                    .all()
+                )
+                artigo_ids = [a.id for a in artigos_hoje]
+                print(f"  v2.0 SHADOW: {len(artigo_ids)} artigos para processar")
+            finally:
+                db_shadow.close()
+            
+            if artigo_ids:
+                results = run_batch_workflow(artigo_ids=artigo_ids, shadow_mode=True, verbose=True)
+        except Exception as e:
+            print(f"  v2.0 SHADOW: Erro (nao critico): {e}")
+    
+    # Sumario do grafo (sempre mostra)
+    try:
+        from backend.agents.graph_crud import get_entity_stats
+        db_stats = SessionLocal()
+        try:
+            stats = get_entity_stats(db_stats)
+            print(f"\n  GRAFO v2: {stats.get('total_entities', 0)} entidades, "
+                  f"{stats.get('total_edges', 0)} arestas, "
+                  f"tipos: {stats.get('entities_by_type', {})}")
+        finally:
+            db_stats.close()
+    except Exception:
+        pass
     
     print("=" * 60)
 

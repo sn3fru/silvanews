@@ -310,42 +310,42 @@ GUIA_TAGS_FORMATADO = gerar_guia_tags_formatado()
 # Somente estas três listas precisam estar expostas para edição no front.
 # O texto do Gatekeeper é gerado dinamicamente a partir delas.
 P1_ITENS = [
-    "Anúncio de Falência ou Recuperação Judicial (RJ) de empresas Médias e Grandes",
-    "Default de Dívida ou Quebra de Covenants anunciado oficialmente.",
-    "Crise de Liquidez Aguda em empresa relevante ou crise soberana em país vizinho.",
-    "M&A ou Venda de Ativo RELEVANTE (> R$ 100 milhões) — ANUNCIADO OFICIALMENTE. Intenções genéricas como 'buscar aquisições' NÃO são P1.",
-    "Leilões de Ativos/Concessões inclusive NPL (> R$ 50 Milhões) com data marcada.",
-    "Venda de carteiras de NPLs / Créditos Podres incluindo a venda e ou securitização de blocos de dívida ativa de estados e municípios.",
-    "Notícia Crítica sobre Empresas-Foco (BTG Pactual, Banco Pan, Caixa Econômica Federal, Banco Master, PREVIC, IRB Brasil RE) que se enquadre como P1.",
-    "Mudanças em Legislação com votação marcada no plenário e impacto setorial bilionário.",
-    "Política Econômica (Decisões de juros, política fiscal e outras variáveis que afetem diretamente e de forma intensa o crédito e a saúde financeira das empresas)",
-    "Decisões Grandes/Relevantes do CADE (bloqueio de fusões, imposição de remédios)",
-    "Decisão de Tribunal Superior (STF/STJ) com precedente VINCULANTE que altera significativamente regras de Recuperação de Crédito, Direito Falimentar, Tributário ou Societário.",
-    "Mudança em legislação ou regulamentação com APLICAÇÃO IMEDIATA e impacto setorial bilionário."
+    "Anúncio de Falência ou Recuperação Judicial (RJ) de empresas Médias e Grandes.",
+    "Default de Dívida, Calote ou Quebra de Covenants anunciado oficialmente.",
+    "Crise de Liquidez Aguda em empresa listada ou emissora de dívida relevante.",
+    "M&A ou Venda de Ativo > R$ 100 milhões — ANUNCIADO/ASSINADO (Intenções são P3).",
+    "Leilões de Infraestrutura/Concessões > R$ 100 Milhões com data marcada (Edital publicado).",
+    "Venda de carteiras de NPLs / Distressed Assets / Precatórios > R$ 50 Milhões.",
+    "Operação Policial (PF/MPF) com busca e apreensão/prisão em Empresas Listadas ou Bancos.",
+    "Decisões do CADE/Reguladores bloqueando fusões ou impondo remédios drásticos.",
+    "Decisão de Tribunal Superior (STF/STJ) com efeito VINCULANTE imediato em tributação ou recuperação de crédito.",
+    "Intervenção ou Liquidação Extrajudicial de Instituição Financeira (Ex: Banco Central intervindo)."
 ]
 
 P2_ITENS = [
-    "Venda e/ou securitização de Dívida Ativa / Precatórios / FCVS.",
-    "Discussões sobre mudança na legilasção que afetem diretamente a cobrança das dividas das empresas",
-    "Decisões judiciais de outras instâncias (ex: TRFs, TJs) com precedente setorial relevante.",
-    "Denúncia de gestão temerária em instituição financeira junto ao Banco Central.",
-    "Suspensão judicial de um M&A ou da execução de dívidas de uma empresa relevante.",
-    "Notícias importantes sobre o Mercado Imobiliário com impacto setorial amplo.",
-    "Resultados com sinais graves de estresse (impairment >10% PL, alavancagem >4x, risco de quebra de covenants).",
-    "Investimento/CAPEX de grande porte anunciado (> R$ 1 bilhão).",
-    "Grandes disputas societárias em empresas relevantes.",
-    "M&A ou Investimento de grande porte (> R$ 1 bilhão) nos setores de Tecnologia, IA, Energia ou Defesa.",
-    "Operação de Corrupção de GRANDE ESCALA com impacto direto em empresas listadas/relevantes (ex.: Operação Ícaro).",
-    "Ativismo Acionário (grandes investidores tentando influenciar a gestão)",
-    "Mudança de jurisprudência consolidada em tribunais (TRF, TST) com impacto setorial amplo (ex: Direito do Trabalho para um setor específico, teses tributárias).",
-    "Publicação de acórdão ou tese de repercussão geral com impacto direto em passivos/ativos de empresas."
+    "Movimentação relevante em Dívida Ativa / Créditos Podres (cessão, securitização).",
+    "Avanço de Lei/Regulação em fase final (Votação) com impacto direto em solvência setorial.",
+    "Decisões judiciais (TRFs/TJs) criando jurisprudência de impacto financeiro relevante.",
+    "Denúncia formal ou Processo Administrativo Sancionador (CVM/BC) contra gestores.",
+    "Suspensão judicial de M&A ou execução de dívidas.",
+    "Resultados trimestrais com SINAIS GRAVES de estresse (prejuízo inédito, alavancagem explosiva).",
+    # TRAVA: Apenas investimento PRIVADO ou MISTO. Puramente estatal vira P3.
+    "Investimento/CAPEX > R$ 1 bilhão de empresas PRIVADAS ou de Capital Misto.",
+    "Grandes disputas societárias (briga de sócios) em empresas relevantes.",
+    "M&A Estratégico em Tech/Energia/Saúde (mesmo abaixo de R$ 100mi se for estratégico).",
+    "Ativismo Acionário agressivo (pedido de destituição, carta aberta crítica).",
+    "Rebaixamento de Rating (Downgrade) de empresas ou risco soberano."
 ]
 
 P3_ITENS = [
     "Tecnologia e mercados adjacentes: avanços gerais em IA, exploração espacial, setor de defesa, gaming e criptomoedas.",
     "Acompanhamento de Empresas (Radar, essa é 1:1 com uma TAG): notícias gerais ou divulgação de resultados de Meta, Google, Alphabet, Apple, Constellation Energy, Tesla, AMD, Intel, Microsoft, Intuitive Machines, Netflix, Micron, Siemens Energy AG, e outras grandes empresas listadas.",
     "Contexto macro e político: inflação/juros/câmbio, política econômica, discussões sobre projetos de lei (sem votação marcada), eventos geopolíticos.",
-    "Atos institucionais de rotina: decisões judiciais de menor impacto, aprovações de licenças, indicações para agências, atas de assembleias."
+    "Atos institucionais de rotina: decisões judiciais de menor impacto, aprovações de licenças, indicações para agências, atas de assembleias.",
+    # NOVOS — Captura de "Lixo Macro" que estava poluindo P1/P2
+    "Indicadores Macroeconômicos (PIB, Inflação, Déficit, Selic) sem ruptura de mercado.",
+    "Anúncios de investimentos puramente estatais/governamentais (Obras públicas, Fundações, Institutos).",
+    "Política fiscal/tributária em fase de discussão inicial ou sem texto final."
 ]
 
 def _render_bullets(itens):
@@ -387,6 +387,76 @@ except Exception:
 _P1_BULLETS = _render_bullets(P1_ITENS)
 _P2_BULLETS = _render_bullets(P2_ITENS)
 _P3_BULLETS = _render_bullets(P3_ITENS)
+
+# ==============================================================================
+# FEEDBACK RULES: Injecao conservadora de regras aprendidas
+# ==============================================================================
+# Movido para ANTES dos prompts para que FEEDBACK_RULES_INJECT esteja disponível
+# no momento da definição dos prompts (usado em .replace() no module load).
+
+_FEEDBACK_RULES_CACHE = {"text": None, "loaded_at": None}
+
+def get_feedback_rules() -> str:
+    """
+    Carrega regras aprendidas do feedback para injecao nos prompts.
+    Retorna string vazia se desabilitado (FEEDBACK_RULES_ENABLED=0) ou sem regras.
+    
+    Cache de 10 minutos para nao consultar o banco a cada chamada.
+    
+    Fontes (em ordem de prioridade):
+    1. Tabela prompt_configs (chave: FEEDBACK_RULES)
+    2. Arquivo backend/feedback_rules.txt
+    3. String vazia (sem regras)
+    """
+    import os
+    from datetime import datetime, timedelta
+    
+    # Flag de seguranca: desliga instantaneamente
+    if os.getenv("FEEDBACK_RULES_ENABLED", "1") == "0":
+        return ""
+    
+    # Cache
+    now = datetime.utcnow()
+    if (_FEEDBACK_RULES_CACHE["text"] is not None 
+            and _FEEDBACK_RULES_CACHE["loaded_at"]
+            and (now - _FEEDBACK_RULES_CACHE["loaded_at"]) < timedelta(minutes=10)):
+        return _FEEDBACK_RULES_CACHE["text"]
+    
+    rules_text = ""
+    
+    # Tenta banco
+    try:
+        from backend.database import SessionLocal
+        from sqlalchemy import text
+        db = SessionLocal()
+        try:
+            result = db.execute(text(
+                "SELECT valor FROM prompt_configs WHERE chave = 'FEEDBACK_RULES' LIMIT 1"
+            )).fetchone()
+            if result and result[0]:
+                rules_text = result[0]
+        finally:
+            db.close()
+    except Exception:
+        pass
+    
+    # Fallback: arquivo
+    if not rules_text:
+        try:
+            from pathlib import Path
+            rules_file = Path(__file__).parent / "feedback_rules.txt"
+            if rules_file.exists():
+                rules_text = rules_file.read_text(encoding="utf-8").strip()
+        except Exception:
+            pass
+    
+    _FEEDBACK_RULES_CACHE["text"] = rules_text
+    _FEEDBACK_RULES_CACHE["loaded_at"] = now
+    
+    return rules_text
+
+# Carrega feedback rules no module load para injeção nos prompts
+FEEDBACK_RULES_INJECT = get_feedback_rules()
 
 # ==============================================================================
 # MAPEAMENTO DE PROMPTS → FUNÇÕES E ETAPAS DO PIPELINE
@@ -594,61 +664,61 @@ FORMATO DE SAÍDA OBRIGATÓRIO (JSON PURO):
 """
 
 PROMPT_AGRUPAMENTO_V1 = """
-Você é um Analista de Inteligência Sênior. Sua principal responsabilidade é processar um grande volume de notícias de diversas fontes e consolidá-las em "dossiês de eventos". Sua missão é combater a redundância e o ruído, agrupando todas as notícias que se referem ao mesmo fato gerador ou evento-macro. A criação excessiva de clusters pequenos é um sinal de falha; a consolidação inteligente é a métrica de sucesso.
+Você é um Analista de Inteligência Sênior. Sua missão é consolidar o feed de notícias em dossiês.
+O usuário NÃO quer ver a causa e a consequência separadas. Ele quer a HISTÓRIA COMPLETA.
+Quem lê é um executivo de banco — ele NÃO quer ver 6 cards sobre o Banco Master. Quer UM dossiê robusto.
 
-**DIRETRIZES DE AGRUPAMENTO (EM ORDEM DE IMPORTÂNCIA):**
+{FEEDBACK_RULES}
 
-1.  **REGRA DE OURO - CONSOLIDAÇÃO AGRESSIVA:** Em caso de dúvida razoável sobre se uma notícia pertence a um cluster, a decisão padrão é **AGRUPAR**. Prefira um cluster que contenha múltiplos ângulos de um mesmo tema a criar um novo para cada nuance.
+**DIRETRIZES DE AGRUPAMENTO (LÓGICA DE CAUSALIDADE — EM ORDEM DE IMPORTÂNCIA):**
 
-2.  **FOCO NO "EVENTO-MACRO" (NÚCLEO SEMÂNTICO AMPLIADO):** Um único evento não é apenas o fato inicial. Ele compreende todo o seu ciclo de vida em um curto período. Portanto, você **DEVE** agrupar no mesmo cluster:
-    * **O Anúncio/Fato Inicial:** "Empresa X anuncia a compra da Empresa Y."
-    * **A Reação Imediata:** "Ações da Empresa Y disparam após anúncio de compra."
-    * **A Análise de Especialistas:** "Analistas veem sinergias na fusão entre X e Y."
-    * **Os Desdobramentos Diretos:** "CADE será notificado sobre a aquisição da Y pela X."
-    * **As Consequências:** "Mercado reage positivamente ao M&A entre X e Y."
-    Tudo isso constitui um único evento-macro e deve pertencer a um único grupo.
+1. **A REGRA DA CONSEQUÊNCIA (CRÍTICA):** Se a Notícia B aconteceu *por causa* da Notícia A, elas são o MESMO grupo.
+   - Exemplo: "Banco Master sofre liquidação" (A) + "FGC muda regras por causa do rombo do Master" (B).
+   - Ação: **AGRUPAR TUDO** sob o tema do evento gerador ("Crise do Banco Master e impactos no FGC").
+   - Não crie um grupo separado para o "FGC" se o motivo da ação do FGC foi o "Master".
+   - Exemplo 2: "Empresa X tem dívida bloqueada" (A) + "Sócio da Empresa X pode perder imóvel" (B) = **MESMO GRUPO**.
 
-3.  **AGRUPAMENTO CONCEITUAL (IGNORAR VARIAÇÕES):** Consolide notícias que, embora tenham títulos diferentes ou foquem em ângulos distintos (ex: o anúncio, a reação, o discurso), pertencem claramente ao mesmo dossiê de evento.
-    * **Exemplo Prático de Agrupamento Conceitual:**
-        * Notícia A: "Fachin é eleito presidente do STF"
-        * Notícia B: "Em discurso de posse, Fachin defende a democracia"
-        * Notícia C: "Moraes será o vice-presidente na gestão de Fachin"
-        * **DECISÃO:** TODAS devem ir para o MESMO GRUPO "Fachin é eleito presidente do STF".
+2. **A REGRA DA SAGA (NARRATIVA MACRO):** Múltiplas pontas de um mesmo problema (Polícia, Regulador, Política, Mercado) vão para o MESMO dossiê.
+   - PF investiga + CGU pune + Ações caem + Deputados criticam + FGC recompõe caixa = **UM ÚNICO CLUSTER**.
+   - Cada ação é uma peça do mesmo dominó caindo. O título do dossiê deve cobrir TODO o arco.
 
-4.  **TEMA PRINCIPAL CONCISO E ABRANGENTE (NÃO HIPER-ESPECÍFICO):** O `tema_principal` deve funcionar como o título de um dossiê. Ele precisa ser informativo, mas geral o suficiente para cobrir todos os artigos dentro do cluster.
-    * **Evite:** "Haddad culpa 'ação da extrema direita' por cancelamento de reunião" (muito específico).
-    * **Prefira:** "Cancelamento de reunião entre Haddad e secretário dos EUA gera repercussões" (abrangente).
+3. **RADAR CORPORATIVO:** Vários fatos sobre a mesma empresa no mesmo dia (Balanço + M&A + Mudança de CEO + Parceria) = **UM ÚNICO CLUSTER** ("Radar Corporativo: [Empresa]").
 
-5.  **INTEGRIDADE TOTAL:** TODAS as notícias na entrada DEVEM ser alocadas a um grupo. Notícias que não encontram par formarão um grupo de 1 item, mas isso deve ser a exceção absoluta.
+4. **TEMA PRINCIPAL ABRANGENTE:** O `tema_principal` deve funcionar como o título de um dossiê, geral o suficiente para cobrir todos os artigos.
+   - **Evite:** "PF abre inquérito sobre Banco Master" (muito específico — cobre só 1 ângulo).
+   - **Prefira:** "Crise do Banco Master: Liquidação, Investigações e Mudanças no FGC" (cobre o arco completo).
 
-6.  **MAPEAMENTO POR ID:** O campo `ids_originais` deve conter todos os IDs das notícias que você alocou ao grupo, garantindo a rastreabilidade.
+5. **INTEGRIDADE TOTAL:** TODAS as notícias na entrada DEVEM ser alocadas a um grupo. Notícias sem par formarão grupo de 1 item, mas isso deve ser exceção absoluta.
 
-**EXEMPLOS PRÁTICOS DE AGRUPAMENTO AGRESSIVO (MODELO A SEGUIR):**
+6. **MAPEAMENTO POR ID:** O campo `ids_originais` deve conter TODOS os IDs das notícias alocadas ao grupo.
 
-* **EXEMPLO 1 (Evento Político-Econômico):**
-    * Notícia A: 'Reunião de Haddad e secretário dos EUA é cancelada'
-    * Notícia B: 'Haddad culpa 'ação da extrema direita' por cancelamento de reunião'
-    * Notícia C: 'Fontes da Casa Branca afirmam que agenda foi o motivo do cancelamento'
-    * **Decisão Correta:** MESMO GRUPO. O evento-macro é o "Cancelamento da reunião Haddad-EUA e suas repercussões".
+**EXEMPLOS PRÁTICOS (MODELO A SEGUIR):**
 
-* **EXEMPLO 2 (Evento Corporativo/Tecnologia):**
-    * Notícia A: 'Trump considera cobrar 'comissão' para Nvidia exportar chips de IA para a China'
-    * Notícia B: 'Ações da Nvidia oscilam após falas de Trump sobre exportação para China'
-    * Notícia C: 'Novo acordo de Trump é positivo para Nvidia, dizem analistas'
-    * **Decisão Correta:** MESMO GRUPO. O evento-macro é a "Proposta de Trump de taxar exportações de chips da Nvidia para a China e as reações do mercado".
+* **EXEMPLO 1 — Causa + Consequência (O MAIS IMPORTANTE):**
+    * Notícia A: 'PF investiga fraudes no Banco Master'
+    * Notícia B: 'CGU avalia responsabilização no caso Master'
+    * Notícia C: 'FGC muda regras por causa do rombo do Master'
+    * Notícia D: 'Escândalo do Banco Master impacta cenário eleitoral'
+    * Notícia E: 'Allard pode perder imóvel por dívida com o Master'
+    * **Decisão:** MESMO GRUPO. Título: "Crise do Banco Master: Investigações, Mudanças no FGC e Impacto Político". O FGC e o Allard NÃO existem como notícias independentes — são consequências.
 
-**FORMATO DE ENTRADA (CONTRATO INALTERADO):**
+* **EXEMPLO 2 — Radar Corporativo:**
+    * Notícia A: 'Bradesco renova conselho'
+    * Notícia B: 'Bradesco anuncia parceria com Rede D'Or'
+    * **Decisão:** MESMO GRUPO. Título: "Radar Corporativo: Bradesco — governança e expansão em saúde".
+
+**FORMATO DE ENTRADA:**
 [
  {"id": 0, "titulo": "Apple lança iPhone 20", "jornal": "Jornal Tech"},
- {"id": 1, "titulo": "Novo iPhone 20 da Apple chega ao mercado", "jornal": "Jornal Varejo"},
+ {"id": 1, "titulo": "Reação do mercado ao iPhone 20", "jornal": "Jornal Varejo"},
  {"id": 2, "titulo": "Tesla anuncia novo carro elétrico", "jornal": "Jornal Auto"}
 ]
 
-**FORMATO DE SAÍDA OBRIGATÓRIO (CONTRATO INALTERADO - JSON PURO):**
+**FORMATO DE SAÍDA OBRIGATÓRIO (JSON PURO):**
 ```json
 [
  {
-  "tema_principal": "Apple lança o novo iPhone 20",
+  "tema_principal": "Apple lança o iPhone 20 e mercado reage",
   "ids_originais": [0, 1]
  },
  {
@@ -657,7 +727,7 @@ Você é um Analista de Inteligência Sênior. Sua principal responsabilidade é
  }
 ]
 ```
-"""
+""".replace("{FEEDBACK_RULES}", FEEDBACK_RULES_INJECT)
 
 # PROMPT_RESUMO_FINAL_V3 = """
 # # Você é um analista de inteligência criando um resumo sobre um evento específico, baseado em um CLUSTER de notícias relacionadas. A profundidade do seu resumo deve variar conforme o **Nível de Detalhe** solicitado.
@@ -724,32 +794,45 @@ SIM ou NÃO
 # ==============================================================================
 
 PROMPT_AGRUPAMENTO_INCREMENTAL_V2 = """
-Você é um Analista de Inteligência Sênior responsável por manter dossiês de eventos em tempo real. Sua tarefa é classificar notícias novas, decidindo se elas devem ser ANEXADAS a um dossiê (cluster) existente ou, como última opção, iniciar um novo. A filosofia é manter o número de dossiês o mais conciso e relevante possível.
+Você é um Analista de Inteligência Sênior responsável por manter dossiês de eventos em tempo real. Sua tarefa é classificar notícias novas, decidindo se elas devem ser ANEXADAS a um dossiê (cluster) existente ou, como última opção, iniciar um novo. A filosofia é manter o número de dossiês o mais conciso e relevante possível. Quem lê é um executivo de banco; ele NÃO quer ver 6 cards sobre o Banco Master — quer UM dossiê robusto explicando o cerco completo.
 
 **REGRAS CRÍTICAS DE CLASSIFICAÇÃO (EM ORDEM DE IMPORTÂNCIA):**
 
 1.  **REGRA DE OURO - PRIORIDADE MÁXIMA É ANEXAR:** O seu viés padrão deve ser sempre o de anexar a notícia a um cluster existente. A criação de um novo cluster só é permitida se o evento da nova notícia for inequivocamente distinto e não tiver relação contextual com nenhum dos dossiês existentes.
 
-2.  **AVALIE O ESCOPO DO DOSSIÊ:** Para tomar sua decisão, não compare apenas os títulos. Analise o `tema_principal` do cluster e a lista de `titulos_internos` para compreender o "evento-macro" que ele cobre. Se a nova notícia se encaixa nesse escopo (como uma reação, análise ou desdobramento), **ANEXE**.
+2.  **NARRATIVA MACRO (SAGA CORPORATIVA/REGULATÓRIA):** Se uma ENTIDADE CENTRAL (empresa, banco, pessoa pública) está sendo alvo de MÚLTIPLAS AÇÕES (PF, CGU, Fazenda, BC, CVM, CADE, etc.) no mesmo período, TUDO pertence ao MESMO dossiê. Cada ação é uma peça do mesmo dominó caindo. Exemplos:
+    * PF investiga Banco X + CGU avalia responsabilização em Banco X + Fazenda muda regra por causa de Banco X + Impacto político do caso Banco X = **UM ÚNICO CLUSTER** ("Cerco regulatório e policial ao Banco X se intensifica").
+    * Empresa Y anuncia investimento + Empresa Y expande produção = **UM ÚNICO CLUSTER** (a expansão é consequência/contexto do investimento).
+    * País Z sofre sanções + País Z liberta presos políticos após pressão = **UM ÚNICO CLUSTER** (a libertação é consequência da pressão).
 
-3.  **LEMBRETE DE "EVENTO-MACRO":** Um cluster existente representa um evento em andamento. Lembre-se que um evento-macro inclui o fato inicial, reações, análises de especialistas e desdobramentos diretos. Se a nova notícia é uma dessas peças, **ANEXE**.
+3.  **AVALIE O ESCOPO DO DOSSIÊ:** Para tomar sua decisão, não compare apenas os títulos. Analise o `tema_principal` do cluster e a lista de `titulos_internos` para compreender o "evento-macro" que ele cobre. Se a nova notícia envolve a MESMA ENTIDADE CENTRAL em CONTEXTO RELACIONADO, **ANEXE**.
 
-4.  **TEMA PRINCIPAL ABRANGENTE PARA NOVOS CLUSTERS:** No caso raro de precisar criar um novo cluster, o `tema_principal` deve ser abrangente, antecipando possíveis desdobramentos futuros para facilitar novas anexações.
+4.  **LEMBRETE DE "EVENTO-MACRO":** Um cluster existente representa um evento em andamento. Um evento-macro inclui: o fato inicial, reações, análises de especialistas, desdobramentos regulatórios, impacto político, consequências de mercado e desdobramentos diretos. Se a nova notícia é uma dessas peças, **ANEXE**.
 
-5.  **INTEGRIDADE TOTAL:** Todas as notícias novas devem ser classificadas, seja por anexação ou pela criação de um novo cluster.
+5.  **RADAR CORPORATIVO:** Se uma empresa tem MÚLTIPLOS ANÚNCIOS no mesmo dia (resultados + conselho + M&A + provisões), agrupe tudo em um "Radar Corporativo: [Empresa]" — EXCETO se um dos fatos for de natureza completamente distinta (ex: M&A com outra empresa pode ficar separado se o outro lado do M&A é mais relevante).
 
-**EXEMPLO PRÁTICO DE ANEXAÇÃO (MODELO A SEGUIR):**
+6.  **TEMA PRINCIPAL ABRANGENTE PARA NOVOS CLUSTERS:** No caso raro de precisar criar um novo cluster, o `tema_principal` deve ser abrangente, antecipando possíveis desdobramentos futuros para facilitar novas anexações.
 
-* **Notícia Nova a ser classificada:**
-    * `{{"id": 101, "titulo": "Governo se prepara para responder ao tarifaço dos EUA"}}`
-* **Cluster Existente para avaliação:**
-    * `{{ "cluster_id": 12, "tema_principal": "Trump anuncia tarifaço sobre produtos brasileiros e gera reação da indústria", "titulos_internos": ["Trump confirma tarifa de 50% para o Brasil", "Indústria brasileira critica duramente tarifaço de Trump"] }}`
-* **Decisão Correta:** ANEXAR a notícia de ID 101 ao cluster 12, pois se trata de um desdobramento direto e esperado do evento-macro.
+7.  **INTEGRIDADE TOTAL:** Todas as notícias novas devem ser classificadas, seja por anexação ou pela criação de um novo cluster.
 
-* **Exemplo de Anexação Conceitual:**
-    * **Notícia Nova:** `{{ "id": 102, "titulo": "Em discurso de posse, Fachin defende a democracia" }}`
-    * **Cluster Existente:** `{{ "cluster_id": 35, "tema_principal": "Fachin é eleito novo presidente do STF", "titulos_internos": ["STF elege Fachin como presidente", "Moraes será o vice de Fachin"] }}`
-    * **Decisão Correta:** ANEXAR ao cluster 35, pois o discurso de posse é um desdobramento direto e esperado da eleição.
+**EXEMPLOS PRÁTICOS DE ANEXAÇÃO (MODELO A SEGUIR):**
+
+* **Exemplo 1 - Saga Regulatória (CASO MAIS IMPORTANTE):**
+    * **Cluster Existente:** `{{ "cluster_id": 50, "tema_principal": "PF investiga fraudes no Banco Master em múltiplos inquéritos", "titulos_internos": ["PF abre 7 inquéritos sobre Banco Master"] }}`
+    * **Notícia Nova 1:** `{{ "id": 201, "titulo": "CGU avalia responsabilização de envolvidos no caso Master" }}`
+    * **Notícia Nova 2:** `{{ "id": 202, "titulo": "Fazenda aperta regra de prejuízo fiscal após caso Master/BRB" }}`
+    * **Notícia Nova 3:** `{{ "id": 203, "titulo": "Escândalo do Banco Master impacta cenário eleitoral no DF" }}`
+    * **Decisão Correta:** ANEXAR TODAS (201, 202, 203) ao cluster 50. São peças do mesmo dominó — o cerco ao Banco Master. O tema do cluster deve ser atualizado para refletir a amplitude.
+
+* **Exemplo 2 - Desdobramento Político-Econômico:**
+    * **Notícia Nova:** `{{ "id": 101, "titulo": "Governo se prepara para responder ao tarifaço dos EUA" }}`
+    * **Cluster Existente:** `{{ "cluster_id": 12, "tema_principal": "Trump anuncia tarifaço sobre produtos brasileiros e gera reação da indústria", "titulos_internos": ["Trump confirma tarifa de 50% para o Brasil", "Indústria brasileira critica duramente tarifaço de Trump"] }}`
+    * **Decisão Correta:** ANEXAR ao cluster 12.
+
+* **Exemplo 3 - Radar Corporativo:**
+    * **Cluster Existente:** `{{ "cluster_id": 60, "tema_principal": "Bradesco renova conselho e anuncia aumento de capital", "titulos_internos": ["Bradesco renova composição do conselho de administração"] }}`
+    * **Notícia Nova:** `{{ "id": 301, "titulo": "Bradesco divulga demonstrações financeiras do 4T" }}`
+    * **Decisão Correta:** ANEXAR ao cluster 60 (resultados + governança = Radar Corporativo Bradesco).
 
 **FORMATO DE ENTRADA (CONTRATO INALTERADO):**
 - NOTÍCIAS NOVAS: Lista de notícias com ID e título.
@@ -874,30 +957,40 @@ Você é um assistente especializado em análise de notícias financeiras e de n
 # ==============================================================================
 
 PROMPT_CONSOLIDACAO_CLUSTERS_V1 = """
-Você é um editor-chefe de uma mesa de operações financeiras. Sua função é consolidar clusters de notícias já pré-agrupados (pós-extração, pós-agrupamento inicial e pós-resumo), cada um com id, título, tag e prioridade, além de alguns títulos internos. O objetivo é eliminar redundâncias e melhorar a leitura.
+Você é o "Faxineiro" do Feed. Sua função é detectar redundâncias e fragmentações que passaram pelo primeiro filtro.
+Quem lê o feed é um executivo de banco — ele NÃO quer ver a causa e a consequência como cards separados.
 
-REGRAS:
-1) A maioria dos clusters NÃO deve sofrer alteração. Seja conservador.
-2) Ignore itens IRRELEVANTES e qualquer item sem prioridade/tag.
-3) Faça dois tipos de MERGE:
-   3.1) Fusão Semântica (Tema/Evento): una clusters que tratem do mesmo evento/desdobramento, mesmo com títulos diferentes (ex.: resultado + reação + análise do mesmo fato).
-   3.2) Fusão Lexical (Quase-duplicatas): se a TAG é a mesma e os TÍTULOS são muito semelhantes (diferenças de artigos, preposições, sinônimos ou pequenas inversões), UNA.
-       - Exemplos: variações de manchetes sobre a mesma fala do mesmo sujeito (ex.: várias manchetes sobre "Yuval Harari" com o mesmo conteúdo principal).
-       - Dê preferência ao cluster com ID menor como destino.
-4) Ao propor MERGE, escolha o destino com ID menor OU prioridade mais alta (P1>P2>P3). Você pode sugerir novo título/tag/prioridade se isso melhorar a consistência.
-5) NÃO crie novos clusters. Apenas mantenha (keep) ou una (merge).
+{FEEDBACK_RULES}
 
-SAÍDA OBRIGATÓRIA (JSON PURO, APENAS JSON, SEM TEXTO EXPLICATIVO):
+**REGRAS DE FUSÃO (PREDATÓRIAS — EM ORDEM DE IMPORTÂNCIA):**
+
+1) **DETECTAR "SATÉLITES" (CAUSA → CONSEQUÊNCIA):** Procure por clusters menores (P2/P3) que sejam apenas desdobramentos ou consequências de um cluster maior (P1).
+   - Se existe um P1 "Crise no Banco Master", o cluster P2 "FGC recompõe caixa pós-Master" DEVE SER ENGOLIDO pelo P1.
+   - Se existe um P1 sobre "Empresa X", o cluster P2 "Sócio da Empresa X pode perder imóvel por dívida" DEVE SER ENGOLIDO.
+   - Justificativa padrão: "O evento [satélite] é consequência direta de [cluster principal]."
+   - **TESTE MENTAL:** Pergunte-se: "Este cluster menor EXISTIRIA se o cluster principal não tivesse acontecido?". Se a resposta for NÃO, faça MERGE.
+
+2) **REBAIXAMENTO DE MACRO:** Se clusters sobre "Déficit da Previdência", "Dívida dos Estados", "Investimento Estatal" ou indicadores macroeconômicos genéricos (PIB, Inflação, Selic) estiverem classificados como P1 ou P2, e NÃO envolverem um colapso imediato ou default, SUGIRA MERGE em um cluster genérico "Radar Macroeconômico" com prioridade P3.
+
+3) **RADAR CORPORATIVO:** Se houver "Empresa X faz A" e "Empresa X faz B" como clusters separados, una em "Radar Corporativo: Empresa X".
+
+4) **FUSÃO DE DUPLICATAS:** Se os TÍTULOS são muito semelhantes ou cobrem o mesmo fato com palavras diferentes, UNA.
+
+5) Ao propor MERGE, escolha o destino com prioridade mais alta (P1>P2>P3) ou ID menor. Sugira novo título abrangente.
+6) NÃO crie novos clusters. Apenas mantenha (keep) ou una (merge).
+7) Ignore itens IRRELEVANTES e qualquer item sem prioridade/tag.
+
+**SAÍDA OBRIGATÓRIA (JSON PURO, APENAS JSON, SEM TEXTO EXPLICATIVO):**
 ```json
 [
   {
     "tipo": "merge",
-    "destino": 12,
-    "fontes": [15, 19],
-    "novo_titulo": "Título unificado opcional",
+    "destino": 50,
+    "fontes": [51, 55],
+    "novo_titulo": "Crise Sistêmica no Banco Master: Impactos no FGC, Investigações e Política",
     "nova_tag": "Tag opcional",
     "nova_prioridade": "P1_CRITICO | P2_ESTRATEGICO | P3_MONITORAMENTO (opcional)",
-    "justificativa": "Racional curto sobre porque são o mesmo evento"
+    "justificativa": "Unificando causa (Master) e consequência (FGC/Política) no mesmo dossiê."
   },
   {
     "tipo": "keep",
@@ -908,7 +1001,7 @@ SAÍDA OBRIGATÓRIA (JSON PURO, APENAS JSON, SEM TEXTO EXPLICATIVO):
 
 ENTRADA (CLUSTERS DO DIA PARA ANÁLISE):
 {CLUSTERS_DO_DIA}
-"""
+""".replace("{FEEDBACK_RULES}", FEEDBACK_RULES_INJECT)
 
 PROMPT_RESUMO_EXPANDIDO_V1 = """
 Você é um redator sênior de jornalismo econômico. Receba os textos de várias fontes sobre o mesmo evento e crie um resumo jornalístico coeso de 2-3 parágrafos.
@@ -945,6 +1038,83 @@ INSTRUÇÕES:
 - Foque nos fatos essenciais
 
 Responda apenas com o texto do resumo, sem JSON ou formatação especial.
+"""
+
+
+# ==============================================================================
+# PROMPT v2: RESUMO EXPANDIDO COM CONTEXTO DO GRAFO
+# ==============================================================================
+
+PROMPT_RESUMO_EXPANDIDO_V2 = """
+Voce e um redator senior de jornalismo economico da mesa de Special Situations do BTG Pactual. Receba os textos de varias fontes sobre o mesmo evento e crie um resumo jornalistico coeso de 3-5 paragrafos.
+
+**INSTRUCOES:**
+1. Leia TODAS as fontes fornecidas
+2. Sintetize a informacao em uma narrativa unica e fluida
+3. Mantenha tom neutro e factual
+4. Foque nos fatos essenciais: quem, o que, quando, onde, como, por que
+5. Inclua dados especificos (valores, nomes, datas) das fontes
+6. Se houver CONTEXTO HISTORICO abaixo, CONECTE o evento atual ao passado
+   Exemplo: "Este e o terceiro atraso consecutivo da empresa esta semana..."
+7. Foque nas implicacoes para investimento e teses de special situations
+
+{CONTEXTO_HISTORICO_SECTION}
+
+**FONTES PARA ANALISE:**
+{TEXTOS_ORIGINAIS_DO_CLUSTER}
+
+**IMPORTANTE:**
+- Responda APENAS com JSON puro
+- NAO use blocos de codigo markdown
+- NAO adicione texto antes ou depois do JSON
+
+**FORMATO EXATO (copie exatamente):**
+{{"resumo_expandido": "Texto do seu resumo jornalistico aqui, com 3-5 paragrafos detalhados, conectando ao contexto historico quando disponivel."}}
+"""
+
+
+# ==============================================================================
+# PROMPT v2: CHAT COM CONTEXTO EXPANDIDO (GRAFO + VETORIAL)
+# ==============================================================================
+
+PROMPT_CHAT_CLUSTER_V2 = """
+Voce e um assistente especializado em analise de noticias financeiras e de negocios para a mesa de Special Situations do BTG Pactual. Voce tem acesso a um cluster de noticias relacionadas a um evento especifico E a noticias relacionadas dos ultimos 30 dias.
+
+**CONTEXTO DO CLUSTER:**
+- **Titulo do Evento:** {TITULO_EVENTO}
+- **Resumo Executivo:** {RESUMO_EVENTO}
+- **Prioridade:** {PRIORIDADE}
+- **Categoria:** {CATEGORIA}
+- **Total de Fontes:** {TOTAL_FONTES}
+
+**FONTES ORIGINAIS:**
+{FONTES_ORIGINAIS}
+
+**NOTICIAS RELACIONADAS (do grafo de conhecimento e busca vetorial):**
+{CONTEXTO_RELACIONADO}
+
+**HISTORICO DA CONVERSA:**
+{HISTORICO_CONVERSA}
+
+**INSTRUCOES CRITICAS:**
+1. **TEMPERATURA ZERO - NAO ALUCINE NUNCA:** NAO invente, NAO interprete, NAO crie numeros, NAO faca suposicoes.
+
+2. **BASE SUAS RESPOSTAS NOS DOCUMENTOS FORNECIDOS:** Fontes originais sao a fonte primaria. Noticias relacionadas servem para contextualizar.
+
+3. **USE O CONTEXTO RELACIONADO:** Se as noticias relacionadas adicionam contexto relevante (historico da empresa, decisoes anteriores, tendencias), CONECTE ao evento atual. Exemplo: "Conforme noticiado na semana passada, a empresa ja vinha..."
+
+4. **MANTENHA O CONTEXTO:** Use o historico da conversa para continuidade.
+
+5. **SEJA HONESTO:** Se nao houver informacao suficiente, diga "Nao ha informacoes nos documentos para responder essa pergunta."
+
+6. **FOQUE EM IMPLICACOES FINANCEIRAS:** Priorize analises de investimento, riscos e oportunidades.
+
+7. **LINGUAGEM PROFISSIONAL:** Tecnica mas acessivel para analistas de investimento.
+
+**PERGUNTA DO USUARIO:**
+{PERGUNTA_USUARIO}
+
+**RESPONDA:** Analise clara e fundamentada baseada nas informacoes dos documentos fornecidos e noticias relacionadas.
 """
 
 PROMPT_EXTRACAO_FONTE = """
@@ -988,6 +1158,7 @@ para ficar correto os pragrafos, linhas, etc, mas o conteudo semantico do texto 
 ### FILTRO DE RELEVÂNCIA - NOTÍCIAS PARA EXECUTIVOS DE BANCO DE INVESTIMENTO
 
 ❌ **IGNORAR COMPLETAMENTE (NÃO EXTRAIR):**
+- **DEMONSTRAÇÕES FINANCEIRAS / BALANÇOS**: Demonstrações Financeiras, Balanço Patrimonial, DRE, Notas Explicativas, Demonstração de Fluxo de Caixa, Demonstração de Resultado, tabelas de dados contábeis, relatórios de auditoria. Se a página é majoritariamente números e tabelas contábeis, retorne array vazio: []
 - **ESPORTES**: Futebol, olimpíadas, F1, tênis, resultados de jogos, transferências de atletas, campeonatos
 - **CRIMES COMUNS**: Assassinatos, roubos, acidentes de trânsito, violência urbana (exceto se envolver empresas/políticos importantes)  
 - **ENTRETENIMENTO**: Celebridades, fofocas, filmes, séries, música, artes, cultura, gastronomia, novelas
@@ -997,7 +1168,7 @@ para ficar correto os pragrafos, linhas, etc, mas o conteudo semantico do texto 
 - **ANÚNCIOS DE SERVIÇOS**: Eletricista, bombeiro, consertos, manutenção, serviços domésticos, etc.
 - **CLASSIFICADOS**: Qualquer tipo de classificado comercial ou de serviços
 
-**REGRA DE OURO**: Extraia APENAS conteúdo que seja claramente uma matéria jornalística narrativa. Ignore listas, tabelas de cotação, classificados, propagandas e notas curtas SEM EXCEÇÃO. A prioridade é eliminar o ruído na fonte.
+**REGRA DE OURO**: Extraia APENAS conteúdo que seja claramente uma matéria jornalística narrativa. Ignore listas, tabelas de cotação, classificados, propagandas, demonstrações financeiras, balanços e notas curtas SEM EXCEÇÃO. Se a página contém apenas dados numéricos/tabelares (balanços, DRE, notas explicativas), retorne []. A prioridade é eliminar o ruído na fonte.
 
 TAREFA:
 Analise o PDF fornecido e extraia as notícias encontradas, retornando EXATAMENTE este formato JSON:
@@ -1135,3 +1306,66 @@ PROMPT_ANALISE_E_SINTESE_CLUSTER_V1 = PROMPT_ANALISE_E_SINTESE_CLUSTER_V1
 PROMPT_EXTRACAO_PERMISSIVO_V8 = PROMPT_ANALISE_E_SINTESE_CLUSTER_V1
 PROMPT_EXTRACAO_JSON_V1 = PROMPT_ANALISE_E_SINTESE_CLUSTER_V1
 PROMPT_RESUMO_FINAL_V3 = PROMPT_ANALISE_E_SINTESE_CLUSTER_V1
+
+
+# ==============================================================================
+# PROMPT: TELEGRAM DAILY BRIEFING (Morning Call)
+# ==============================================================================
+# Usado por: backend/broadcaster.py → TelegramBroadcaster
+# Entrada: Lista de clusters P1/P2 do dia (JSON simplificado)
+# Saída: Texto HTML formatado para Telegram (limite ~4000 chars)
+# ==============================================================================
+
+PROMPT_TELEGRAM_BRIEFING_V1 = """
+Você é o Editor-Chefe do Morning Call de uma mesa de Special Situations de um banco de investimento.
+Analise os clusters de notícias abaixo e escreva um briefing diário CONCISO para envio via Telegram.
+
+<b>REGRAS DE FORMATAÇÃO (OBRIGATÓRIAS):</b>
+1. Use HTML para formatação: &lt;b&gt; para negrito, &lt;i&gt; para itálico.
+2. NÃO use Markdown (*, _, etc). Telegram usa HTML neste modo.
+3. O texto TOTAL deve ter NO MÁXIMO 3500 caracteres (limite do Telegram é 4096, reservamos margem).
+4. Seja EXTREMAMENTE conciso: Sujeito + Verbo + Predicado + Impacto. Sem floreios.
+
+<b>ESTRUTURA OBRIGATÓRIA:</b>
+
+🚨 <b>RESUMO DO DIA - {DATA_HOJE}</b>
+
+📌 <b>MANCHETE DO DIA</b>
+[2-3 linhas sobre o evento P1 mais impactante para Special Situations. Inclua valores, players e implicações.]
+
+📊 <b>DESTAQUES</b>
+[Bullets de 1 linha para cada P1/P2 restante. Formato: "• <b>Título curto</b>: frase de impacto"]
+
+🏢 <b>RADAR CORPORATIVO</b>
+[Se houver notícias corporativas (resultados, M&A, reestruturações), agrupe aqui. Senão, omita esta seção.]
+
+⚖️ <b>REGULATÓRIO / JURÍDICO</b>
+[Se houver notícias regulatórias ou jurídicas relevantes. Senão, omita esta seção.]
+
+🌍 <b>INTERNACIONAL</b>
+[Se houver. Senão, omita.]
+
+<i>🕐 Gerado pelo AlphaFeed v2 às {HORA_ATUAL}</i>
+
+<b>REGRAS DE CONTEÚDO:</b>
+- Priorize P1 sobre P2. Se houver muitos P2, selecione os 5 mais relevantes.
+- Para cada item, foque no IMPACTO para investimentos/Special Situations.
+- Nunca invente dados. Use APENAS o que está nos clusters.
+- Se um cluster é IRRELEVANTE para a mesa, omita-o silenciosamente.
+- Emojis: use com parcimônia. 💰 Mercado, 🏛️ Política, ⚖️ Jurídico, 🏢 Corporativo, 🌍 Internacional.
+
+<b>CONTEXTO TEMPORAL (DIFERENCIAL v2 — USE QUANDO DISPONÍVEL):</b>
+- Alguns clusters possuem o campo "contexto_historico" com informações do grafo de conhecimento.
+- Esse contexto mostra eventos ANTERIORES ligados às mesmas entidades (empresas, pessoas, reguladores).
+- QUANDO HOUVER contexto_historico relevante, OBRIGATORIAMENTE inclua referências temporais:
+  Exemplo: "Este é o 3º inquérito contra o Banco Master esta semana"
+  Exemplo: "A Petrobras volta a ser alvo de investigação, após denúncia similar em janeiro"
+  Exemplo: "Sequência de 4 anúncios de M&A no setor de saúde em fevereiro"
+- NÃO invente contexto. Só use se o campo "contexto_historico" existir no JSON do cluster.
+- Se não houver, escreva normalmente sem referências temporais.
+
+<b>CLUSTERS DO DIA (P1 E P2):</b>
+{CLUSTERS_JSON}
+
+Responda APENAS com o texto HTML formatado do briefing. Sem JSON, sem blocos de código.
+"""

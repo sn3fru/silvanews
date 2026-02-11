@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 import time # Adicionado para tracking de progresso
 import asyncio # Adicionado para delays assíncronos
 
-from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, UploadFile, File, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
@@ -133,6 +133,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ==============================================================================
+# WEBSOCKET SILENCIOSO (evita flood de 403 no terminal por extensões de live-reload)
+# ==============================================================================
+
+@app.websocket("/ws")
+async def websocket_noop(ws: WebSocket):
+    """Aceita conexões WebSocket silenciosamente (ex.: Live Server, LiveReload).
+    Apenas mantém a conexão aberta até o cliente desconectar."""
+    await ws.accept()
+    try:
+        while True:
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        pass
 
 # ==============================================================================
 # SERVIR FRONTEND E ENDPOINTS PRINCIPAIS
@@ -597,6 +612,16 @@ async def expandir_resumo_cluster(cluster_id: int, db: Session = Depends(get_db)
             logger.warning(f"⚠️ Cluster {cluster_id} não encontrado ou sem artigos")
             raise HTTPException(status_code=404, detail="Cluster não encontrado ou sem artigos.")
 
+        # Busca contexto do grafo + vetorial para enriquecer o resumo
+        contexto_historico = ""
+        try:
+            from backend.agents.graph_crud import get_context_for_cluster
+            contexto_historico = get_context_for_cluster(db, cluster_id, days_graph=7, days_vector=30)
+            if contexto_historico:
+                logger.info(f"📊 Contexto do grafo encontrado ({len(contexto_historico)} chars)")
+        except Exception as ctx_err:
+            logger.warning(f"⚠️ Contexto do grafo indisponivel: {ctx_err}")
+
         # Tenta primeiro com o prompt principal
         resumo_novo = None
         tentativas = 0
@@ -608,11 +633,11 @@ async def expandir_resumo_cluster(cluster_id: int, db: Session = Depends(get_db)
 
             try:
                 if tentativas == 1:
-                    # Primeira tentativa com prompt JSON estruturado
+                    # Primeira tentativa: prompt v2 com contexto do grafo
                     try:
-                        from .prompts import PROMPT_RESUMO_EXPANDIDO_V1 as _PROMPT
+                        from .prompts import PROMPT_RESUMO_EXPANDIDO_V2 as _PROMPT
                     except Exception:
-                        from backend.prompts import PROMPT_RESUMO_EXPANDIDO_V1 as _PROMPT
+                        from backend.prompts import PROMPT_RESUMO_EXPANDIDO_V2 as _PROMPT
                 else:
                     # Segunda tentativa com prompt fallback mais simples
                     logger.warning("⚠️ Usando prompt de fallback na tentativa 2")
@@ -622,7 +647,17 @@ async def expandir_resumo_cluster(cluster_id: int, db: Session = Depends(get_db)
                         from backend.prompts import PROMPT_RESUMO_EXPANDIDO_FALLBACK as _PROMPT
 
                 payload_text = json.dumps(textos_originais, ensure_ascii=False, indent=2)
-                prompt_text = _PROMPT.format(TEXTOS_ORIGINAIS_DO_CLUSTER=payload_text)
+                
+                # Monta secao de contexto historico (vazia se nao houver)
+                if contexto_historico and tentativas == 1:
+                    ctx_section = f"**CONTEXTO HISTORICO (eventos relacionados recentes):**\n{contexto_historico}"
+                else:
+                    ctx_section = ""
+                
+                prompt_text = _PROMPT.format(
+                    TEXTOS_ORIGINAIS_DO_CLUSTER=payload_text,
+                    CONTEXTO_HISTORICO_SECTION=ctx_section,
+                ) if tentativas == 1 else _PROMPT.format(TEXTOS_ORIGINAIS_DO_CLUSTER=payload_text)
 
                 logger.debug(f"📝 Prompt preparado (tamanho: {len(prompt_text)} chars)")
 
@@ -690,6 +725,125 @@ async def expandir_resumo_cluster(cluster_id: int, db: Session = Depends(get_db)
         create_log(db, "ERROR", "api", f"Erro em expandir-resumo cluster {cluster_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Erro na geração do resumo expandido: {str(e)}")
 
+# ==============================================================================
+# GRAPH-RAG: Grafo de Relacionamentos (v2.0)
+# ==============================================================================
+
+@app.get("/api/cluster/{cluster_id}/graph")
+async def get_cluster_graph(cluster_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    """
+    Retorna dados do grafo de relacionamentos para visualizacao D3.js.
+    Nodes: entidades (PERSON, ORG, GOV, EVENT, CONCEPT) + clusters relacionados.
+    Edges: conexoes entre entidades e clusters.
+    """
+    try:
+        from backend.agents.graph_crud import get_cluster_graph_data
+        data = get_cluster_graph_data(
+            db=db,
+            cluster_id=cluster_id,
+            max_entity_nodes=30,
+            max_cluster_nodes=10,
+            days=30,
+        )
+        return data
+    except Exception as e:
+        create_log(db, "ERROR", "api", f"Erro em GET /api/cluster/{cluster_id}/graph: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar grafo: {str(e)}")
+
+
+# ==============================================================================
+# NOTIFICACOES INCREMENTAIS (Telegram/WhatsApp)
+# ==============================================================================
+
+@app.get("/api/notifications/pending")
+async def get_pending_notifications(limit: int = 50, db: Session = Depends(get_db)):
+    """Retorna clusters pendentes de notificacao."""
+    try:
+        from backend.crud import get_clusters_nao_notificados
+        clusters = get_clusters_nao_notificados(db, limit=limit)
+        return {
+            "total": len(clusters),
+            "clusters": [
+                {
+                    "id": c.id,
+                    "titulo": c.titulo_cluster,
+                    "resumo": (c.resumo_cluster or "")[:500],
+                    "prioridade": c.prioridade,
+                    "tag": c.tag,
+                    "tipo_fonte": c.tipo_fonte,
+                    "total_artigos": c.total_artigos,
+                    "created_at": c.created_at.isoformat(),
+                }
+                for c in clusters
+            ],
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/notifications/dispatch")
+async def dispatch_notifications(
+    limit: int = 50,
+    dry_run: bool = False,
+    db: Session = Depends(get_db)
+):
+    """
+    Despacha notificacoes via Telegram para clusters pendentes.
+    Requer TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID no ambiente.
+    """
+    try:
+        from backend.crud import get_clusters_nao_notificados, marcar_cluster_notificado
+        import os
+
+        token = os.getenv("TELEGRAM_BOT_TOKEN")
+        chat_id = os.getenv("TELEGRAM_CHAT_ID")
+
+        clusters = get_clusters_nao_notificados(db, limit=limit)
+
+        if not clusters:
+            return {"status": "ok", "message": "Nenhum cluster pendente", "enviados": 0}
+
+        if dry_run or not token or not chat_id:
+            return {
+                "status": "dry_run" if dry_run else "config_missing",
+                "message": "Dry run ou config Telegram ausente" if dry_run else "TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID nao configurados",
+                "pendentes": len(clusters),
+                "clusters": [{"id": c.id, "titulo": c.titulo_cluster} for c in clusters],
+            }
+
+        # Envia via Telegram
+        from scripts.notify_telegram import formatar_mensagem_telegram, enviar_telegram
+        import time as _time
+
+        enviados = 0
+        erros = 0
+        for cluster in clusters:
+            msg = formatar_mensagem_telegram(cluster)
+            ok = enviar_telegram(token, chat_id, msg)
+            if ok:
+                marcar_cluster_notificado(db, cluster.id)
+                enviados += 1
+            else:
+                erros += 1
+            _time.sleep(1.0)
+
+        return {"status": "ok", "enviados": enviados, "erros": erros, "total_pendentes": len(clusters)}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/notifications/mark-sent")
+async def mark_notifications_sent(cluster_ids: List[int], db: Session = Depends(get_db)):
+    """Marca clusters como notificados manualmente (sem enviar)."""
+    try:
+        from backend.crud import marcar_clusters_notificados_em_lote
+        total = marcar_clusters_notificados_em_lote(db, cluster_ids)
+        return {"status": "ok", "marcados": total}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/internal/processar-artigo")
 async def processar_artigo_endpoint(
     request: ProcessarArtigoRequest,
@@ -735,14 +889,28 @@ async def criar_novo_artigo(
     Endpoint para coletores criarem novos artigos.
     """
     try:
-        # Verifica se já existe um artigo com o mesmo hash
+        # Verifica se já existe um artigo com o mesmo hash (dedup exata)
         artigo_existente = get_artigo_by_hash(db, artigo_data.hash_unico)
         if artigo_existente:
             return StatusResponse(
                 status="duplicado",
-                message="Artigo já existe no sistema",
+                message="Artigo já existe no sistema (hash exato)",
                 data={"id_artigo": artigo_existente.id}
             )
+        
+        # Dedup semantica: verifica artigos muito parecidos nas ultimas 48h
+        try:
+            from backend.processing import verificar_duplicata_semantica
+            dup = verificar_duplicata_semantica(db, artigo_data.texto_bruto, threshold=0.85, horas=48)
+            if dup:
+                return StatusResponse(
+                    status="duplicado_semantico",
+                    message=f"Artigo semanticamente similar encontrado (sim={dup['similaridade']:.2f})",
+                    data={"id_artigo_similar": dup["artigo_id"], "titulo_similar": dup["titulo"], "similaridade": dup["similaridade"]}
+                )
+        except Exception as e:
+            # Falha na dedup semantica nao bloqueia a insercao
+            print(f"[Dedup Semantica API] Aviso: {e}")
         
         # Preenche 'jornal' a partir de metadados se possível antes de criar
         try:
@@ -894,14 +1062,46 @@ async def post_feedback(artigo_id: int, feedback: str, db: Session = Depends(get
     if feedback not in ("like", "dislike"):
         raise HTTPException(status_code=400, detail="feedback deve ser 'like' ou 'dislike'")
     try:
-        fb_id = create_feedback(db, artigo_id, feedback)
-        # Se for dislike, marca o artigo como IRRELEVANTE para não aparecer no frontend
+        # Coleta contexto rico para analise de padroes de feedback
+        feedback_meta = {}
+        try:
+            artigo = get_artigo_by_id(db, artigo_id)
+            if artigo:
+                feedback_meta["tag"] = artigo.tag
+                feedback_meta["prioridade"] = artigo.prioridade
+                feedback_meta["titulo"] = artigo.titulo_extraido or ""
+                feedback_meta["cluster_id"] = artigo.cluster_id
+                feedback_meta["tipo_fonte"] = artigo.tipo_fonte
+                # Busca entidades do grafo
+                try:
+                    from backend.database import GraphEdge, GraphEntity
+                    edges = db.query(GraphEdge).filter(GraphEdge.artigo_id == artigo_id).all()
+                    if edges:
+                        entity_ids = [e.entity_id for e in edges]
+                        entities = db.query(GraphEntity).filter(GraphEntity.id.in_(entity_ids)).all()
+                        feedback_meta["entidades"] = [
+                            {"name": e.canonical_name, "type": e.entity_type}
+                            for e in entities
+                        ]
+                except Exception:
+                    pass
+                # Busca titulo do cluster
+                if artigo.cluster_id:
+                    cluster = get_cluster_by_id(db, artigo.cluster_id)
+                    if cluster:
+                        feedback_meta["titulo_cluster"] = cluster.titulo_cluster or ""
+                        feedback_meta["prioridade_cluster"] = cluster.prioridade
+        except Exception:
+            pass
+        
+        fb_id = create_feedback(db, artigo_id, feedback, metadados=feedback_meta)
+        # Se for dislike, marca o artigo como IRRELEVANTE para nao aparecer no frontend
         if feedback == "dislike":
             try:
                 artigo = get_artigo_by_id(db, artigo_id)
                 if artigo:
                     artigo.tag = "IRRELEVANTE"
-                    # Também marca o cluster como IRRELEVANTE para sumir do feed
+                    # Tambem marca o cluster como IRRELEVANTE para sumir do feed
                     try:
                         if artigo.cluster_id:
                             cluster = get_cluster_by_id(db, artigo.cluster_id)
@@ -915,7 +1115,6 @@ async def post_feedback(artigo_id: int, feedback: str, db: Session = Depends(get
                     except Exception:
                         pass
             except Exception:
-                # Não bloqueia o retorno do feedback se a atualização de tag falhar
                 pass
         return {"status": "ok", "id": fb_id}
     except Exception as e:
@@ -2844,22 +3043,59 @@ async def send_chat_message(
                 historico_conversa += f"{role}: {msg.content}\n"
             historico_conversa += "\n"
         
-        # Prepara prompt para o LLM
+        # Busca contexto do grafo + vetorial para enriquecer o chat
+        contexto_relacionado = ""
         try:
-            from .prompts import PROMPT_CHAT_CLUSTER_V1
-        except ImportError:
-            # Fallback para import absoluto quando executado diretamente
-            from prompts import PROMPT_CHAT_CLUSTER_V1
-        prompt = PROMPT_CHAT_CLUSTER_V1.format(
-            TITULO_EVENTO=cluster.titulo_cluster,
-            RESUMO_EVENTO=cluster.resumo_cluster or "Resumo não disponível",
-            PRIORIDADE=cluster.prioridade,
-            CATEGORIA=cluster.tag,
-            TOTAL_FONTES=len(artigos),
-            FONTES_ORIGINAIS=fontes_texto,
-            HISTORICO_CONVERSA=historico_conversa,
-            PERGUNTA_USUARIO=request.message
-        )
+            from backend.agents.graph_crud import get_context_for_cluster
+            contexto_relacionado = get_context_for_cluster(db, request.cluster_id, days_graph=7, days_vector=30)
+        except Exception:
+            pass
+        
+        # Prepara prompt para o LLM (v2 com contexto do grafo se disponivel)
+        try:
+            if contexto_relacionado:
+                try:
+                    from .prompts import PROMPT_CHAT_CLUSTER_V2
+                except ImportError:
+                    from backend.prompts import PROMPT_CHAT_CLUSTER_V2
+                prompt = PROMPT_CHAT_CLUSTER_V2.format(
+                    TITULO_EVENTO=cluster.titulo_cluster,
+                    RESUMO_EVENTO=cluster.resumo_cluster or "Resumo não disponível",
+                    PRIORIDADE=cluster.prioridade,
+                    CATEGORIA=cluster.tag,
+                    TOTAL_FONTES=len(artigos),
+                    FONTES_ORIGINAIS=fontes_texto,
+                    CONTEXTO_RELACIONADO=contexto_relacionado,
+                    HISTORICO_CONVERSA=historico_conversa,
+                    PERGUNTA_USUARIO=request.message,
+                )
+            else:
+                try:
+                    from .prompts import PROMPT_CHAT_CLUSTER_V1
+                except ImportError:
+                    from backend.prompts import PROMPT_CHAT_CLUSTER_V1
+                prompt = PROMPT_CHAT_CLUSTER_V1.format(
+                    TITULO_EVENTO=cluster.titulo_cluster,
+                    RESUMO_EVENTO=cluster.resumo_cluster or "Resumo não disponível",
+                    PRIORIDADE=cluster.prioridade,
+                    CATEGORIA=cluster.tag,
+                    TOTAL_FONTES=len(artigos),
+                    FONTES_ORIGINAIS=fontes_texto,
+                    HISTORICO_CONVERSA=historico_conversa,
+                    PERGUNTA_USUARIO=request.message,
+                )
+        except Exception:
+            from backend.prompts import PROMPT_CHAT_CLUSTER_V1
+            prompt = PROMPT_CHAT_CLUSTER_V1.format(
+                TITULO_EVENTO=cluster.titulo_cluster,
+                RESUMO_EVENTO=cluster.resumo_cluster or "Resumo não disponível",
+                PRIORIDADE=cluster.prioridade,
+                CATEGORIA=cluster.tag,
+                TOTAL_FONTES=len(artigos),
+                FONTES_ORIGINAIS=fontes_texto,
+                HISTORICO_CONVERSA=historico_conversa,
+                PERGUNTA_USUARIO=request.message,
+            )
         
         # Chama o LLM
         try:

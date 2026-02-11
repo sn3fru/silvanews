@@ -1,0 +1,85 @@
+# .cursorrules - BTG AlphaFeed (v2.0 Graph-RAG Agentic)
+#
+# ANTES DE QUALQUER IMPLEMENTACAO: Leia docs/SYSTEM.md para entender
+# onde cada funcao mora. Leia docs/OPERATIONS.md para os endpoints da API.
+
+# ARQUITETURA
+# Pipeline DUAL: v1 (producao, linear em process_articles.py) + v2 (sombra, LangGraph Graph-RAG em backend/workflow.py).
+# Stack: Python 3.11, FastAPI, SQLAlchemy, PostgreSQL (pgvector), LangGraph, Gemini 2.0 Flash.
+# Estrategia: Strangler Fig - v2 roda em paralelo sem afetar v1.
+
+# DOCUMENTACAO (OBRIGATORIA para contexto)
+# docs/SYSTEM.md             -> REFERENCIA COMPLETA: todas as tabelas (17), funcoes CRUD (79), pipeline v1 (31 funcoes),
+#                               pipeline v2 (5 nos LangGraph), prompts (10+), frontend (200+ funcoes JS), agente estagiario
+# docs/OPERATIONS.md         -> REFERENCIA DE API: todos os 60+ endpoints com params, bodies e funcoes que chamam,
+#                               setup, deploy, troubleshooting
+# docs/V2-MIGRATION-PLAN.md  -> Status do Graph-RAG: fases concluidas, como usar, proximos passos
+
+# LEIS IMUTAVEIS
+# 1. Gatekeeper V13 (backend/prompts.py PROMPT_ANALISE_E_SINTESE_CLUSTER_V1) - encapsular, nunca reescrever
+# 2. Nacional e Internacional NUNCA se misturam no mesmo cluster (campo tipo_fonte em artigos e clusters)
+# 3. texto_bruto e somente leitura (campo IMUTAVEL em artigos_brutos)
+# 4. v2 roda em shadow mode (V2_SHADOW_MODE=1) sem afetar v1
+
+# MAPA DE NAVEGACAO - "Onde implementar X?"
+#
+# Nova feature de DADOS/TABELA:
+#   1. Modelo ORM: backend/database.py
+#   2. CRUD: backend/crud.py (seguir padrao existente: funcoes puras db+session)
+#   3. Endpoint: backend/main.py (seguir padrao: depende de get_db, chama crud)
+#   4. Migration SQL: scripts/migrate_*.py (se producao Heroku)
+#
+# Nova feature de PROCESSAMENTO/LLM:
+#   1. Prompt: backend/prompts.py (SEMPRE centralizar aqui)
+#   2. Logica v1: process_articles.py (funcao dedicada, integrar no main())
+#   3. Logica v2: backend/agents/nodes.py (novo no ou extender existente)
+#   4. Orquestracao v2: backend/workflow.py (adicionar no ao StateGraph)
+#
+# Nova feature de FRONTEND:
+#   1. Feed/Deep-dive: frontend/script.js (120+ funcoes, cache em Map)
+#   2. Admin/Settings: frontend/settings.js (80+ funcoes, 5 abas)
+#   3. Layout: frontend/index.html ou settings.html
+#   4. Estilo: frontend/style.css
+#
+# Nova feature de BUSCA/RAG:
+#   1. Embeddings v1 (OpenAI 384d): semantic_search/embedder.py + store.py + search.py
+#   2. Embeddings v2 (pgvector 768d): coluna embedding_v2 em artigos_brutos + indice HNSW
+#   3. Grafo: backend/agents/graph_crud.py (entidades, arestas, queries temporais)
+#
+# Nova feature de AGENTE/CHAT:
+#   1. Chat por cluster: endpoints /api/chat/* em main.py, CRUD em crud.py
+#   2. Estagiario: agents/estagiario/agent.py (classificacao de intencao + roteamento)
+#   3. Ferramentas: agents/estagiario/tools/definitions.py
+
+# ARQUIVOS CRITICOS (ler ANTES de editar qualquer coisa relacionada)
+# backend/prompts.py          -> Tags (9 nacionais, 8 internacionais), prioridades P1/P2/P3, todos os prompts LLM
+# backend/crud.py             -> 79 funcoes. Qualquer operacao de banco DEVE passar por aqui.
+# backend/main.py             -> 60+ endpoints. Estado global: upload_progress, processing_state.
+# process_articles.py         -> Pipeline v1 completo. 4 etapas + modo sombra v2. Funcoes de extracao JSON com 5 fallbacks.
+# backend/database.py         -> 17 tabelas ORM. Mudanca aqui = migration SQL para producao.
+
+# DEPLOYMENT & SYNC (CRITICO)
+# Workflow do usuario: cola PDFs em ../pdfs/ e roda run_complete_workflow.py
+# Esse script executa: load_news.py -> process_articles.py -> migrate_incremental --include-all
+# O migrate_incremental.py sincroniza LOCAL -> HEROKU (producao).
+#
+# REGRA OBRIGATORIA: Se criar/alterar tabela em database.py:
+#   1. Adicionar import no migrate_incremental.py (ambos os blocos try/except)
+#   2. Criar funcao migrate_<entidade>() seguindo o padrao existente (idempotente, incremental)
+#   3. Adicionar flag --include-<entidade> e chamar no bloco main()
+#   4. Fornecer SQL raw de migracao para producao Heroku (scripts/migrate_*.py)
+#   SEM ISSO: a inteligencia fica PRESA no localhost e producao nao recebe os dados.
+#
+# Arquivos de sync:
+#   run_complete_workflow.py   -> Orquestrador: DB check -> load_news -> process_articles -> migrate
+#   migrate_incremental.py     -> Sync incremental (18 tabelas). Flags: --include-all para tudo
+#   last_migration.txt         -> Timestamp da ultima sync (ISO UTC)
+
+# REGRAS DE CODIGO
+# - Type hints estrito. Pydantic para validacao entre nos.
+# - Erros em LLM: fallback gracioso (Writer sem contexto, NER vazio). Nunca crashar o pipeline.
+# - Se modificar database.py: OBRIGATORIO atualizar migrate_incremental.py (ver regra acima).
+# - Novos CRUD: seguir padrao de crud.py (session como 1o param, returns tipados).
+# - Frontend: toda chamada API deve ter tratamento de erro + notification toast.
+# - Se criar arquivo de teste: deletar apos uso (nao guardar lixo).
+# - Manter docs/SYSTEM.md e docs/OPERATIONS.md atualizados ao implementar features.

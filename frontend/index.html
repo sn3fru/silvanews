@@ -167,6 +167,7 @@
                 <div style="margin-left:auto;display:flex;gap:.5rem;align-items:center;">
                     <button id="modal-copy-btn" class="btn btn-secundario">📋 Copiar</button>
                     <button id="modal-expand-summary-btn" class="btn btn-secundario">⤴︎ Expandir</button>
+                    <button id="modal-graph-btn" class="btn btn-secundario" title="Grafo de relacionamentos">🕸 Grafo</button>
                     <button id="modal-like-btn" class="btn btn-secundario" title="Gostei (like)">👍</button>
                     <button id="modal-dislike-btn" class="btn btn-secundario" title="Não gostei (dislike)">👎</button>
                 </div>
@@ -327,7 +328,7 @@
         </div>
     </div>
     
-    <script src="/frontend/script.js?v=1.0.33"></script>
+    <!-- script.js carregado no final do body, apos D3.js -->
     <div id="modal-estagiario" class="modal-overlay oculto">
         <div class="modal-container" style="max-width:560px;height:auto;">
             <button class="modal-close-btn" onclick="document.getElementById('modal-estagiario').classList.add('oculto')">&times;</button>
@@ -370,5 +371,27 @@
             </div>
         </div>
     </div>
+    <!-- Graph Overlay (D3.js) -->
+    <div id="graph-overlay" class="graph-overlay oculto">
+        <div class="graph-container">
+            <div class="graph-header">
+                <h3 id="graph-title">Grafo de Relacionamentos</h3>
+                <div class="graph-legend">
+                    <span class="legend-item"><span class="legend-dot legend-person"></span>Pessoa</span>
+                    <span class="legend-item"><span class="legend-dot legend-org"></span>Empresa</span>
+                    <span class="legend-item"><span class="legend-dot legend-gov"></span>Governo</span>
+                    <span class="legend-item"><span class="legend-dot legend-event"></span>Evento</span>
+                    <span class="legend-item"><span class="legend-dot legend-concept"></span>Conceito</span>
+                    <span class="legend-item"><span class="legend-dot legend-cluster"></span>Cluster</span>
+                </div>
+                <button id="graph-close-btn" class="modal-close-btn">&times;</button>
+            </div>
+            <div id="graph-canvas"></div>
+            <div id="graph-tooltip" class="graph-tooltip"></div>
+        </div>
+    </div>
+
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="/frontend/script.js?v=2.0.0"></script>
 </body>
 </html>

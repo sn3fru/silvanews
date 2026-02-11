@@ -1,14 +1,17 @@
 ## BTG AlphaFeed
 
-Plataforma de inteligência de mercado que transforma alto volume de notícias em um feed orientado a eventos (clusters) para Special Situations, com suporte para notícias nacionais e internacionais.
+Plataforma de inteligencia de mercado que transforma alto volume de noticias (~1000/dia) em um feed orientado a eventos (clusters) para Special Situations, com suporte para noticias nacionais e internacionais.
 
-### O que é (visão executiva)
+> **Documentacao completa:** [`docs/SYSTEM.md`](docs/SYSTEM.md) (arquitetura e referencia) | [`docs/OPERATIONS.md`](docs/OPERATIONS.md) (setup e API) | [`docs/V2-MIGRATION-PLAN.md`](docs/V2-MIGRATION-PLAN.md) (Graph-RAG v2)
 
-- Identifica o fato gerador por trás de múltiplas notícias e consolida em um único evento.
-- Classifica por prioridade (P1 crítico, P2 estratégico, P3 monitoramento) e por categoria temática (tags).
-- Gera resumos executivos no tamanho certo por prioridade (P1 longo, P2 médio, P3 curto).
-- Oferece visualização por data, filtros e drill-down para as fontes originais.
-- **NOVO**: Separação entre notícias nacionais e internacionais com tags e critérios de priorização específicos.
+### O que e (visao executiva)
+
+- Identifica o fato gerador por tras de multiplas noticias e consolida em um unico evento.
+- Classifica por prioridade (P1 critico, P2 estrategico, P3 monitoramento) e por categoria tematica (tags).
+- Gera resumos executivos no tamanho certo por prioridade (P1 longo, P2 medio, P3 curto).
+- Oferece visualizacao por data, filtros e drill-down para as fontes originais.
+- Separacao entre noticias nacionais e internacionais com tags e criterios de priorizacao especificos.
+- **NOVO v2.0**: Arquitetura Graph-RAG Agentica com memoria temporal (grafo de conhecimento + LangGraph).
 
 ### Como funciona na prática
 
@@ -51,53 +54,67 @@ Plataforma de inteligência de mercado que transforma alto volume de notícias e
 - **Fallback Automático**: O sistema carrega do banco de dados, mas mantém compatibilidade com as estruturas originais do `backend/prompts.py`.
 - **Migração**: Use `python seed_prompts.py` para popular o banco com dados iniciais após criar as tabelas.
 
-### Pipeline (passo a passo)
+### Pipeline (passo a passo) — v2.0 Graph-RAG Integrado
 
-1) Ingestão
-   - `load_news.py` chama `backend/collectors/file_loader.py`
+O pipeline e executado via `run_complete_workflow.py` que orquestra todas as etapas:
+
+```bash
+python run_complete_workflow.py           # ciclo unico (ingestao + processamento + migracao + notificacao)
+python run_complete_workflow.py --scheduler --interval 60  # loop continuo (de hora em hora)
+```
+
+**Etapas internas (executadas automaticamente):**
+
+1) **Ingestao** (`load_news.py`)
    - PDFs: usa `PROMPT_EXTRACAO_PDF_RAW_V1` para extrair TEXTO COMPLETO ORIGINAL (sem resumo)
    - JSONs: ingeridos diretamente sem LLM
+   - Deduplicacao semantica via `embedding_v2` (768d Gemini) — rejeita artigos com >85% de similaridade
    - Salva como artigos brutos (status `pendente`) com `texto_bruto` preservado
-2) Processamento inicial (Etapa 1)
-   - `process_articles.py::processar_artigo_sem_cluster`
-   - Valida dados, aplica heurísticas leves e gera embeddings (sem prompts/LLM)
+2) **Processamento + Enriquecimento Graph-RAG** (Etapa 1)
+   - `process_articles.py::processar_artigo_sem_cluster` + `enriquecer_artigo_v2`
+   - Valida dados, aplica heuristicas leves, gera embedding v1 (384d hash)
+   - **v2**: Gera `embedding_v2` (768d Gemini), extrai entidades via LLM (NER), resolve nomes canonicos e persiste no grafo (`graph_entities` + `graph_edges`)
    - Marca `pronto_agrupar`
-3) Agrupamento (Etapa 2)
-   - Lote: `process_articles.py::agrupar_noticias_com_prompt` → `PROMPT_AGRUPAMENTO_V1` (processa lotes NACIONAL e INTERNACIONAL separadamente; usa trecho curto por item e `max_output_tokens` alto para respostas longas)
-   - Incremental: `process_articles.py::agrupar_noticias_incremental` → `PROMPT_AGRUPAMENTO_INCREMENTAL_V2` (lotes ≤ 100; 10 títulos por cluster; `max_output_tokens` alto). Isolado por tipo_fonte e impede anexação entre tipos diferentes.
-4) Classificação e Resumo (Etapa 3)
-   - `process_articles.py::classificar_e_resumir_cluster`
-   - Classificação/Prioridade/Tag: `PROMPT_EXTRACAO_GATEKEEPER_V13`
-   - Resumo do CLUSTER: `PROMPT_RESUMO_FINAL_V3` (salvo em `texto_processado` do cluster)
-5) Priorização e Consolidação (Etapa 4)
-   - Priorização executiva: `process_articles.py::priorizacao_executiva_final` → `PROMPT_PRIORIZACAO_EXECUTIVA_V1` (lotes ≤ 40; `resumo_final` ~240; `max_output_tokens` 8192)
-   - Consolidação final: `process_articles.py::consolidacao_final_clusters` → `PROMPT_CONSOLIDACAO_CLUSTERS_V1` (lotes ≤ 50) + fallback determinístico (Jaccard por título e mesma tag)
-6) Exposição: API `FastAPI` alimenta o frontend; CRUD e endpoints admin.
+3) **Agrupamento + Dicas de Similaridade** (Etapa 2)
+   - Lote: `agrupar_noticias_com_prompt` → `PROMPT_AGRUPAMENTO_V1`
+   - Incremental: `agrupar_noticias_incremental` → `PROMPT_AGRUPAMENTO_INCREMENTAL_V2`
+   - **v2**: Calcula similaridade cosseno entre artigos via `embedding_v2` e injeta DICAS DE SIMILARIDADE no prompt (ex: "Noticias 3 e 7 tem 92% de similaridade semantica")
+   - Isolado por tipo_fonte (NACIONAL/INTERNACIONAL nunca se misturam)
+4) **Classificacao, Resumo + Contexto Historico** (Etapa 3)
+   - `classificar_e_resumir_cluster` → `PROMPT_ANALISE_E_SINTESE_CLUSTER_V1`
+   - **v2**: Busca contexto historico via `get_context_for_cluster()` (grafo: entidades 7 dias + vetorial: artigos similares 30 dias) e injeta no prompt como CONTEXTO HISTORICO. Permite resumos como "Este e o terceiro anuncio do tipo nesta semana..."
+5) **Consolidacao + Similaridade de Clusters** (Etapa 4)
+   - `consolidacao_final_clusters` → `PROMPT_CONSOLIDACAO_CLUSTERS_V1`
+   - **v2**: Calcula embedding medio por cluster (media dos `embedding_v2` dos artigos) e identifica pares com alta similaridade para sugerir merges mais inteligentes
+6) **Migracao** → Sincroniza local → Heroku (`migrate_incremental --include-all`)
+7) **Notificacoes** → Envia clusters novos via Telegram (se configurado)
+8) **Exposicao**: API `FastAPI` alimenta o frontend; CRUD e endpoints admin.
 
 ```mermaid
 graph TD
   A[Upload PDFs/JSON<br/>load_news.py] --> B[(PostgreSQL<br/>artigos_brutos: pendente)]
-  B --> C[process_articles.py<br/>Etapa 1: processar artigos]
-  C --> D[(artigos_brutos: pronto_agrupar)]
-  D --> E[process_articles.py<br/>Etapa 2: agrupar (pivot auto))]
-  E --> F[Etapa 3: classificar e resumir]
-  F --> F2[Etapa 4: priorização executiva]
-  F2 --> G[(clusters_eventos + resumos + prioridades finais)]
+  B --> C[Etapa 1: processar + Graph-RAG v2<br/>embedding_v2 + NER + grafo]
+  C --> D[(artigos_brutos: pronto_agrupar<br/>+ graph_entities + graph_edges)]
+  D --> E[Etapa 2: agrupar<br/>+ dicas similaridade v2]
+  E --> F[Etapa 3: classificar/resumir<br/>+ contexto historico do grafo]
+  F --> F2[Etapa 4: consolidacao<br/>+ similaridade entre clusters]
+  F2 --> G[(clusters_eventos + resumos + grafo)]
+  G --> M[migrate_incremental<br/>local → Heroku]
+  M --> T[notify_telegram<br/>clusters novos]
   G --> H[FastAPI /api/feed]
   H --> I[Frontend /frontend]
-  J[Admin: upload-file<br/>processar-pendentes] --> H
 ```
 
-### LLMs e prompts (o que roda e para quê)
+### LLMs e prompts (o que roda e para que)
 
-- Extração de PDFs: `PROMPT_EXTRACAO_PDF_RAW_V1`.
-- Gatekeeper de relevância/priority/tag (clusters): `PROMPT_EXTRACAO_GATEKEEPER_V13`.
-- Agrupamento em lote: `PROMPT_AGRUPAMENTO_V1` (lotes ≤ 60; `max_output_tokens` 32768).
-- Agrupamento incremental (novas notícias do dia): `PROMPT_AGRUPAMENTO_INCREMENTAL_V2` (lotes ≤ 100; 10 títulos por cluster; `max_output_tokens` 32768).
-- Resumo executivo por prioridade: `PROMPT_RESUMO_FINAL_V3`.
-- Chat com cluster: `PROMPT_CHAT_CLUSTER_V1`.
-- Priorização executiva (pós-pipeline): `PROMPT_PRIORIZACAO_EXECUTIVA_V1`.
-- Consolidação final de clusters (Etapa 4): `PROMPT_CONSOLIDACAO_CLUSTERS_V1`.
+- Extracao de PDFs: `PROMPT_EXTRACAO_PDF_RAW_V1`
+- **v2 NER (Etapa 1)**: `PROMPT_ENTITY_EXTRACTION` — extrai entidades (PERSON, ORG, GOV, EVENT, CONCEPT) via Gemini Flash
+- **v2 Embedding (Etapa 1)**: `gemini-embedding-001` — gera embedding_v2 de 768 dimensoes para cada artigo
+- Agrupamento em lote: `PROMPT_AGRUPAMENTO_V1` + **dicas de similaridade v2**
+- Agrupamento incremental: `PROMPT_AGRUPAMENTO_INCREMENTAL_V2` + **dicas de similaridade v2**
+- Classificacao e resumo (Etapa 3): `PROMPT_ANALISE_E_SINTESE_CLUSTER_V1` + **contexto historico do grafo v2**
+- Consolidacao final (Etapa 4): `PROMPT_CONSOLIDACAO_CLUSTERS_V1` + **similaridade entre clusters v2**
+- Chat com cluster: `PROMPT_CHAT_CLUSTER_V1`
 
 ### Busca Semântica (novo módulo)
 
@@ -180,39 +197,37 @@ python add_tipo_fonte_migration.py
 
 ### 3) Comandos essenciais
 
-- Upload manual de PDFs/JSON (diretório completo):
-  ```bash
-  python load_news.py --dir ../pdfs --direct --yes
-  ```
-- Upload de um arquivo específico:
+- **Pipeline completo (recomendado)** — ingestao + processamento v2 + migracao + notificacao:
 
 ```bash
-  python load_news.py --file ../pdfs/arquivo.pdf --direct --yes
+python run_complete_workflow.py
 ```
 
-- Processar artigos (extração → agrupamento → resumos):
+- **Pipeline em loop** (de hora em hora, para operacao continua):
 
-  ```bash
-  python process_articles.py
-  ```
+```bash
+python run_complete_workflow.py --scheduler --interval 60
+```
 
-  - Rodar somente a Etapa 4 (Priorização + Consolidação Final):
+- Upload manual de PDFs/JSON (diretorio completo):
 
-  ```bash
-  python process_articles.py --stage 4
-  ```
+```bash
+python load_news.py --dir ../pdfs --direct --yes
+```
 
-  - Rodar em modo em lote (em vez de incremental) e selecionar etapa:
+- Processar artigos isoladamente (sem migracao/notificacao):
 
-  ```bash
-  python process_articles.py --modo lote --stage all
-  ```
-- Iniciar o backend (use apenas se não houver outro servidor rodando):
+```bash
+python process_articles.py
+```
 
-  ```bash
-  python start_dev.py
-  ```
-- Acesso rápido: Frontend `http://localhost:8000/frontend` | Docs `http://localhost:8000/docs` | Health `http://localhost:8000/health`
+- Iniciar o backend (use apenas se nao houver outro servidor rodando):
+
+```bash
+python start_dev.py
+```
+
+- Acesso rapido: Frontend `http://localhost:8000/frontend` | Docs `http://localhost:8000/docs` | Health `http://localhost:8000/health`
 
 ### Estimativa de Custos (LLM)
 
@@ -281,11 +296,13 @@ Passo a passo:
 O sistema agora diferencia automaticamente entre fontes nacionais e internacionais:
 
 **Detecção Automática de Fonte**:
+
 - Jornais nacionais: Folha, Estadão, O Globo, Valor, etc.
 - Jornais internacionais: NYT, WSJ, Financial Times, Bloomberg, etc.
 - Default: nacional (para compatibilidade com dados existentes)
 
 **Tags Internacionais Disponíveis**:
+
 - Global M&A and Corporate Transactions
 - Global Legal and Regulatory
 - Sovereign Debt and Credit
@@ -296,28 +313,30 @@ O sistema agora diferencia automaticamente entre fontes nacionais e internaciona
 - Technology and Innovation
 
 **Critérios de Priorização Internacional**:
+
 - P1: Defaults soberanos > $5B, Chapter 11 de Fortune 500, mega-mergers > $20B
 - P2: Mudanças de rating de países G20, M&As cross-border > $5B
 - P3: Earnings regulares, indicadores econômicos, desenvolvimentos políticos
 
 ## Tarefas Comuns
 
-- Reexecutar pipeline completo (ingestão + processamento):
-  ```bash
-  python load_news.py --dir ../pdfs --direct --yes && python process_articles.py
-  ```
-- Migração completa (one-shot):
-  ```bash
-  python -m btg_alphafeed.migrate_databases --source "postgresql+psycopg2://postgres_local@localhost:5433/devdb" --dest "postgres://<usuario>:<senha>@<host>:5432/<db>"
-  ```
+- Pipeline completo (recomendado):
+
+```bash
+python run_complete_workflow.py
+```
+
 - Limpar banco (script interativo, com backup):
-  ```bash
-  python limpar_banco.py
-  ```
+
+```bash
+python limpar_banco.py
+```
+
 - Ver estado da API e DB:
-  ```bash
-  curl http://localhost:8000/health
-  ```
+
+```bash
+curl http://localhost:8000/health
+```
 
 ### Reprocessamento seletivo (do dia atual)
 
@@ -354,29 +373,27 @@ Saída esperada:
 
 Importante: este processo não altera `backend/prompts.py`. É apenas para estudo e validação.
 
-## Playbooks (cenários prontos)
+## Playbooks (cenarios prontos)
 
-### 1) Rodar o dia do zero (ingestão PDFs/JSON + processamento + backend)
-
-```bash
-conda activate pymc2
-cd btg_alphafeed
-python load_news.py --dir ../pdfs --direct --yes
-python process_articles.py
-# iniciar backend somente se necessário
-python start_dev.py
-```
-
-### 2) Apenas ingestão de JSON (sem LLM) e processamento
+### 1) Pipeline completo do dia (RECOMENDADO)
 
 ```bash
 conda activate pymc2
 cd btg_alphafeed
-python load_news.py --dir ../pdfs --direct --yes
-python process_articles.py
+python run_complete_workflow.py
+# Executa: ingestao PDFs → processamento v2 (Graph-RAG) → migracao Heroku → notificacoes
 ```
 
-### 3) Reprocessar apenas pendentes já carregados
+### 2) Pipeline em loop (operacao continua, de hora em hora)
+
+```bash
+conda activate pymc2
+cd btg_alphafeed
+python run_complete_workflow.py --scheduler --interval 60
+# Deduplicacao semantica garante que artigos repetidos nao sao reprocessados
+```
+
+### 3) Reprocessar apenas pendentes (sem ingestao, sem migracao)
 
 ```bash
 conda activate pymc2
@@ -384,32 +401,28 @@ cd btg_alphafeed
 python process_articles.py
 ```
 
-### 4) Ingestão incremental de PDFs durante o dia + agrupamento incremental
+### 4) Sincronizar local → Heroku (manual)
 
 ```bash
 conda activate pymc2
 cd btg_alphafeed
-# novas páginas/PDFs na pasta ../pdfs
-python load_news.py --dir ../pdfs --direct --yes
-python process_articles.py
-```
-
-### 5) Sincronizar local → Heroku (incremental, com logs e chat)
-
-```bash
-conda activate pymc2
-cd silva-front
-python -m btg_alphafeed.migrate_incremental \
+python -m migrate_incremental \
   --source "postgresql+psycopg2://postgres_local@localhost:5433/devdb" \
   --dest   "postgres://<usuario>:<senha>@<host>:5432/<db>" \
-  --include-logs --include-chat
+  --include-all
+```
+
+### 5) Backfill do grafo (uma vez, apos setup inicial)
+
+```bash
+python scripts/backfill_graph.py --days 30 --batch 50
 ```
 
 ### 6) Verificar data sem dados (sanidade)
 
 ```bash
 curl "http://localhost:8000/api/feed?data=2099-01-01"
-# Esperado: métricas zeradas e lista vazia (sem dados de teste)
+# Esperado: metricas zeradas e lista vazia
 ```
 
 ## Regras de Negócio e Convenções
@@ -468,12 +481,14 @@ python test_fluxo_completo.py
 - JSON de crawlers: campos típicos `id_hash`, `titulo`, `texto_completo`, `link`, `fonte`, `data_publicacao`
 - PDF: OCR + LLM quando disponível; fallback 1 artigo por página
 
-## Referências rápidas
+## Referencias rapidas
 
-- Upload: `python load_news.py --dir ../pdfs --direct --yes`
-- Processar: `python process_articles.py`
+- **Pipeline completo**: `python run_complete_workflow.py` (ingestao + processamento v2 + migracao + notificacao)
+- **Pipeline loop**: `python run_complete_workflow.py --scheduler --interval 60`
+- Upload manual: `python load_news.py --dir ../pdfs --direct --yes`
+- Processar somente: `python process_articles.py`
 - Backend: `python start_dev.py`
-- Sync Heroku: `python -m btg_alphafeed.migrate_incremental --source "postgresql+psycopg2://postgres_local@localhost:5433/devdb" --dest "postgres://<usuario>:<senha>@<host>:5432/<db>" --include-logs --include-chat`
+- Migracao Heroku: `python -m migrate_incremental --source "..." --dest "..." --include-all`
 
 ---
 
@@ -492,17 +507,20 @@ python test_fluxo_completo.py
 - `btg_alphafeed/frontend/index.html|script.js|style.css`: UI do feed, seletor de data, modal de deep-dive, filtros dinâmicos.
 - `btg_alphafeed/frontend/settings.html|settings.js`: UI administrativa/CRUD e operações de manutenção, com abas de BI (séries por dia, por fonte e por autor) e Feedback (like/dislike por artigo, com marcação de processado).
 - `btg_alphafeed/load_news.py`: CLI para ingestão de PDFs/JSONs (salva artigos brutos, com `--direct` para DB).
-- `btg_alphafeed/process_articles.py`: orquestrador do pipeline (processar → agrupar → classificar/resumir). Não conter regra de negócio própria.
+- `btg_alphafeed/process_articles.py`: orquestrador do pipeline v2 (processar + enriquecer Graph-RAG → agrupar com dicas similaridade → classificar/resumir com contexto historico → consolidar com similaridade clusters).
+- `btg_alphafeed/run_complete_workflow.py`: ponto de entrada principal. Orquestra: ingestao → processamento → migracao → notificacao. Suporta `--scheduler` para loop continuo.
 - `btg_alphafeed/migrate_incremental.py`: sync incremental local → Heroku (idempotente, com filtros `--only`, `--include-logs`, `--include-chat`).
 - `btg_alphafeed/migrate_databases.py`: migração completa (one-shot) local → Heroku.
 - `btg_alphafeed/limpar_banco.py`: limpeza seletiva com backup.
 
-### Fluxos críticos (pontos de extensão)
+### Fluxos criticos (pontos de extensao)
 
-- Ingestão: estender `backend/collectors/file_loader.py` para novas fontes/formatos.
-- Classificação/Tags: alterar apenas `backend/prompts.py` e manter coerência com `TAGS_SPECIAL_SITUATIONS`.
+- Ingestao: estender `backend/collectors/file_loader.py` para novas fontes/formatos.
+- Classificacao/Tags: alterar apenas `backend/prompts.py` e manter coerencia com `TAGS_SPECIAL_SITUATIONS`.
 - Prioridade/Resumo: `backend/prompts.py` (PROMPT_RESUMO_*), tamanho conforme P1/P2/P3.
-- Agrupamento incremental: `PROMPT_AGRUPAMENTO_INCREMENTAL_V2` (usa `titulos_internos` dos artigos de cada cluster no payload) e lógica de pivot automático em `process_articles.py`.
+- Agrupamento incremental: `PROMPT_AGRUPAMENTO_INCREMENTAL_V2` + dicas de similaridade v2 em `process_articles.py`.
+- Enriquecimento v2 (NER + embeddings + grafo): `process_articles.py::enriquecer_artigo_v2` + `backend/agents/graph_crud.py`.
+- Contexto historico (Etapa 3): `backend/agents/graph_crud.py::get_context_for_cluster` injeta grafo + vetorial no prompt.
 - API/Endpoints: adicionar rotas em `backend/main.py` e delegar CRUD para `backend/crud.py`.
 
 ### Regras de contribuição (para evitar duplicação e lógica fora do lugar)
@@ -528,3 +546,56 @@ python test_fluxo_completo.py
   - `POST /api/estagiario/start` — inicia sessão de chat do dia.
   - `POST /api/estagiario/send` — envia pergunta e retorna resposta do agente.
   - `GET /api/estagiario/messages/{session_id}` — histórico de mensagens.
+
+---
+
+## v2.0 - Arquitetura Graph-RAG Integrada
+
+A v2.0 integra um **Grafo de Conhecimento** e **Embeddings Semanticos** diretamente nas 4 etapas do pipeline principal. Nao e mais um modo sombra separado — o motor v2 e o motor principal.
+
+### Componentes
+
+| Componente                      | Arquivo                             | Descricao                                             |
+| ------------------------------- | ----------------------------------- | ----------------------------------------------------- |
+| **Grafo de Conhecimento** | `backend/database.py`             | Tabelas `graph_entities` + `graph_edges`          |
+| **CRUD do Grafo**         | `backend/agents/graph_crud.py`    | Entity Resolution, arestas, queries temporais, contexto |
+| **Nos Agenticos**         | `backend/agents/nodes.py`         | Gatekeeper, NER, Entity Resolution, Historian, Writer |
+| **Workflow LangGraph**    | `backend/workflow.py`             | StateGraph (disponivel para debug/comparacao)         |
+| **Enriquecimento v2**     | `process_articles.py::enriquecer_artigo_v2` | Embedding + NER + Grafo por artigo (Etapa 1) |
+| **Backfill**              | `scripts/backfill_graph.py`       | Popula grafo com dados historicos                     |
+
+### Como o v2 funciona em cada etapa
+
+| Etapa | O que o v2 adiciona | Funcao chave |
+|-------|---------------------|--------------|
+| **Etapa 1** | Gera `embedding_v2` (768d Gemini) + extrai entidades via NER + persiste no grafo | `enriquecer_artigo_v2()` |
+| **Etapa 2** | Calcula similaridade cosseno entre artigos e injeta DICAS DE SIMILARIDADE no prompt | `cosine_similarity_bytes()` |
+| **Etapa 3** | Busca contexto historico do grafo (7 dias) e artigos similares (30 dias), injeta no prompt | `get_context_for_cluster()` |
+| **Etapa 4** | Calcula embedding medio por cluster e identifica pares similares para sugerir merges | `cosine_similarity_bytes()` |
+
+### Setup Rapido
+
+```bash
+# 1. Instalar dependencias (se ainda nao instaladas)
+pip install langgraph
+
+# 2. Migrar banco de dados (criar tabelas do grafo)
+python scripts/migrate_graph_tables.py
+
+# 3. Popular grafo com dados historicos (uma vez)
+python scripts/backfill_graph.py --days 30 --batch 50
+
+# 4. Rodar pipeline completo (v2 integrado)
+python run_complete_workflow.py
+```
+
+### Variaveis de Ambiente
+
+| Variavel           | Padrao | Descricao                                                  |
+| ------------------ | ------ | ---------------------------------------------------------- |
+| `V2_SHADOW_MODE` | `0`  | Se `1`, roda workflow LangGraph completo apos pipeline (debug) |
+| `GEMINI_API_KEY` | -    | Chave da API Gemini (obrigatoria para v2)                  |
+
+### Degradacao Graciosa
+
+Se o Gemini estiver indisponivel ou a chave nao configurada, o pipeline funciona identicamente a v1 (sem embeddings, sem grafo, sem contexto historico). Nenhuma etapa falha — apenas perde o enriquecimento v2.

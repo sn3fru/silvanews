@@ -248,11 +248,14 @@ def run_migrate_incremental():
         print(f"[INFO] Origem: {SOURCE_DB}")
         print(f"[INFO] Destino: {DEST_DB}")
         
-        # Executa a migração com comando exato especificado (sem flags extras)
+        # Executa a migração com --include-all para sincronizar TODAS as entidades
+        # (clusters, artigos, sinteses, configs, alteracoes, chat, prompts,
+        #  grafo v2, feedback, estagiario, research jobs)
         result = subprocess.run([
             sys.executable, "-m", "migrate_incremental", 
             "--source", SOURCE_DB,
-            "--dest", DEST_DB
+            "--dest", DEST_DB,
+            "--include-all"
         ], cwd=Path(__file__).parent, capture_output=True, text=True, encoding='utf-8', errors='replace', env=_subprocess_env())
         
         if result.returncode == 0:
@@ -315,8 +318,242 @@ def start_backend():
     except Exception as e:
         print(f"[ERRO] ERRO: Erro ao iniciar backend: {e}")
 
+def run_feedback_learning():
+    """
+    Analisa feedback historico (likes/dislikes) e atualiza regras
+    de refinamento para injecao conservadora nos prompts.
+    Roda ANTES do processamento para que as regras atualizadas
+    estejam disponiveis durante a classificacao (Etapa 3 e 4).
+    Nao bloqueia o pipeline em caso de falha.
+    """
+    try:
+        print("\n📊 Feedback Learning: Analisando padroes de likes/dislikes...")
+        
+        result = subprocess.run([
+            sys.executable, "scripts/analyze_feedback.py",
+            "--days", "90",
+            "--min-samples", "3",
+            "--save"
+        ], cwd=Path(__file__).parent, capture_output=True, text=True,
+        encoding='utf-8', errors='replace', env=_subprocess_env())
+        
+        if result.returncode == 0:
+            print("[OK] Feedback Learning: regras atualizadas")
+            # Mostra resumo se houver
+            for line in (result.stdout or "").split("\n"):
+                if "regra" in line.lower() or "dislike" in line.lower() or "pattern" in line.lower():
+                    print(f"  {line.strip()}")
+            return True
+        else:
+            print("[AVISO] Feedback Learning falhou (nao critico):")
+            if result.stderr:
+                print(f"  {result.stderr[:200]}")
+            return True  # Nao bloqueia pipeline
+            
+    except Exception as e:
+        print(f"[AVISO] Feedback Learning indisponivel: {e}")
+        return True  # Nao bloqueia pipeline
+
+
+def run_notify():
+    """Envia notificacoes Telegram de clusters pendentes (notificacoes individuais)."""
+    try:
+        print("\nETAPA 4: Enviando notificacoes Telegram...")
+        
+        # Verifica se tem config de Telegram
+        env = _subprocess_env()
+        if not env.get("TELEGRAM_BOT_TOKEN") or not env.get("TELEGRAM_CHAT_ID"):
+            print("[INFO] TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID nao configurados. Pulando notificacoes.")
+            return True  # Nao falha, apenas pula
+        
+        print("[INFO] Executando: python scripts/notify_telegram.py")
+        result = subprocess.run([
+            sys.executable, "scripts/notify_telegram.py", "--limit", "50"
+        ], cwd=Path(__file__).parent, capture_output=True, text=True, encoding='utf-8', errors='replace', env=env)
+        
+        if result.returncode == 0:
+            print("[OK] Notificacoes enviadas!")
+            print(result.stdout)
+            return True
+        else:
+            print("[AVISO] Erro nas notificacoes (nao critico):")
+            print(result.stderr)
+            return True  # Nao bloqueia pipeline
+            
+    except Exception as e:
+        print(f"[AVISO] Erro ao enviar notificacoes: {e}")
+        return True  # Nao bloqueia pipeline
+
+
+def run_telegram_briefing():
+    """
+    ETAPA 5: Gera e envia Daily Briefing sintetizado via Telegram.
+    Usa o TelegramBroadcaster (backend/broadcaster.py) que:
+      1. Busca clusters P1/P2 do dia
+      2. Gera briefing via Gemini Flash
+      3. Envia para canal Telegram
+    Idempotente: nao reenvia se ja enviou hoje.
+    Nao bloqueia o pipeline em caso de falha.
+    """
+    try:
+        print("\nETAPA 5: Gerando Daily Briefing (Telegram)...")
+        
+        # Verifica configuracao
+        env = _subprocess_env()
+        if not env.get("TELEGRAM_BOT_TOKEN") or not env.get("TELEGRAM_CHAT_ID"):
+            print("[INFO] TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID nao configurados. Pulando briefing.")
+            return True
+        
+        print("[INFO] Executando: python send_telegram.py")
+        result = subprocess.run([
+            sys.executable, "send_telegram.py"
+        ], cwd=Path(__file__).parent, capture_output=True, text=True, encoding='utf-8', errors='replace', env=env)
+        
+        if result.returncode == 0:
+            print("[OK] Daily Briefing enviado!")
+            if result.stdout:
+                print(result.stdout)
+            return True
+        else:
+            print("[AVISO] Erro no briefing (nao critico):")
+            if result.stderr:
+                print(result.stderr)
+            if result.stdout:
+                print(result.stdout)
+            return True  # Nao bloqueia pipeline
+            
+    except Exception as e:
+        print(f"[AVISO] Erro ao gerar briefing: {e}")
+        return True  # Nao bloqueia pipeline
+
+
+def run_single_cycle(skip_load: bool = False):
+    """Executa um unico ciclo do pipeline (para uso incremental de hora em hora)."""
+    print("=" * 60)
+    print(f"BTG AlphaFeed - Ciclo de Processamento")
+    print(f"Horario: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print("=" * 60)
+    
+    # Verificações iniciais
+    if not check_env_file():
+        return False
+    
+    # ETAPA 0: Verifica banco local
+    if not check_and_start_local_db():
+        print("[ERRO] Falha na verificacao do banco local")
+        return False
+    
+    # PRE-STEP: Feedback Learning (atualiza regras antes do processamento)
+    run_feedback_learning()
+    
+    # ETAPA 1: Carregamento de noticias (opcional - pode pular se nao tem PDFs novos)
+    if not skip_load:
+        if not run_load_news():
+            print("[AVISO] Falha no carregamento de noticias (continuando...)")
+    
+    # ETAPA 2: Processamento de artigos (incremental: so pendentes)
+    if not run_process_articles():
+        print("[ERRO] Falha no processamento de artigos")
+        return False
+    
+    # ETAPA 3: Migracao incremental
+    if not run_migrate_incremental():
+        print("[AVISO] Falha na migracao (continuando...)")
+    
+    # ETAPA 4: Notificacoes Telegram (individuais)
+    run_notify()
+    
+    # ETAPA 5: Daily Briefing sintetizado
+    run_telegram_briefing()
+    
+    print(f"\n[OK] Ciclo concluido em {time.strftime('%H:%M:%S')}")
+    return True
+
+
+def run_scheduler(interval_minutes: int = 60, skip_load: bool = False):
+    """
+    Roda o pipeline em loop continuo a cada N minutos.
+    Para com Ctrl+C.
+    
+    Args:
+        interval_minutes: Intervalo entre execucoes em minutos. Default 60.
+        skip_load: Se True, pula o carregamento de PDFs em cada ciclo.
+    """
+    print("=" * 60)
+    print(f"BTG AlphaFeed - SCHEDULER (a cada {interval_minutes} min)")
+    print(f"Inicio: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Skip load: {skip_load}")
+    print("Pressione Ctrl+C para parar")
+    print("=" * 60)
+    
+    ciclo = 0
+    try:
+        while True:
+            ciclo += 1
+            print(f"\n{'#'*60}")
+            print(f"# CICLO {ciclo} - {time.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"{'#'*60}")
+            
+            start = time.time()
+            
+            try:
+                ok = run_single_cycle(skip_load=skip_load)
+                elapsed = time.time() - start
+                status = "OK" if ok else "FALHA"
+                print(f"\n[{status}] Ciclo {ciclo} concluido em {elapsed:.0f}s")
+            except Exception as e:
+                elapsed = time.time() - start
+                print(f"\n[ERRO] Ciclo {ciclo} falhou apos {elapsed:.0f}s: {e}")
+            
+            # Aguarda proximo ciclo
+            wait_seconds = interval_minutes * 60
+            next_run = time.strftime('%H:%M:%S', time.localtime(time.time() + wait_seconds))
+            print(f"\n⏰ Proximo ciclo em {interval_minutes} min (as {next_run})")
+            print(f"   Pressione Ctrl+C para parar.\n")
+            time.sleep(wait_seconds)
+            
+    except KeyboardInterrupt:
+        print(f"\n\n[PARADO] Scheduler encerrado apos {ciclo} ciclos.")
+
+
 def main():
     """Função principal."""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="BTG AlphaFeed - Fluxo Completo Automatizado")
+    parser.add_argument("--scheduler", action="store_true",
+                        help="Roda em loop continuo (a cada N minutos)")
+    parser.add_argument("--interval", type=int, default=60,
+                        help="Intervalo entre ciclos em minutos (default: 60)")
+    parser.add_argument("--skip-load", action="store_true",
+                        help="Pula carregamento de PDFs (util em ciclos rapidos)")
+    parser.add_argument("--single", action="store_true",
+                        help="Executa um unico ciclo e sai (modo incremental)")
+    parser.add_argument("--notify-only", action="store_true",
+                        help="Apenas envia notificacoes pendentes")
+    args = parser.parse_args()
+    
+    # --notify-only: so envia notificacoes
+    if args.notify_only:
+        check_env_file()
+        run_notify()
+        return
+    
+    # --scheduler: loop continuo
+    if args.scheduler:
+        if not check_conda_env():
+            sys.exit(1)
+        run_scheduler(interval_minutes=args.interval, skip_load=args.skip_load)
+        return
+    
+    # --single: um ciclo e sai
+    if args.single:
+        if not check_conda_env():
+            sys.exit(1)
+        ok = run_single_cycle(skip_load=args.skip_load)
+        sys.exit(0 if ok else 1)
+    
+    # Modo padrao (legado): fluxo completo sem loop
     print("=" * 60)
     print("BTG AlphaFeed - Fluxo Completo Automatizado")
     print("=" * 60)
@@ -335,12 +572,16 @@ def main():
     
     # Informações do que será executado (sem confirmação interativa)
     print("\nEste script executará:")
-    print("   0. ✅ Verificação/inicialização do banco local")
+    print("   0. Verificação/inicialização do banco local")
+    print("   *. Feedback Learning (analise de likes/dislikes)")
     print("   1. Carregamento de notícias (load_news.py --direct --yes)")
     print("   2. Processamento de artigos (process_articles.py)")
     print("   3. Migração incremental do banco (migrate_incremental)")
-    print("   4. Teste do fluxo completo")
-    print("   5. Inicialização do backend")
+    print("   4. Notificacoes Telegram individuais (se configurado)")
+    print("   5. Daily Briefing sintetizado (se configurado)")
+    
+    # PRE-STEP: Feedback Learning (atualiza regras antes do processamento)
+    run_feedback_learning()
     
     # ETAPA 1: Carregamento de notícias
     if not run_load_news():
@@ -357,13 +598,13 @@ def main():
         print("[ERRO] Falha na migração incremental")
         sys.exit(1)
     
-    # # ETAPA 4: Teste do fluxo completo
-    # if not run_test_workflow():
-    #     print("[ERRO] Falha no teste do fluxo completo")
-    #     sys.exit(1)
+    # ETAPA 4: Notificacoes individuais
+    run_notify()
     
-    # # ETAPA 5: Inicialização do backend
-    # start_backend()
+    # ETAPA 5: Daily Briefing sintetizado
+    run_telegram_briefing()
+    
+    print("\n[OK] Pipeline completo concluido!")
 
 if __name__ == "__main__":
     main() 

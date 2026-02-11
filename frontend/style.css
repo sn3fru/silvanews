@@ -1857,3 +1857,136 @@ hr { border: none; border-top: 1px solid var(--cor-borda); margin: 1.5rem 0; }
         min-width: 45px;
     }
 }
+
+/* ==============================================================================
+   GRAPH OVERLAY (D3.js Force-Directed)
+   ============================================================================== */
+
+.graph-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+}
+
+.graph-overlay.oculto {
+    display: none;
+}
+
+.graph-container {
+    background: #fff;
+    border-radius: 16px;
+    width: 90%;
+    max-width: 1100px;
+    height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+    position: relative;
+}
+
+.graph-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid #e5e7eb;
+    flex-shrink: 0;
+}
+
+.graph-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: #111827;
+    white-space: nowrap;
+}
+
+.graph-legend {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-left: auto;
+    margin-right: 2rem;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.legend-person { background: #3b82f6; }
+.legend-org { background: #10b981; }
+.legend-gov { background: #ef4444; }
+.legend-event { background: #f59e0b; }
+.legend-concept { background: #8b5cf6; }
+.legend-cluster { background: #f97316; border-radius: 3px; }
+
+#graph-canvas {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+}
+
+#graph-canvas svg {
+    width: 100%;
+    height: 100%;
+}
+
+.graph-tooltip {
+    position: absolute;
+    background: #1e293b;
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    max-width: 280px;
+    z-index: 2001;
+    line-height: 1.4;
+}
+
+.graph-tooltip.visible {
+    opacity: 1;
+}
+
+/* D3 node styling */
+.graph-node {
+    cursor: pointer;
+}
+
+.graph-node text {
+    font-size: 10px;
+    fill: #374151;
+    pointer-events: none;
+    text-anchor: middle;
+}
+
+.graph-link {
+    stroke: #d1d5db;
+    stroke-opacity: 0.6;
+}
+
+.graph-link.shared {
+    stroke: #f59e0b;
+    stroke-dasharray: 4 2;
+}

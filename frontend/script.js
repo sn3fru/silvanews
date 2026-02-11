@@ -45,6 +45,7 @@ const modalResumo = document.getElementById('modal-resumo');
 const modalTabs = document.querySelector('.modal-tabs');
 const modalCopyBtn = document.getElementById('modal-copy-btn');
 const modalExpandBtn = document.getElementById('modal-expand-summary-btn');
+const modalGraphBtn = document.getElementById('modal-graph-btn');
 const modalLikeBtn = document.getElementById('modal-like-btn');
 const modalDislikeBtn = document.getElementById('modal-dislike-btn');
 const tabContents = document.querySelectorAll('.tab-content');
@@ -709,11 +710,17 @@ function setupEventListeners() {
         });
     }
 
-    // Modal: Expandir Resumo / Copiar / Like / Dislike
+    // Modal: Expandir Resumo / Grafo / Copiar / Like / Dislike
     if (modalExpandBtn) {
         modalExpandBtn.addEventListener('click', async () => {
             if (!currentClusterId) return;
             await expandirResumo(currentClusterId, modalResumo, modalExpandBtn);
+        });
+    }
+    if (modalGraphBtn) {
+        modalGraphBtn.addEventListener('click', () => {
+            if (!currentClusterId) return;
+            abrirGrafo(currentClusterId);
         });
     }
     if (modalCopyBtn) {
@@ -4025,4 +4032,223 @@ async function copiarArtigosFiltrados(event, clusterId, fonteNome) {
         console.error('Erro ao copiar:', error);
         alert('Erro ao copiar: ' + error.message);
     }
+}
+
+
+// ==============================================================================
+// GRAFO D3.js (Force-Directed Graph Visualization)
+// ==============================================================================
+
+const GRAPH_COLORS = {
+    PERSON: '#3b82f6',
+    ORG: '#10b981',
+    GOV: '#ef4444',
+    EVENT: '#f59e0b',
+    CONCEPT: '#8b5cf6',
+    cluster: '#f97316',
+    P1_CRITICO: '#dc2626',
+    P2_ESTRATEGICO: '#f59e0b',
+    P3_MONITORAMENTO: '#6b7280',
+};
+
+function getNodeColor(node) {
+    if (node.type === 'cluster') {
+        return GRAPH_COLORS[node.subtype] || GRAPH_COLORS.cluster;
+    }
+    return GRAPH_COLORS[node.subtype] || '#94a3b8';
+}
+
+function getNodeRadius(node) {
+    const base = node.type === 'cluster' ? 18 : 10;
+    return base + Math.min(node.size || 1, 8) * 1.5;
+}
+
+async function abrirGrafo(clusterId) {
+    const overlay = document.getElementById('graph-overlay');
+    const canvas = document.getElementById('graph-canvas');
+    const tooltip = document.getElementById('graph-tooltip');
+    const titleEl = document.getElementById('graph-title');
+    const closeBtn = document.getElementById('graph-close-btn');
+
+    if (!overlay || !canvas) return;
+
+    // Limpa canvas anterior
+    canvas.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#6b7280;">Carregando grafo...</div>';
+    overlay.classList.remove('oculto');
+
+    // Fecha overlay
+    closeBtn.onclick = () => {
+        overlay.classList.add('oculto');
+        canvas.innerHTML = '';
+    };
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+            overlay.classList.add('oculto');
+            canvas.innerHTML = '';
+        }
+    });
+
+    try {
+        const resp = await fetch(`/api/cluster/${clusterId}/graph`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+
+        if (!data.nodes || data.nodes.length === 0) {
+            canvas.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#6b7280;">Nenhuma entidade encontrada no grafo para este cluster.</div>';
+            return;
+        }
+
+        titleEl.textContent = `Grafo de Relacionamentos (${data.nodes.length} nos, ${data.edges.length} conexoes)`;
+        renderGraph(canvas, tooltip, data);
+
+    } catch (err) {
+        console.error('Erro ao carregar grafo:', err);
+        canvas.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#ef4444;">Erro ao carregar grafo: ${err.message}</div>`;
+    }
+}
+
+function renderGraph(container, tooltip, data) {
+    container.innerHTML = '';
+
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+    const svg = d3.select(container)
+        .append('svg')
+        .attr('width', width)
+        .attr('height', height);
+
+    // Zoom
+    const g = svg.append('g');
+    svg.call(d3.zoom()
+        .scaleExtent([0.3, 4])
+        .on('zoom', (event) => g.attr('transform', event.transform))
+    );
+
+    // Build node/edge maps
+    const nodeMap = {};
+    data.nodes.forEach(n => { nodeMap[n.id] = n; });
+
+    const links = data.edges.filter(e => nodeMap[e.source] && nodeMap[e.target]).map(e => ({
+        source: e.source,
+        target: e.target,
+        relation: e.relation,
+        weight: e.weight || 1,
+    }));
+
+    const nodes = data.nodes.map(n => ({ ...n }));
+
+    // Force simulation
+    const simulation = d3.forceSimulation(nodes)
+        .force('link', d3.forceLink(links).id(d => d.id).distance(d => d.relation === 'SHARED' ? 180 : 100))
+        .force('charge', d3.forceManyBody().strength(-300))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collision', d3.forceCollide().radius(d => getNodeRadius(d) + 5));
+
+    // Links
+    const link = g.append('g')
+        .selectAll('line')
+        .data(links)
+        .enter().append('line')
+        .attr('class', d => 'graph-link' + (d.relation === 'SHARED' ? ' shared' : ''))
+        .attr('stroke-width', d => Math.max(1, Math.min(d.weight, 4)));
+
+    // Nodes group
+    const node = g.append('g')
+        .selectAll('g')
+        .data(nodes)
+        .enter().append('g')
+        .attr('class', 'graph-node')
+        .call(d3.drag()
+            .on('start', (event, d) => {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            })
+            .on('drag', (event, d) => {
+                d.fx = event.x;
+                d.fy = event.y;
+            })
+            .on('end', (event, d) => {
+                if (!event.active) simulation.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+            })
+        );
+
+    // Node shapes
+    node.each(function(d) {
+        const el = d3.select(this);
+        const r = getNodeRadius(d);
+        const color = getNodeColor(d);
+
+        if (d.type === 'cluster') {
+            // Clusters are rounded rectangles
+            el.append('rect')
+                .attr('x', -r)
+                .attr('y', -r * 0.6)
+                .attr('width', r * 2)
+                .attr('height', r * 1.2)
+                .attr('rx', 6)
+                .attr('fill', color)
+                .attr('fill-opacity', 0.85)
+                .attr('stroke', '#fff')
+                .attr('stroke-width', 2);
+        } else {
+            // Entities are circles
+            el.append('circle')
+                .attr('r', r)
+                .attr('fill', color)
+                .attr('fill-opacity', 0.85)
+                .attr('stroke', '#fff')
+                .attr('stroke-width', 1.5);
+        }
+    });
+
+    // Labels
+    node.append('text')
+        .attr('dy', d => d.type === 'cluster' ? 4 : getNodeRadius(d) + 14)
+        .text(d => {
+            const maxLen = d.type === 'cluster' ? 25 : 18;
+            return d.label.length > maxLen ? d.label.substring(0, maxLen) + '...' : d.label;
+        })
+        .attr('font-size', d => d.type === 'cluster' ? '11px' : '9px')
+        .attr('font-weight', d => d.type === 'cluster' ? '600' : '400')
+        .attr('fill', d => d.type === 'cluster' ? '#fff' : '#374151');
+
+    // Tooltip
+    node.on('mouseover', (event, d) => {
+        const typeLabel = d.type === 'cluster' ? `Cluster (${d.subtype})` : d.subtype;
+        tooltip.innerHTML = `<strong>${d.label}</strong><br>${typeLabel}<br>Conexoes: ${d.size || 1}`;
+        tooltip.classList.add('visible');
+    })
+    .on('mousemove', (event) => {
+        tooltip.style.left = (event.pageX + 12) + 'px';
+        tooltip.style.top = (event.pageY - 30) + 'px';
+    })
+    .on('mouseout', () => {
+        tooltip.classList.remove('visible');
+    });
+
+    // Click on cluster node to navigate
+    node.on('click', (event, d) => {
+        if (d.type === 'cluster') {
+            const cid = d.id.replace('c_', '');
+            document.getElementById('graph-overlay').classList.add('oculto');
+            if (typeof openModal === 'function') {
+                openModal(parseInt(cid));
+            }
+        }
+    });
+
+    // Tick
+    simulation.on('tick', () => {
+        link
+            .attr('x1', d => d.source.x)
+            .attr('y1', d => d.source.y)
+            .attr('x2', d => d.target.x)
+            .attr('y2', d => d.target.y);
+
+        node.attr('transform', d => `translate(${d.x},${d.y})`);
+    });
 }

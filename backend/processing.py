@@ -91,7 +91,7 @@ def gerar_embedding(texto: str) -> bytes:
         texto: Texto para gerar embedding
         
     Returns:
-        Embedding como bytes para armazenamento no banco
+        Embedding como bytes para armazenamento no banco (384d)
     """
     try:
         # Usa implementação simples
@@ -99,6 +99,151 @@ def gerar_embedding(texto: str) -> bytes:
     except Exception as e:
         print(f"❌ Erro ao gerar embedding: {e}")
         return np.zeros(384, dtype=np.float32).tobytes()
+
+
+def gerar_embedding_v2(texto: str, max_chars: int = 8000) -> Optional[bytes]:
+    """
+    Gera embedding real de 768 dimensoes via Gemini Embedding API.
+    Usado para a coluna embedding_v2 em artigos_brutos (Graph-RAG v2.0).
+    
+    Modelo: gemini-embedding-001 (3072d nativo, reduzido para 768d via MRL).
+    Custo: ~$0.15/1M tokens (gratis no free tier).
+    
+    Args:
+        texto: Texto para gerar embedding
+        max_chars: Maximo de caracteres para enviar (Gemini tem limite de ~2048 tokens)
+    
+    Returns:
+        Embedding como bytes (768 floats, np.float32) ou None se falhar.
+    """
+    import google.generativeai as genai
+    import os
+    
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return None
+    
+    try:
+        genai.configure(api_key=api_key)
+        
+        # Trunca texto para evitar erro de tokens
+        texto_truncado = texto[:max_chars].strip()
+        if len(texto_truncado) < 10:
+            return None
+        
+        result = genai.embed_content(
+            model="models/gemini-embedding-001",
+            content=texto_truncado,
+            task_type="RETRIEVAL_DOCUMENT",
+            output_dimensionality=768,
+        )
+        
+        embedding_list = result.get("embedding") if isinstance(result, dict) else getattr(result, 'embedding', None)
+        if not embedding_list:
+            return None
+        
+        embedding_array = np.array(embedding_list, dtype=np.float32)
+        
+        # Normaliza
+        norm = np.linalg.norm(embedding_array)
+        if norm > 0:
+            embedding_array = embedding_array / norm
+        
+        return embedding_array.tobytes()
+    
+    except Exception as e:
+        print(f"[Embedding v2] Erro: {e}")
+        return None
+
+
+def cosine_similarity_bytes(a_bytes: bytes, b_bytes: bytes) -> float:
+    """Calcula similaridade cosseno entre dois embeddings armazenados como BYTEA."""
+    try:
+        a = np.frombuffer(a_bytes, dtype=np.float32)
+        b = np.frombuffer(b_bytes, dtype=np.float32)
+        if len(a) != len(b) or len(a) == 0:
+            return 0.0
+        dot = np.dot(a, b)
+        norm_a = np.linalg.norm(a)
+        norm_b = np.linalg.norm(b)
+        if norm_a == 0 or norm_b == 0:
+            return 0.0
+        return float(dot / (norm_a * norm_b))
+    except Exception:
+        return 0.0
+
+
+def verificar_duplicata_semantica(
+    db: Session,
+    texto: str,
+    threshold: float = 0.85,
+    horas: int = 48,
+    max_candidatos: int = 200,
+) -> Optional[Dict[str, Any]]:
+    """
+    Verifica se ja existe artigo semanticamente similar nas ultimas N horas.
+    
+    Fluxo:
+        1. Gera embedding_v2 (768d Gemini) para o texto candidato.
+        2. Busca artigos recentes que possuem embedding_v2.
+        3. Calcula similaridade cosseno com cada candidato.
+        4. Se max(similaridade) >= threshold, retorna o artigo mais similar.
+    
+    Args:
+        db: Sessao do banco
+        texto: Texto do artigo candidato
+        threshold: Limiar de similaridade (0-1). Default 0.85.
+        horas: Janela temporal em horas. Default 48.
+        max_candidatos: Max artigos para comparar. Default 200.
+    
+    Returns:
+        Dict com {artigo_id, titulo, similaridade} se duplicata encontrada, None caso contrario.
+    """
+    from datetime import timedelta
+    try:
+        from .database import ArtigoBruto
+    except ImportError:
+        from backend.database import ArtigoBruto
+    
+    # 1. Gera embedding do candidato
+    emb_candidato = gerar_embedding_v2(texto)
+    if emb_candidato is None:
+        # Sem embedding = nao conseguimos comparar, permite a insercao
+        return None
+    
+    # 2. Busca artigos recentes com embedding_v2
+    from sqlalchemy import and_, func
+    corte = datetime.utcnow() - timedelta(hours=horas)
+    
+    candidatos = db.query(ArtigoBruto.id, ArtigoBruto.titulo_extraido, ArtigoBruto.embedding_v2).filter(
+        and_(
+            ArtigoBruto.created_at >= corte,
+            ArtigoBruto.embedding_v2.isnot(None),
+        )
+    ).order_by(ArtigoBruto.created_at.desc()).limit(max_candidatos).all()
+    
+    if not candidatos:
+        return None
+    
+    # 3. Calcula similaridade
+    melhor_sim = 0.0
+    melhor_artigo = None
+    
+    for art_id, art_titulo, art_emb in candidatos:
+        sim = cosine_similarity_bytes(emb_candidato, art_emb)
+        if sim > melhor_sim:
+            melhor_sim = sim
+            melhor_artigo = (art_id, art_titulo)
+    
+    # 4. Verifica threshold
+    if melhor_sim >= threshold and melhor_artigo:
+        return {
+            "artigo_id": melhor_artigo[0],
+            "titulo": melhor_artigo[1],
+            "similaridade": round(melhor_sim, 4),
+        }
+    
+    return None
 
 
 def bytes_to_embedding(embedding_bytes: bytes) -> np.ndarray:

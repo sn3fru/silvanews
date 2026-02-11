@@ -87,8 +87,11 @@ class ArtigoBruto(Base):
     # Tipo de fonte: nacional ou internacional
     tipo_fonte = Column(String(20), default='nacional', nullable=False)  # nacional, internacional
     
-    # Embedding para clusterização
+    # Embedding para clusterização (v1 - 384d hash simples)
     embedding = Column(LargeBinary, nullable=True)
+    
+    # Embedding v2 (768d Gemini text-embedding-004) para Graph-RAG
+    embedding_v2 = Column(LargeBinary, nullable=True)
     
     # Relacionamentos
     cluster_id = Column(Integer, ForeignKey('clusters_eventos.id'), nullable=True)
@@ -141,6 +144,10 @@ class ClusterEvento(Base):
     total_artigos = Column(Integer, default=0, nullable=False)
     ultima_atualizacao = Column(DateTime, default=datetime.utcnow, nullable=False)
     
+    # Notificacao incremental (Telegram/WhatsApp)
+    ja_notificado = Column(Boolean, default=False, nullable=False)
+    notificado_em = Column(DateTime, nullable=True)
+    
     # Relacionamentos
     artigos = relationship("ArtigoBruto", back_populates="cluster")
     
@@ -153,6 +160,7 @@ class ClusterEvento(Base):
         Index('idx_clusters_updated_date', 'updated_at'),  # Índice por data de atualização
         Index('idx_clusters_tag_date', 'tag', 'created_at'),  # Índice composto para queries por tag e data
         Index('idx_clusters_prioridade_date', 'prioridade', 'created_at'),  # Índice composto para queries por prioridade e data
+        Index('idx_clusters_notificado', 'ja_notificado', 'created_at'),  # Clusters pendentes de notificacao
     )
 
 
@@ -285,7 +293,9 @@ class ChatMessage(Base):
 
 class FeedbackNoticia(Base):
     """
-    Tabela para coletar feedback de usuários sobre notícias (artigos).
+    Tabela para coletar feedback de usuarios sobre noticias (artigos).
+    Campo metadados armazena contexto rico para analise de padroes:
+    {tag, prioridade, titulo_cluster, cluster_id, entidades: [{name, type}]}
     """
     __tablename__ = "feedback_noticias"
 
@@ -293,6 +303,7 @@ class FeedbackNoticia(Base):
     artigo_id = Column(Integer, ForeignKey('artigos_brutos.id'), nullable=False, index=True)
     feedback = Column(String(10), nullable=False)  # like | dislike
     processed = Column(Boolean, default=False, nullable=False)
+    metadados = Column(JSON, default={})  # contexto rico para feedback analysis
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     artigo = relationship("ArtigoBruto")
@@ -456,8 +467,92 @@ class PromptTemplate(Base):
     )
 
 
+class PromptConfig(Base):
+    """
+    Tabela de configuracoes dinamicas de prompts.
+    Usada pelo sistema de feedback learning para armazenar regras aprendidas
+    (chave: FEEDBACK_RULES) e outras configs runtime.
+    
+    Fluxo: analyze_feedback.py --save -> INSERT/UPSERT -> get_feedback_rules() -> leitura com cache
+    """
+    __tablename__ = "prompt_configs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    chave = Column(String(120), unique=True, nullable=False, index=True)  # ex: FEEDBACK_RULES, CONSOLIDATION_HINTS
+    valor = Column(Text, nullable=False)  # Conteudo da config (texto livre ou JSON)
+    descricao = Column(Text, nullable=True)  # Metadados/contexto (JSON com analise, etc)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        Index('idx_prompt_configs_chave', 'chave'),
+    )
+
+
 # ========================
-# Pesquisas Assíncronas
+# Graph-RAG: Entidades e Arestas (v2.0)
+# ========================
+
+class GraphEntity(Base):
+    """
+    Tabela de Entidades do Grafo de Conhecimento.
+    Armazena Pessoas, Empresas, Orgaos Governamentais e Conceitos
+    com resolucao de entidades via canonical_name.
+    """
+    __tablename__ = "graph_entities"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(Text, nullable=False)                    # Nome como aparece no texto
+    canonical_name = Column(Text, nullable=False)          # Nome normalizado (ex: "Haddad" -> "Fernando Haddad")
+    entity_type = Column(String(50), nullable=False)       # PERSON, ORG, GOV, EVENT, CONCEPT
+    description = Column(Text, nullable=True)              # Descricao/contexto sobre a entidade
+    aliases = Column(JSON, default=list)                   # Lista de aliases conhecidos
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relacionamentos
+    edges = relationship("GraphEdge", back_populates="entity", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index('idx_graph_entity_canonical', 'canonical_name', 'entity_type', unique=True),
+        Index('idx_graph_entity_type', 'entity_type'),
+        Index('idx_graph_entity_name', 'name'),
+    )
+
+
+class GraphEdge(Base):
+    """
+    Tabela de Arestas do Grafo de Conhecimento.
+    Liga artigos existentes (artigos_brutos) as entidades (graph_entities).
+    Cada aresta tem metadados como sentimento, papel e trecho de contexto.
+    """
+    __tablename__ = "graph_edges"
+
+    id = Column(Integer, primary_key=True, index=True)
+    artigo_id = Column(Integer, ForeignKey('artigos_brutos.id', ondelete='CASCADE'), nullable=False)
+    entity_id = Column(UUID(as_uuid=True), ForeignKey('graph_entities.id', ondelete='CASCADE'), nullable=False)
+
+    relation_type = Column(String(50), nullable=False, default='MENTIONED')  # MENTIONED, PROTAGONIST, TARGET, COADJUVANT
+    sentiment_score = Column(Float, nullable=True)         # -1.0 (negativo) a 1.0 (positivo)
+    context_snippet = Column(Text, nullable=True)          # Trecho do texto que justifica a ligacao
+    confidence = Column(Float, default=1.0)                # Confianca da extracao (0-1)
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relacionamentos
+    artigo = relationship("ArtigoBruto")
+    entity = relationship("GraphEntity", back_populates="edges")
+
+    __table_args__ = (
+        Index('idx_graph_edge_artigo', 'artigo_id'),
+        Index('idx_graph_edge_entity', 'entity_id'),
+        Index('idx_graph_edge_relation', 'relation_type'),
+        Index('idx_graph_edge_artigo_entity', 'artigo_id', 'entity_id', unique=True),
+    )
+
+
+# ========================
+# Pesquisas Assincronas
 # ========================
 
 class DeepResearchJob(Base):

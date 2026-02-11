@@ -670,12 +670,17 @@ def get_metricas_by_date(db: Session, target_date: datetime.date) -> Dict[str, i
     }
 
 # ===================== FEEDBACK =====================
-def create_feedback(db: Session, artigo_id: int, feedback: str) -> int:
+def create_feedback(db: Session, artigo_id: int, feedback: str, metadados: dict = None) -> int:
     try:
         from .database import FeedbackNoticia
     except ImportError:
         from backend.database import FeedbackNoticia
-    novo = FeedbackNoticia(artigo_id=artigo_id, feedback=feedback, processed=False)
+    novo = FeedbackNoticia(
+        artigo_id=artigo_id,
+        feedback=feedback,
+        processed=False,
+        metadados=metadados or {},
+    )
     db.add(novo)
     db.commit()
     db.refresh(novo)
@@ -1833,6 +1838,57 @@ def list_social_research_jobs_by_cluster(db: Session, cluster_id: int, limit: in
     except ImportError:
         from backend.database import SocialResearchJob
     return db.query(SocialResearchJob).filter(SocialResearchJob.cluster_id == cluster_id).order_by(SocialResearchJob.created_at.desc()).limit(limit).all()
+
+
+# ==============================================================================
+# OPERAÇÕES CRUD - NOTIFICAÇÕES INCREMENTAIS
+# ==============================================================================
+
+def get_clusters_nao_notificados(db: Session, limit: int = 50) -> List[ClusterEvento]:
+    """
+    Busca clusters ativos que ainda nao foram notificados.
+    Usado pelo dispatcher de Telegram/WhatsApp para envio incremental.
+    Exclui clusters com prioridade/tag IRRELEVANTE.
+    """
+    return db.query(ClusterEvento).filter(
+        ClusterEvento.status == 'ativo',
+        ClusterEvento.ja_notificado == False,
+        ClusterEvento.prioridade != 'IRRELEVANTE',
+        ClusterEvento.tag != 'IRRELEVANTE',
+        ClusterEvento.resumo_cluster.isnot(None),
+    ).order_by(
+        # P1 primeiro, depois P2, depois P3
+        func.case(
+            (ClusterEvento.prioridade == 'P1_CRITICO', 1),
+            (ClusterEvento.prioridade == 'P2_ESTRATEGICO', 2),
+            else_=3
+        ),
+        ClusterEvento.created_at.asc()
+    ).limit(limit).all()
+
+
+def marcar_cluster_notificado(db: Session, cluster_id: int) -> bool:
+    """Marca um cluster como ja notificado."""
+    cluster = db.query(ClusterEvento).filter(ClusterEvento.id == cluster_id).first()
+    if not cluster:
+        return False
+    cluster.ja_notificado = True
+    cluster.notificado_em = datetime.utcnow()
+    db.commit()
+    return True
+
+
+def marcar_clusters_notificados_em_lote(db: Session, cluster_ids: List[int]) -> int:
+    """Marca multiplos clusters como notificados de uma vez. Retorna total marcado."""
+    agora = datetime.utcnow()
+    total = db.query(ClusterEvento).filter(
+        ClusterEvento.id.in_(cluster_ids)
+    ).update(
+        {ClusterEvento.ja_notificado: True, ClusterEvento.notificado_em: agora},
+        synchronize_session='fetch'
+    )
+    db.commit()
+    return total
 
 
 def associate_artigo_to_existing_cluster(db: Session, artigo_id: int, cluster_id: int) -> bool:

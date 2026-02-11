@@ -49,6 +49,13 @@ try:
         PromptTag,
         PromptPrioridadeItem,
         PromptTemplate,
+        FeedbackNoticia,
+        EstagiarioChatSession,
+        EstagiarioChatMessage,
+        GraphEntity,
+        GraphEdge,
+        DeepResearchJob,
+        SocialResearchJob,
     )
 except Exception:
     # Execução direta
@@ -66,6 +73,13 @@ except Exception:
         PromptTag,
         PromptPrioridadeItem,
         PromptTemplate,
+        FeedbackNoticia,
+        EstagiarioChatSession,
+        EstagiarioChatMessage,
+        GraphEntity,
+        GraphEdge,
+        DeepResearchJob,
+        SocialResearchJob,
     )
 
 
@@ -85,9 +99,76 @@ def normalize_db_url(url: str) -> str:
     return url
 
 
+def _ensure_new_columns(engine) -> None:
+    """
+    Garante que colunas adicionadas ao ORM existam na tabela fisica.
+    ALTER TABLE ... ADD COLUMN IF NOT EXISTS e idempotente.
+    Roda em AMBOS os bancos (source e dest) para evitar falha no SELECT.
+    Tambem corrige incompatibilidade de tipo embedding_v2 (vector vs BYTEA).
+    """
+    _new_columns = [
+        # (tabela, coluna, definicao SQL)
+        ("clusters_eventos", "ja_notificado", "BOOLEAN DEFAULT FALSE NOT NULL"),
+        ("clusters_eventos", "notificado_em", "TIMESTAMP"),
+    ]
+    try:
+        with engine.connect() as conn:
+            for table, col, col_def in _new_columns:
+                try:
+                    result = conn.execute(text(
+                        f"SELECT 1 FROM information_schema.columns "
+                        f"WHERE table_name = '{table}' AND column_name = '{col}'"
+                    ))
+                    if not result.fetchone():
+                        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {col_def}"))
+                        conn.commit()
+                        print(f"  [Migration] Coluna {table}.{col} criada")
+                    else:
+                        pass  # ja existe, silencioso
+                except Exception as e:
+                    print(f"  [Migration] Aviso ao criar {table}.{col}: {e}")
+                    try:
+                        conn.rollback()
+                    except Exception:
+                        pass
+
+            # Fix: converter embedding_v2 de vector(768) para BYTEA se necessario
+            # (ORM define como LargeBinary=BYTEA, mas apply_graph_heroku pode ter criado como vector)
+            try:
+                result = conn.execute(text("""
+                    SELECT data_type, udt_name FROM information_schema.columns
+                    WHERE table_name = 'artigos_brutos' AND column_name = 'embedding_v2'
+                """))
+                row = result.fetchone()
+                if row:
+                    data_type = row[0] if row[0] else ""
+                    udt_name = row[1] if row[1] else ""
+                    if udt_name == "vector" or "vector" in data_type.lower():
+                        print(f"  [Migration] embedding_v2 e tipo '{udt_name}' -> convertendo para BYTEA...")
+                        conn.execute(text(
+                            "ALTER TABLE artigos_brutos ALTER COLUMN embedding_v2 TYPE BYTEA USING embedding_v2::text::bytea"
+                        ))
+                        conn.commit()
+                        print(f"  [Migration] embedding_v2 convertida para BYTEA com sucesso")
+            except Exception as e:
+                print(f"  [Migration] Aviso embedding_v2 type fix: {e}")
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+
+    except Exception as e:
+        print(f"  [Migration] Aviso geral _ensure_new_columns: {e}")
+
+
 def create_sessions(source_url: str, dest_url: str) -> Tuple[Session, Session]:
     source_engine = create_engine(normalize_db_url(source_url), pool_pre_ping=True)
     dest_engine = create_engine(normalize_db_url(dest_url), pool_pre_ping=True)
+
+    # Garante que colunas novas do ORM existam em AMBOS os bancos
+    print("🔧 Verificando schema (novas colunas)...")
+    _ensure_new_columns(source_engine)
+    _ensure_new_columns(dest_engine)
 
     Base.metadata.create_all(bind=dest_engine)
 
@@ -167,9 +248,16 @@ def migrate_clusters(db_src: Session, db_dst: Session, since: datetime, no_updat
                     existing.ultima_atualizacao = cluster.ultima_atualizacao or existing.ultima_atualizacao
                     existing.updated_at = cluster.updated_at or existing.updated_at
                     existing.tipo_fonte = cluster.tipo_fonte or existing.tipo_fonte  # NOVO: Atualiza tipo_fonte
+                    # Notificacao incremental (resiliente a bancos sem essas colunas)
+                    try:
+                        existing.ja_notificado = getattr(cluster, 'ja_notificado', False) or False
+                        if getattr(cluster, 'notificado_em', None):
+                            existing.notificado_em = cluster.notificado_em
+                    except Exception:
+                        pass
                 continue
 
-            clone = ClusterEvento(
+            clone_kwargs = dict(
                 titulo_cluster=cluster.titulo_cluster,
                 resumo_cluster=cluster.resumo_cluster,
                 tag=cluster.tag,
@@ -180,8 +268,15 @@ def migrate_clusters(db_src: Session, db_dst: Session, since: datetime, no_updat
                 status=cluster.status or "ativo",
                 total_artigos=cluster.total_artigos or 0,
                 ultima_atualizacao=cluster.ultima_atualizacao or cluster.created_at,
-                tipo_fonte=cluster.tipo_fonte or 'nacional',  # NOVO: Campo crítico para separação nacional/internacional
+                tipo_fonte=cluster.tipo_fonte or 'nacional',
             )
+            # Colunas de notificacao (podem nao existir em bancos antigos)
+            try:
+                clone_kwargs["ja_notificado"] = getattr(cluster, 'ja_notificado', False) or False
+                clone_kwargs["notificado_em"] = getattr(cluster, 'notificado_em', None)
+            except Exception:
+                pass
+            clone = ClusterEvento(**clone_kwargs)
             db_dst.add(clone)
             db_dst.commit()
             db_dst.refresh(clone)
@@ -206,9 +301,12 @@ def migrate_artigos(db_src: Session, db_dst: Session, since: datetime, cluster_i
                 # Atualiza vínculo de cluster se necessário
                 if artigo.cluster_id and not exists.cluster_id:
                     exists.cluster_id = cluster_id_map.get(artigo.cluster_id)
-                # NOVO: Atualiza tipo_fonte se necessário
+                # Atualiza tipo_fonte se necessário
                 if hasattr(artigo, 'tipo_fonte') and artigo.tipo_fonte and artigo.tipo_fonte != exists.tipo_fonte:
                     exists.tipo_fonte = artigo.tipo_fonte
+                # Sincroniza embedding_v2 do local para destino (evita refazer backfill)
+                if artigo.embedding_v2 and not exists.embedding_v2:
+                    exists.embedding_v2 = artigo.embedding_v2
                 continue
 
             clone = ArtigoBruto(
@@ -232,8 +330,9 @@ def migrate_artigos(db_src: Session, db_dst: Session, since: datetime, cluster_i
                 relevance_score=artigo.relevance_score,
                 relevance_reason=artigo.relevance_reason,
                 embedding=artigo.embedding,
+                embedding_v2=artigo.embedding_v2,  # Migra embedding v2 (ambos BYTEA)
                 cluster_id=cluster_id_map.get(artigo.cluster_id) if artigo.cluster_id else None,
-                tipo_fonte=artigo.tipo_fonte or 'nacional',  # NOVO: Campo crítico para separação nacional/internacional
+                tipo_fonte=artigo.tipo_fonte or 'nacional',
             )
             db_dst.add(clone)
             total += 1
@@ -554,6 +653,282 @@ def migrate_prompts(db_src: Session, db_dst: Session, since: datetime, no_update
 
 
 # ==============================================================================
+# Migrações v2.0: Grafo, Feedback, Estagiário, Research
+# ==============================================================================
+
+
+def migrate_graph_entities(db_src: Session, db_dst: Session, since: datetime, no_update: bool) -> Dict[str, str]:
+    """Migra graph_entities (nós do grafo). DEVE rodar ANTES de graph_edges (FK)."""
+    print("➡️ Migrando entidades do grafo (incremental)...")
+    uuid_map: Dict[str, str] = {}  # source UUID string -> dest UUID string
+    total_new = 0
+
+    q = db_src.query(GraphEntity).filter(
+        or_(GraphEntity.created_at > since, GraphEntity.updated_at > since)
+    ).order_by(GraphEntity.created_at.asc())
+
+    for batch in chunked(q.yield_per(500), 500):
+        for entity in batch:
+            # Chave de negócio: (canonical_name, entity_type) é UNIQUE
+            existing = (
+                db_dst.query(GraphEntity)
+                .filter_by(canonical_name=entity.canonical_name, entity_type=entity.entity_type)
+                .first()
+            )
+            if existing:
+                uuid_map[str(entity.id)] = str(existing.id)
+                if not no_update:
+                    existing.name = entity.name
+                    existing.description = entity.description
+                    existing.aliases = entity.aliases
+                    existing.updated_at = entity.updated_at
+                continue
+
+            clone = GraphEntity(
+                id=entity.id,  # Preserva UUID original
+                name=entity.name,
+                canonical_name=entity.canonical_name,
+                entity_type=entity.entity_type,
+                description=entity.description,
+                aliases=entity.aliases or [],
+                created_at=entity.created_at,
+                updated_at=entity.updated_at,
+            )
+            db_dst.add(clone)
+            uuid_map[str(entity.id)] = str(entity.id)
+            total_new += 1
+        db_dst.commit()
+
+    print(f"✅ Entidades do grafo: {total_new} novas | {len(uuid_map)} total mapeadas")
+    return uuid_map
+
+
+def migrate_graph_edges(
+    db_src: Session, db_dst: Session, since: datetime,
+    entity_uuid_map: Dict[str, str], artigo_hash_map: Dict[str, int]
+) -> int:
+    """Migra graph_edges (arestas). DEVE rodar APÓS graph_entities e artigos."""
+    print("➡️ Migrando arestas do grafo (incremental)...")
+    total = 0
+    skipped = 0
+
+    q = db_src.query(GraphEdge).filter(GraphEdge.created_at > since).order_by(GraphEdge.created_at.asc())
+
+    for batch in chunked(q.yield_per(500), 500):
+        for edge in batch:
+            # Precisamos mapear artigo_id (pode ter mudado no destino)
+            # e entity_id (UUID, geralmente preservado)
+            mapped_entity_id_str = entity_uuid_map.get(str(edge.entity_id))
+            if not mapped_entity_id_str:
+                skipped += 1
+                continue
+
+            # Para artigo_id: buscar pelo hash no destino
+            src_artigo = db_src.query(ArtigoBruto).filter(ArtigoBruto.id == edge.artigo_id).first()
+            if not src_artigo:
+                skipped += 1
+                continue
+            dst_artigo = db_dst.query(ArtigoBruto).filter(ArtigoBruto.hash_unico == src_artigo.hash_unico).first()
+            if not dst_artigo:
+                skipped += 1
+                continue
+
+            # Chave de negócio: (artigo_id, entity_id) é UNIQUE
+            import uuid as uuid_mod
+            mapped_entity_uuid = uuid_mod.UUID(mapped_entity_id_str)
+            existing = (
+                db_dst.query(GraphEdge)
+                .filter_by(artigo_id=dst_artigo.id, entity_id=mapped_entity_uuid)
+                .first()
+            )
+            if existing:
+                continue
+
+            clone = GraphEdge(
+                artigo_id=dst_artigo.id,
+                entity_id=mapped_entity_uuid,
+                relation_type=edge.relation_type,
+                sentiment_score=edge.sentiment_score,
+                context_snippet=edge.context_snippet,
+                confidence=edge.confidence,
+                created_at=edge.created_at,
+            )
+            db_dst.add(clone)
+            total += 1
+        db_dst.commit()
+
+    print(f"✅ Arestas do grafo inseridas: {total} (skipped: {skipped})")
+    return total
+
+
+def migrate_feedback(db_src: Session, db_dst: Session, since: datetime) -> int:
+    """Migra feedback (likes/dislikes) de artigos."""
+    print("➡️ Migrando feedback (incremental)...")
+    total = 0
+
+    q = db_src.query(FeedbackNoticia).filter(FeedbackNoticia.created_at > since).order_by(FeedbackNoticia.created_at.asc())
+
+    for batch in chunked(q.yield_per(500), 500):
+        for fb in batch:
+            # Busca artigo no destino pelo hash
+            src_artigo = db_src.query(ArtigoBruto).filter(ArtigoBruto.id == fb.artigo_id).first()
+            if not src_artigo:
+                continue
+            dst_artigo = db_dst.query(ArtigoBruto).filter(ArtigoBruto.hash_unico == src_artigo.hash_unico).first()
+            if not dst_artigo:
+                continue
+
+            # Deduplica por (artigo_id, feedback, created_at)
+            existing = (
+                db_dst.query(FeedbackNoticia)
+                .filter_by(artigo_id=dst_artigo.id, feedback=fb.feedback, created_at=fb.created_at)
+                .first()
+            )
+            if existing:
+                continue
+
+            clone = FeedbackNoticia(
+                artigo_id=dst_artigo.id,
+                feedback=fb.feedback,
+                processed=fb.processed,
+                created_at=fb.created_at,
+            )
+            db_dst.add(clone)
+            total += 1
+        db_dst.commit()
+
+    print(f"✅ Feedbacks inseridos: {total}")
+    return total
+
+
+def migrate_estagiario_chat(db_src: Session, db_dst: Session, since: datetime) -> Tuple[int, int]:
+    """Migra sessões e mensagens do Estagiário."""
+    print("➡️ Migrando chat do Estagiário (incremental)...")
+    session_map: Dict[int, int] = {}
+
+    # Sessões
+    q_sessions = db_src.query(EstagiarioChatSession).filter(
+        EstagiarioChatSession.created_at > since
+    ).order_by(EstagiarioChatSession.created_at.asc())
+
+    for s in q_sessions.yield_per(200):
+        # Deduplica por data_referencia
+        existing = (
+            db_dst.query(EstagiarioChatSession)
+            .filter_by(data_referencia=s.data_referencia)
+            .first()
+        ) if hasattr(s, 'data_referencia') and s.data_referencia else None
+
+        if existing:
+            session_map[s.id] = existing.id
+            continue
+
+        clone = EstagiarioChatSession(
+            data_referencia=getattr(s, 'data_referencia', None),
+            created_at=s.created_at,
+        )
+        db_dst.add(clone)
+        db_dst.commit()
+        db_dst.refresh(clone)
+        session_map[s.id] = clone.id
+
+    # Mensagens
+    count_msgs = 0
+    q_msgs = db_src.query(EstagiarioChatMessage).filter(
+        EstagiarioChatMessage.timestamp > since
+    ).order_by(EstagiarioChatMessage.timestamp.asc())
+
+    for batch in chunked(q_msgs.yield_per(500), 500):
+        for m in batch:
+            mapped_session_id = session_map.get(m.session_id)
+            if not mapped_session_id:
+                continue
+            existing = (
+                db_dst.query(EstagiarioChatMessage)
+                .filter_by(session_id=mapped_session_id, timestamp=m.timestamp, role=m.role)
+                .first()
+            )
+            if existing:
+                continue
+            clone = EstagiarioChatMessage(
+                session_id=mapped_session_id,
+                role=m.role,
+                content=m.content,
+                timestamp=m.timestamp,
+            )
+            db_dst.add(clone)
+            count_msgs += 1
+        db_dst.commit()
+
+    print(f"✅ Estagiário: {len(session_map)} sessões | {count_msgs} mensagens")
+    return len(session_map), count_msgs
+
+
+def migrate_research_jobs(
+    db_src: Session, db_dst: Session, since: datetime, cluster_id_map: Dict[int, int]
+) -> Tuple[int, int]:
+    """Migra jobs de pesquisa (deep research e social research)."""
+    print("➡️ Migrando research jobs (incremental)...")
+    deep_count = 0
+    social_count = 0
+
+    # Deep Research
+    q_deep = db_src.query(DeepResearchJob).filter(DeepResearchJob.created_at > since).order_by(DeepResearchJob.created_at.asc())
+    for job in q_deep.yield_per(200):
+        mapped_cluster_id = cluster_id_map.get(job.cluster_id)
+        if not mapped_cluster_id:
+            continue
+        existing = (
+            db_dst.query(DeepResearchJob)
+            .filter_by(cluster_id=mapped_cluster_id, created_at=job.created_at)
+            .first()
+        )
+        if existing:
+            continue
+        clone = DeepResearchJob(
+            cluster_id=mapped_cluster_id,
+            query=job.query,
+            status=job.status,
+            result_json=job.result_json,
+            error_message=getattr(job, 'error_message', None),
+            created_at=job.created_at,
+            updated_at=getattr(job, 'updated_at', None),
+        )
+        db_dst.add(clone)
+        deep_count += 1
+    db_dst.commit()
+
+    # Social Research
+    q_social = db_src.query(SocialResearchJob).filter(SocialResearchJob.created_at > since).order_by(SocialResearchJob.created_at.asc())
+    for job in q_social.yield_per(200):
+        mapped_cluster_id = cluster_id_map.get(job.cluster_id)
+        if not mapped_cluster_id:
+            continue
+        existing = (
+            db_dst.query(SocialResearchJob)
+            .filter_by(cluster_id=mapped_cluster_id, created_at=job.created_at)
+            .first()
+        )
+        if existing:
+            continue
+        clone = SocialResearchJob(
+            cluster_id=mapped_cluster_id,
+            query=job.query,
+            status=job.status,
+            result_json=job.result_json,
+            error_message=getattr(job, 'error_message', None),
+            created_at=job.created_at,
+            updated_at=getattr(job, 'updated_at', None),
+        )
+        db_dst.add(clone)
+        social_count += 1
+    db_dst.commit()
+
+    print(f"✅ Research: {deep_count} deep | {social_count} social")
+    return deep_count, social_count
+
+
+# ==============================================================================
 # CLI
 # ==============================================================================
 
@@ -570,7 +945,12 @@ def main() -> None:
     parser.add_argument("--include-logs", action="store_true", help="Migrar logs")
     parser.add_argument("--include-chat", action="store_true", help="Migrar chat")
     parser.add_argument("--include-prompts", action="store_true", help="Migrar prompts configuráveis")
-    parser.add_argument("--only", default="", help="Lista de entidades a migrar (ex: clusters,artigos,sinteses,configs,alteracoes,chat,logs,prompts)")
+    parser.add_argument("--include-graph", action="store_true", help="Migrar grafo v2 (entidades e arestas)")
+    parser.add_argument("--include-feedback", action="store_true", help="Migrar feedback (likes/dislikes)")
+    parser.add_argument("--include-research", action="store_true", help="Migrar research jobs")
+    parser.add_argument("--include-estagiario", action="store_true", help="Migrar chat do Estagiário")
+    parser.add_argument("--include-all", action="store_true", help="Migrar TODAS as entidades (equivale a todas as flags --include-*)")
+    parser.add_argument("--only", default="", help="Lista de entidades a migrar (ex: clusters,artigos,sinteses,configs,alteracoes,chat,logs,prompts,graph,feedback,research,estagiario)")
 
     args = parser.parse_args()
     if not args.dest:
@@ -591,6 +971,15 @@ def main() -> None:
 
     print(f"⏱️ Rodando incremental desde: {since.isoformat()}")
     db_src, db_dst = create_sessions(args.source, args.dest)
+
+    # --include-all habilita todas as flags
+    if args.include_all:
+        args.include_chat = True
+        args.include_prompts = True
+        args.include_graph = True
+        args.include_feedback = True
+        args.include_research = True
+        args.include_estagiario = True
 
     try:
         cluster_id_map: Dict[int, int] = {}
@@ -613,17 +1002,31 @@ def main() -> None:
         if want("alteracoes"):
             migrate_cluster_alteracoes(db_src, db_dst, since, cluster_id_map)
 
-        if args.include_chat and want("chat"):
+        if (args.include_chat or args.include_all) and want("chat"):
             migrate_chat(db_src, db_dst, since, cluster_id_map)
 
-        if args.include_logs and want("logs"):
+        if (args.include_logs) and want("logs"):
             # REMOVIDO: Migração de logs para tornar o processo mais rápido
             # Os logs não são essenciais para o funcionamento do sistema em produção
             print("⏭️ Pulando migração de logs (não essencial para produção)")
-            # migrate_logs(db_src, db_dst, since, cluster_id_map, artigo_hash_to_id={})
 
-        if args.include_prompts and want("prompts"):
+        if (args.include_prompts or args.include_all) and want("prompts"):
             migrate_prompts(db_src, db_dst, since, args.no_update_existing)
+
+        # ---- v2.0: Grafo, Feedback, Estagiário, Research ----
+
+        if (args.include_graph or args.include_all) and want("graph"):
+            entity_uuid_map = migrate_graph_entities(db_src, db_dst, since, args.no_update_existing)
+            migrate_graph_edges(db_src, db_dst, since, entity_uuid_map, {})
+
+        if (args.include_feedback or args.include_all) and want("feedback"):
+            migrate_feedback(db_src, db_dst, since)
+
+        if (args.include_estagiario or args.include_all) and want("estagiario"):
+            migrate_estagiario_chat(db_src, db_dst, since)
+
+        if (args.include_research or args.include_all) and want("research"):
+            migrate_research_jobs(db_src, db_dst, since, cluster_id_map)
 
         # Atualiza timestamp somente se nenhuma exceção ocorreu
         write_last_run(args.meta_file, datetime.now(timezone.utc))

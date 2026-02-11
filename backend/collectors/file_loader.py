@@ -799,9 +799,48 @@ class FileLoader:
                 num_paginas = len(doc)
                 print(f"  📄 Total de páginas: {num_paginas}")
 
+                # Pre-filtro: padroes de paginas que NAO sao noticias (balancos, DRE, etc)
+                # Detectados via texto extraido por PyMuPDF ANTES de enviar ao Gemini
+                _SKIP_PATTERNS = [
+                    'demonstrações financeiras', 'demonstracoes financeiras',
+                    'notas explicativas às demonstrações', 'notas explicativas as demonstracoes',
+                    'balanço patrimonial', 'balanco patrimonial',
+                    'demonstração do resultado', 'demonstracao do resultado',
+                    'demonstração de fluxo de caixa', 'demonstracao de fluxo de caixa',
+                    'demonstração das mutações do patrimônio', 'demonstracao das mutacoes',
+                    'relatório dos auditores independentes', 'relatorio dos auditores',
+                    'valores expressos em milhares de reais',
+                    'controladora consolidado',
+                ]
+
+                def _is_financial_page(page_text: str) -> bool:
+                    """Detecta se a pagina e demonstracao financeira/balanco (nao e noticia)."""
+                    text_lower = page_text.lower()[:2000]  # So precisa dos primeiros 2000 chars
+                    matches = sum(1 for p in _SKIP_PATTERNS if p in text_lower)
+                    # Se tem 2+ padroes de balanco, quase certamente nao e noticia
+                    if matches >= 2:
+                        return True
+                    # Se tem muito numero em relacao a texto, provavelmente e tabela
+                    digits = sum(1 for c in page_text[:3000] if c.isdigit())
+                    letters = sum(1 for c in page_text[:3000] if c.isalpha())
+                    if letters > 0 and digits / letters > 0.4:
+                        return True
+                    return False
+
                 def processar_pagina(idx: int) -> List[Dict[str, Any]]:
                     numero_pagina_local = idx + 1
                     print(f"  🔎 Processando página {numero_pagina_local}/{num_paginas}...")
+                    
+                    # Pre-filtro: extrai texto via PyMuPDF e verifica se e balanco/DRE
+                    try:
+                        page = doc[idx]
+                        page_text = page.get_text("text") or ""
+                        if _is_financial_page(page_text):
+                            print(f"  ⏭️ Página {numero_pagina_local} ignorada (demonstração financeira/balanço)")
+                            return []
+                    except Exception:
+                        pass  # Se falhar, envia para Gemini normalmente
+                    
                     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as temp_file:
                         temp_page_path = Path(temp_file.name)
                     try:
@@ -956,17 +995,23 @@ class FileLoader:
         
         # Envia artigos
         sucessos = 0
+        dedup_count = 0
         for i, artigo in enumerate(artigos_brutos, 1):
             print(f"  📤 Enviando artigo {i}/{len(artigos_brutos)}...")
             
             if usar_api:
-                if self.enviar_artigo_via_api(artigo):
+                resultado = self.enviar_artigo_via_api(artigo)
+                if resultado:
                     sucessos += 1
                     print(f"    ✅ Artigo {i} enviado via API")
                 else:
                     print(f"    ❌ Falha ao enviar artigo {i} via API")
             else:
-                if self.enviar_artigo_direto_db(artigo):
+                resultado = self.enviar_artigo_direto_db(artigo)
+                if resultado in ("dedup", "hash_dup"):
+                    dedup_count += 1
+                    # Nao imprime "salvo" - o print de dedup ja foi feito dentro da funcao
+                elif resultado:
                     sucessos += 1
                     print(f"    ✅ Artigo {i} salvo no banco")
                 else:
@@ -975,7 +1020,8 @@ class FileLoader:
             # Aguarda um pouco entre envios
             time.sleep(0.05)
         
-        print(f"🎉 SUCESSO: {sucessos}/{len(artigos_brutos)} artigos processados de {file_path.name}")
+        dedup_msg = f" ({dedup_count} duplicatas ignoradas)" if dedup_count else ""
+        print(f"🎉 SUCESSO: {sucessos}/{len(artigos_brutos)} artigos processados de {file_path.name}{dedup_msg}")
         return sucessos
         
     def processar_diretorio(self, usar_api: bool) -> Dict[str, int]:
@@ -1066,11 +1112,24 @@ class FileLoader:
                 artigo_data.get('url_original', '')
             )
             
-            # Verifica se já existe
+            # Verifica se já existe (dedup exata por hash)
             artigo_existente = get_artigo_by_hash(db, hash_unico)
             if artigo_existente:
-                print(f"⚠️ AVISO: Artigo já existe no banco: {artigo_existente.id}")
-                return True
+                print(f"⚠️ AVISO: Artigo já existe no banco (hash): {artigo_existente.id}")
+                return "hash_dup"  # Retorna string para diferenciar de "salvo com sucesso"
+            
+            # Verifica dedup semantica (artigos muito parecidos nas ultimas 48h)
+            try:
+                from backend.processing import verificar_duplicata_semantica
+                dup = verificar_duplicata_semantica(db, artigo_data['texto_bruto'], threshold=0.85, horas=48)
+                if dup:
+                    print(f"⚠️ DEDUP SEMANTICA: Artigo similar encontrado (id={dup['artigo_id']}, "
+                          f"sim={dup['similaridade']:.2f}, titulo='{dup['titulo']}'). Ignorando.")
+                    db.close()
+                    return "dedup"  # Retorna string para diferenciar de "salvo com sucesso"
+            except Exception as e:
+                # Falha na dedup semantica nao impede a insercao
+                print(f"[Dedup Semantica] Aviso: {e}")
             
             # Detecta tipo de fonte usando a nova classificação de três tipos
             jornal = artigo_data.get('metadados', {}).get('jornal') or artigo_data.get('metadados', {}).get('fonte_original', '')
