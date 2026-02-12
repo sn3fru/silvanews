@@ -1819,3 +1819,7 @@ Cluster 50478: ignorados=[60379] | justificativa=O artigo 60379 foi ignorado por
 Cluster 50393: ignorados=[60013, 60016, 60017, 60061, 60065, 60073, 60074, 60075, 60076, 60077, 60078, 60156, 60172, 60173, 60232, 60233, 60234, 60236, 60237, 60252, 60334, 60336] | justificativa=Os artigos 60237, 60336, 60013, 60016, 60017, 60061, 60073, 60076, 60077, 60078, 60156, 60172, 60173, 60074, 60075, 60232, 60233, 60234, 60236, 60252 e 60065 foram ignorados por tratarem de outros assuntos.
 Cluster 50395: ignorados=[60180] | justificativa=Artigo 60180 foi ignorado por tratar do carnaval do Rio de Janeiro, não sendo pertinente ao evento em São Paulo.
 Cluster 50397: ignorados=[60260] | justificativa=O artigo 60260 não é pertinente ao tema central.
+Cluster 50728: ignorados=[60784] | justificativa=O artigo 60784 foi ignorado por tratar de tema diferente (penduricalhos no judiciário).
+Cluster 50737: ignorados=[60826] | justificativa=Todos os artigos eram pertinentes.
+Cluster 50869: ignorados=[60908, 60910] | justificativa=Os artigos 60908 e 60910 foram ignorados por tratarem de eventos sociais e articulações políticas sem impacto financeiro direto relevante para a mesa de Special Situations.
+Cluster 50868: ignorados=[60928] | justificativa=O artigo 60928 foi ignorado por focar em resultados de conversões de lojas, não estando diretamente relacionado à expansão digital da Assaí.
