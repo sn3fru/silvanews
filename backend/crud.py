@@ -416,7 +416,10 @@ def create_cluster(db: Session, cluster_data: ClusterEventoCreate) -> ClusterEve
     ).first()
     
     if cluster_existente:
-        print(f"⚠️ Cluster já existe: {cluster_existente.id} - '{cluster_data.titulo_cluster}'")
+        titulo_curto = (cluster_data.titulo_cluster or "")[:50]
+        if len((cluster_data.titulo_cluster or "")) > 50:
+            titulo_curto += "..."
+        print(f"⚠️ Cluster já existe: id={cluster_existente.id} ({titulo_curto})")
         return cluster_existente
     
     # Cria novo cluster

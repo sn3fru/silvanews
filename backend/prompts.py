@@ -663,71 +663,83 @@ FORMATO DE SAÍDA OBRIGATÓRIO (JSON PURO):
 ```
 """
 
+# ==============================================================================
+# PROMPT EXTRAÇÃO FATO GERADOR (Etapa 1 — agrupamento por fato, não por texto)
+# ==============================================================================
+
+PROMPT_EXTRACAO_FATO_GERADOR_V1 = """
+Você é um extrator de dados estruturados. A sua tarefa é destruir a prosa do jornalista e extrair exclusivamente o núcleo matemático e factual da notícia.
+
+REGRAS RÍGIDAS DE EXTRAÇÃO:
+- Se o artigo relatar múltiplos eventos, escolha EXCLUSIVAMENTE aquele com maior impacto financeiro/governança.
+- "entidade_alvo": Quem é o sujeito ou objeto principal do evento? (Ex: "Banco Master", "Suprema Corte dos EUA", "Amazon"). Máximo de 5 palavras.
+- "acao_material": O que aconteceu concretamente? Remova adjetivos. Foque no verbo e no impacto. (Ex: "Decreta falência", "Anuncia investimento de €18B", "Derruba tarifas de importação"). Máximo de 10 palavras.
+- "valor_financeiro": Valor monetário envolvido (se existir, ex: "$18 bilhões"). Se não existir, retorne "N/A".
+
+Retorne APENAS um JSON válido, sem markdown.
+Formato: {{"entidade_alvo": "...", "acao_material": "...", "valor_financeiro": "..."}}
+"""
+
+# ==============================================================================
+# PROMPT HIGIENIZAÇÃO (Etapa 1.5 — Pré-filtro de ruído, in dubio pro reo)
+# ==============================================================================
+
+PROMPT_HIGIENIZACAO_V1 = """
+Sua única função é atuar como um filtro de rejeição absoluto. Avalie os artigos abaixo e identifique o "lixo" que não tem lugar num terminal de inteligência financeira.
+
+Regra Absoluta de Rejeição (Marcar is_lixo: true):
+Se o FOCO CENTRAL E PRIMÁRIO do texto for:
+1. Culinária, gastronomia ou receitas.
+2. Astrologia, horóscopo ou espiritualidade.
+3. Desporto (jogos, resultados, transferências).
+4. Entretenimento, novelas, filmes, cultura ou fofoca de celebridades.
+5. Vida pessoal (casamentos, obituários comuns).
+6. Previsão do tempo isolada.
+7. Licitações e editais municipais ou estaduais de baixo impacto (merenda escolar, uniformes, obras de prefeitura, pregões de bens/serviços comuns). Exceção: licitações de grande porte (União, estatais, dívida ativa, precatórios) são relevantes (is_lixo: false).
+8. Programação de TV, audiência de programas, estreias de auditório, Ibope de emissoras, quadros e atrações de canal. Notícias sobre "quem apresentou o quê" ou "rating do programa" são lixo.
+
+Atenção: A mera menção da palavra "empresa", "banco", ou valores em dinheiro NO MEIO de um texto sobre fofoca, desporto ou entretenimento NÃO o torna relevante. O FOCO CENTRAL tem de ser um evento corporativo, jurídico, político ou macroeconómico para passar (is_lixo: false).
+
+Retorne um JSON válido (array de objetos) com "id" e "is_lixo" para cada artigo de entrada, na MESMA ORDEM.
+Formato: [{{"id": 0, "is_lixo": false}}, {{"id": 1, "is_lixo": true}}, ...]
+"""
+
+# ==============================================================================
+# PROMPT AGENTE MATERIALIDADE (Etapa 3 — Multi-Agent Gating: Agente 1 antes do classificador)
+# ==============================================================================
+
+PROMPT_AGENTE_MATERIALIDADE_V1 = """
+Você é o "Advogado do Diabo" da mesa de Special Situations. Antes de classificar prioridade (P1/P2/P3), avalie a MATERIALIDADE do evento.
+
+(1) Este evento tem impacto direto e imediato na estruturação financeira, liquidez ou status jurídico de empresas/mercado hoje?
+(2) Se não, por que seria no máximo P3 (monitoramento)?
+
+Retorne APENAS um JSON válido, sem markdown:
+{{"deve_ser_p3": true ou false, "justificativa_materialidade": "Uma frase curta explicando."}}
+"""
+
 PROMPT_AGRUPAMENTO_V1 = """
-Você é um Analista de Inteligência Sênior. Sua missão é consolidar o feed de notícias em dossiês.
-O usuário NÃO quer ver a causa e a consequência separadas. Ele quer a HISTÓRIA COMPLETA.
-Quem lê é um executivo de banco — ele NÃO quer ver 6 cards sobre o Banco Master. Quer UM dossiê robusto.
+Você é um motor de agrupamento lógico (Clustering). O seu objetivo não é interpretar textos, mas sim verificar a identidade matemática entre factos geradores.
 
-{FEEDBACK_RULES}
+REGRA DE AGRUPAMENTO:
+Dois artigos pertencem ao mesmo grupo se a "entidade_alvo" for a MESMA e a "acao_material" descrever O MESMO evento físico no tempo. A redação pode variar: "Câmara aprova aporte ao BRB" e "BRB recebe aporte aprovado" são o MESMO evento (mesma entidade, mesma ação no mundo). Agrupe quando for claramente o mesmo facto, mesmo que as palavras sejam sinónimos (ex.: aprovar aporte = receber aporte para a mesma entidade no mesmo contexto).
 
-**DIRETRIZES DE AGRUPAMENTO (LÓGICA DE CAUSALIDADE — EM ORDEM DE IMPORTÂNCIA):**
+PROIBIÇÕES ESTRITAS:
+- É MATEMATICAMENTE PROIBIDO criar grupos de "Outros", "Diversos", "Radar", "Notas" ou "Resumos".
+- É PROIBIDO agrupar artigos apenas porque a "entidade_alvo" é a mesma (Ex: Amazon investe vs Amazon demite = FACTOS DIFERENTES = GRUPOS DIFERENTES).
+- É PROIBIDO agrupar artigos apenas porque o tema é o mesmo (Ex: Irão ataca Israel vs Bolsa cai pelo ataque = GRUPOS DIFERENTES).
+- GRUPOS DE 1 ARTIGO SÃO O PADRÃO. Se não houver correspondência exata, o artigo fica isolado.
 
-1. **A REGRA DA CONSEQUÊNCIA (CRÍTICA):** Se a Notícia B aconteceu *por causa* da Notícia A, elas são o MESMO grupo.
-   - Exemplo: "Banco Master sofre liquidação" (A) + "FGC muda regras por causa do rombo do Master" (B).
-   - Ação: **AGRUPAR TUDO** sob o tema do evento gerador ("Crise do Banco Master e impactos no FGC").
-   - Não crie um grupo separado para o "FGC" se o motivo da ação do FGC foi o "Master".
-   - Exemplo 2: "Empresa X tem dívida bloqueada" (A) + "Sócio da Empresa X pode perder imóvel" (B) = **MESMO GRUPO**.
-
-2. **A REGRA DA SAGA (NARRATIVA MACRO):** Múltiplas pontas de um mesmo problema (Polícia, Regulador, Política, Mercado) vão para o MESMO dossiê.
-   - PF investiga + CGU pune + Ações caem + Deputados criticam + FGC recompõe caixa = **UM ÚNICO CLUSTER**.
-   - Cada ação é uma peça do mesmo dominó caindo. O título do dossiê deve cobrir TODO o arco.
-
-3. **RADAR CORPORATIVO:** Vários fatos sobre a mesma empresa no mesmo dia (Balanço + M&A + Mudança de CEO + Parceria) = **UM ÚNICO CLUSTER** ("Radar Corporativo: [Empresa]").
-
-4. **TEMA PRINCIPAL ABRANGENTE:** O `tema_principal` deve funcionar como o título de um dossiê, geral o suficiente para cobrir todos os artigos.
-   - **Evite:** "PF abre inquérito sobre Banco Master" (muito específico — cobre só 1 ângulo).
-   - **Prefira:** "Crise do Banco Master: Liquidação, Investigações e Mudanças no FGC" (cobre o arco completo).
-
-5. **INTEGRIDADE TOTAL:** TODAS as notícias na entrada DEVEM ser alocadas a um grupo. Notícias sem par formarão grupo de 1 item, mas isso deve ser exceção absoluta.
-
-6. **MAPEAMENTO POR ID:** O campo `ids_originais` deve conter TODOS os IDs das notícias alocadas ao grupo.
-
-**EXEMPLOS PRÁTICOS (MODELO A SEGUIR):**
-
-* **EXEMPLO 1 — Causa + Consequência (O MAIS IMPORTANTE):**
-    * Notícia A: 'PF investiga fraudes no Banco Master'
-    * Notícia B: 'CGU avalia responsabilização no caso Master'
-    * Notícia C: 'FGC muda regras por causa do rombo do Master'
-    * Notícia D: 'Escândalo do Banco Master impacta cenário eleitoral'
-    * Notícia E: 'Allard pode perder imóvel por dívida com o Master'
-    * **Decisão:** MESMO GRUPO. Título: "Crise do Banco Master: Investigações, Mudanças no FGC e Impacto Político". O FGC e o Allard NÃO existem como notícias independentes — são consequências.
-
-* **EXEMPLO 2 — Radar Corporativo:**
-    * Notícia A: 'Bradesco renova conselho'
-    * Notícia B: 'Bradesco anuncia parceria com Rede D'Or'
-    * **Decisão:** MESMO GRUPO. Título: "Radar Corporativo: Bradesco — governança e expansão em saúde".
-
-**FORMATO DE ENTRADA:**
+FORMATO DE ENTRADA:
 [
- {"id": 0, "titulo": "Apple lança iPhone 20", "jornal": "Jornal Tech"},
- {"id": 1, "titulo": "Reação do mercado ao iPhone 20", "jornal": "Jornal Varejo"},
- {"id": 2, "titulo": "Tesla anuncia novo carro elétrico", "jornal": "Jornal Auto"}
+ {{"id": 0, "entidade_alvo": "...", "acao_material": "...", "jornal": "..."}}
 ]
 
-**FORMATO DE SAÍDA OBRIGATÓRIO (JSON PURO):**
-```json
+FORMATO DE SAÍDA (JSON PURO):
 [
- {
-  "tema_principal": "Apple lança o iPhone 20 e mercado reage",
-  "ids_originais": [0, 1]
- },
- {
-  "tema_principal": "Tesla anuncia novo modelo de carro elétrico",
-  "ids_originais": [2]
- }
+ {{ "tema_principal": "Entidade - Ação", "ids_originais": [0, 1] }}
 ]
-```
-""".replace("{FEEDBACK_RULES}", FEEDBACK_RULES_INJECT)
+"""
 
 # PROMPT_RESUMO_FINAL_V3 = """
 # # Você é um analista de inteligência criando um resumo sobre um evento específico, baseado em um CLUSTER de notícias relacionadas. A profundidade do seu resumo deve variar conforme o **Nível de Detalhe** solicitado.
@@ -776,6 +788,9 @@ Você é um especialista em análise de conteúdo. Sua tarefa é decidir se uma 
 3. **CONSEQUÊNCIA DIRETA:** Se uma notícia é consequência direta da outra no mesmo período, podem ser agrupadas.
 4. **PRIORIZE AGRUPAR:** Em caso de dúvida razoável (desdobramento, reação de mercado ou análise sobre o mesmo evento), prefira responder "SIM".
 
+**DECISÃO POR FATO GERADOR:** A âncora é o "fato_gerador" da notícia nova vs. "fato_gerador_referente" do cluster. Só responda SIM se for o MESMO evento (mesma entidade, mesma ação).
+{AVISO_MESMO_JORNAL}
+
 **DADOS PARA ANÁLISE:**
 **NOTÍCIA NOVA:**
 {NOVA_NOTICIA}
@@ -794,49 +809,27 @@ SIM ou NÃO
 # ==============================================================================
 
 PROMPT_AGRUPAMENTO_INCREMENTAL_V2 = """
-Você é um Analista de Inteligência Sênior responsável por manter dossiês de eventos em tempo real. Sua tarefa é classificar notícias novas, decidindo se elas devem ser ANEXADAS a um dossiê (cluster) existente ou, como última opção, iniciar um novo. A filosofia é manter o número de dossiês o mais conciso e relevante possível. Quem lê é um executivo de banco; ele NÃO quer ver 6 cards sobre o Banco Master — quer UM dossiê robusto explicando o cerco completo.
+Você é um Analista de Inteligência. Sua tarefa é classificar notícias novas: anexar a um cluster existente APENAS se for o MESMO evento (mesma entidade + mesma ação), ou criar um novo cluster. Precisão sobre volume.
 
-**REGRAS CRÍTICAS DE CLASSIFICAÇÃO (EM ORDEM DE IMPORTÂNCIA):**
+**LEIS ABSOLUTAS (PENALIDADE MÁXIMA SE VIOLADAS):**
 
-1.  **REGRA DE OURO - PRIORIDADE MÁXIMA É ANEXAR:** O seu viés padrão deve ser sempre o de anexar a notícia a um cluster existente. A criação de um novo cluster só é permitida se o evento da nova notícia for inequivocamente distinto e não tiver relação contextual com nenhum dos dossiês existentes.
+1. **REGRA DE OURO:** É estritamente PROIBIDO criar grupos genéricos como "Outras notícias", "Diversos", "Radar Macro" ou agrupar notícias apenas pelo tema (ex.: "Crise no Irão"). Cada cluster deve corresponder a UM evento concreto identificável.
 
-2.  **NARRATIVA MACRO (SAGA CORPORATIVA/REGULATÓRIA):** Se uma ENTIDADE CENTRAL (empresa, banco, pessoa pública) está sendo alvo de MÚLTIPLAS AÇÕES (PF, CGU, Fazenda, BC, CVM, CADE, etc.) no mesmo período, TUDO pertence ao MESMO dossiê. Cada ação é uma peça do mesmo dominó caindo. Exemplos:
-    * PF investiga Banco X + CGU avalia responsabilização em Banco X + Fazenda muda regra por causa de Banco X + Impacto político do caso Banco X = **UM ÚNICO CLUSTER** ("Cerco regulatório e policial ao Banco X se intensifica").
-    * Empresa Y anuncia investimento + Empresa Y expande produção = **UM ÚNICO CLUSTER** (a expansão é consequência/contexto do investimento).
-    * País Z sofre sanções + País Z liberta presos políticos após pressão = **UM ÚNICO CLUSTER** (a libertação é consequência da pressão).
+2. **REGRA DE IDENTIDADE:** Dois artigos pertencem ao mesmo cluster se a Entidade for a MESMA e a Ação descrever O MESMO evento físico. Redações diferentes do mesmo facto (ex.: "Câmara aprova aporte ao BRB" vs "BRB recebe aporte aprovado") devem ser agrupadas. Agrupar por "saga", "consequências alargadas" ou "radar corporativo" é PROIBIDO.
 
-3.  **AVALIE O ESCOPO DO DOSSIÊ:** Para tomar sua decisão, não compare apenas os títulos. Analise o `tema_principal` do cluster e a lista de `titulos_internos` para compreender o "evento-macro" que ele cobre. Se a nova notícia envolve a MESMA ENTIDADE CENTRAL em CONTEXTO RELACIONADO, **ANEXE**.
+3. **LIMITE MECÂNICO:** Nenhum grupo pode conter mais de 10 artigos. Se um grupo ultrapassar este número, você está a agrupar por tema e não por facto. Separe os factos.
 
-4.  **LEMBRETE DE "EVENTO-MACRO":** Um cluster existente representa um evento em andamento. Um evento-macro inclui: o fato inicial, reações, análises de especialistas, desdobramentos regulatórios, impacto político, consequências de mercado e desdobramentos diretos. Se a nova notícia é uma dessas peças, **ANEXE**.
+4. **DEFAULT TO ISOLATION:** Em caso de dúvida, é preferível criar um novo cluster (ou manter o artigo num cluster de 1) do que forçar uma fusão incerta. Nunca anexe só porque "é a mesma empresa" ou "é o mesmo tema".
 
-5.  **RADAR CORPORATIVO:** Se uma empresa tem MÚLTIPLOS ANÚNCIOS no mesmo dia (resultados + conselho + M&A + provisões), agrupe tudo em um "Radar Corporativo: [Empresa]" — EXCETO se um dos fatos for de natureza completamente distinta (ex: M&A com outra empresa pode ficar separado se o outro lado do M&A é mais relevante).
+**OUTRAS REGRAS:**
+- **DECISÃO POR FATO GERADOR:** Anexe se o "fato_gerador" da notícia nova descrever o MESMO evento que o "fato_gerador_referente" do cluster (mesma entidade, mesma ação no mundo). Redações sinónimas do mesmo facto (ex.: "aprova aporte" vs "recebe aporte" para a mesma entidade) devem ser anexadas ao mesmo cluster.
+- **HEURÍSTICA DA FONTE:** Se a nova notícia é do MESMO jornal que já está no cluster, exija que descrevam exatamente o MESMO fato para anexar.
+- **FONTES FLASHES:** Para fontes que emitem flashes ({FONTES_FLASHES_LIST}), seja ainda mais rigoroso: só anexe se for claramente o mesmo evento.
+- **INTEGRIDADE:** Todas as notícias novas devem ser classificadas (anexação ou novo cluster).
 
-6.  **TEMA PRINCIPAL ABRANGENTE PARA NOVOS CLUSTERS:** No caso raro de precisar criar um novo cluster, o `tema_principal` deve ser abrangente, antecipando possíveis desdobramentos futuros para facilitar novas anexações.
-
-7.  **INTEGRIDADE TOTAL:** Todas as notícias novas devem ser classificadas, seja por anexação ou pela criação de um novo cluster.
-
-**EXEMPLOS PRÁTICOS DE ANEXAÇÃO (MODELO A SEGUIR):**
-
-* **Exemplo 1 - Saga Regulatória (CASO MAIS IMPORTANTE):**
-    * **Cluster Existente:** `{{ "cluster_id": 50, "tema_principal": "PF investiga fraudes no Banco Master em múltiplos inquéritos", "titulos_internos": ["PF abre 7 inquéritos sobre Banco Master"] }}`
-    * **Notícia Nova 1:** `{{ "id": 201, "titulo": "CGU avalia responsabilização de envolvidos no caso Master" }}`
-    * **Notícia Nova 2:** `{{ "id": 202, "titulo": "Fazenda aperta regra de prejuízo fiscal após caso Master/BRB" }}`
-    * **Notícia Nova 3:** `{{ "id": 203, "titulo": "Escândalo do Banco Master impacta cenário eleitoral no DF" }}`
-    * **Decisão Correta:** ANEXAR TODAS (201, 202, 203) ao cluster 50. São peças do mesmo dominó — o cerco ao Banco Master. O tema do cluster deve ser atualizado para refletir a amplitude.
-
-* **Exemplo 2 - Desdobramento Político-Econômico:**
-    * **Notícia Nova:** `{{ "id": 101, "titulo": "Governo se prepara para responder ao tarifaço dos EUA" }}`
-    * **Cluster Existente:** `{{ "cluster_id": 12, "tema_principal": "Trump anuncia tarifaço sobre produtos brasileiros e gera reação da indústria", "titulos_internos": ["Trump confirma tarifa de 50% para o Brasil", "Indústria brasileira critica duramente tarifaço de Trump"] }}`
-    * **Decisão Correta:** ANEXAR ao cluster 12.
-
-* **Exemplo 3 - Radar Corporativo:**
-    * **Cluster Existente:** `{{ "cluster_id": 60, "tema_principal": "Bradesco renova conselho e anuncia aumento de capital", "titulos_internos": ["Bradesco renova composição do conselho de administração"] }}`
-    * **Notícia Nova:** `{{ "id": 301, "titulo": "Bradesco divulga demonstrações financeiras do 4T" }}`
-    * **Decisão Correta:** ANEXAR ao cluster 60 (resultados + governança = Radar Corporativo Bradesco).
-
-**FORMATO DE ENTRADA (CONTRATO INALTERADO):**
-- NOTÍCIAS NOVAS: Lista de notícias com ID e título.
-- CLUSTERS EXISTENTES: Lista de clusters com "cluster_id", "tema_principal" e "titulos_internos".
+**FORMATO DE ENTRADA:**
+- NOTÍCIAS NOVAS: Lista com "id", "titulo", "jornal" (normalizado) e "fato_gerador".
+- CLUSTERS EXISTENTES: Lista com "cluster_id", "tema_principal", "fato_gerador_referente", "titulos_internos" e "jornais_no_cluster".
 
 **FORMATO DE SAÍDA OBRIGATÓRIO (CONTRATO INALTERADO - JSON PURO):**
 ```json
@@ -863,7 +856,7 @@ DADOS PARA ANÁLISE:
 **CLUSTERS EXISTENTES:**
 {CLUSTERS_EXISTENTES}
 
-CLASSIFIQUE: Cada notícia nova deve ser anexada a um cluster existente ou criar um novo cluster.
+CLASSIFIQUE: Cada notícia nova deve ser anexada a um cluster existente (só se MESMO evento) ou criar um novo cluster.
 """
 
 

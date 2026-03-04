@@ -14,6 +14,11 @@
 # docs/OPERATIONS.md         -> REFERENCIA DE API: todos os 60+ endpoints com params, bodies e funcoes que chamam,
 #                               setup, deploy, troubleshooting
 # docs/V2-MIGRATION-PLAN.md  -> Status do Graph-RAG: fases concluidas, como usar, proximos passos
+#
+# Implementacao Agrupamento/Priorizacao (1.A, 2.A, 2.B, 3.A):
+#   docs/GUIA_IMPLEMENTACAO_AGRUPAMENTO_PRIORIZACAO.md  -> Guia tecnico completo (passos, decisões, riscos)
+#   docs/TASK_IMPLEMENTACAO_AGRUPAMENTO_PRIORIZACAO.md  -> TASK com regras de ouro: pesquisar impactos antes,
+#                                                          atualizar docs apos cada passo, estudar doc+codigo antes do proximo
 
 # LEIS IMUTAVEIS
 # 1. Gatekeeper V13 (backend/prompts.py PROMPT_ANALISE_E_SINTESE_CLUSTER_V1) - encapsular, nunca reescrever

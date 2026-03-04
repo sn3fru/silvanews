@@ -216,7 +216,10 @@ btg_alphafeed/
 | `extrair_json_da_resposta(resposta)` | Extrai JSON de resposta LLM com 5+ fallbacks | process_articles, agents, main |
 | `gerar_titulo_fallback_curto(texto, max_palavras=10)` | Gera titulo deterministico quando falta titulo | process_articles, file_loader |
 | `titulo_e_generico(titulo)` | Detecta titulos genericos (nao usaveis para agrupamento) | process_articles, file_loader |
+| `normalizar_jornal(nome)` | Chave canonica do jornal (lowercase, sem acentos, aliases). Usado na heuristica da fonte no agrupamento | process_articles, processing (Task 1) |
 | `inferir_tipo_fonte_por_jornal(nome_jornal)` | Infere nacional/internacional pelo nome do jornal | process_articles, main, file_loader |
+| **Constante** `FONTES_FLASHES` | Lista de jornais que emitem flashes; prompt de agrupamento mais rigoroso para estas fontes | prompts, process_articles (Task 1) |
+| **Etapa 1 — Fato gerador** | `processar_artigo_sem_cluster`: após validação Noticia, chama LLM com PROMPT_EXTRACAO_FATO_GERADOR_V1; valida com FatoGeradorContract; grava em `metadados['fato_gerador']`. Falha em artigos novos = reprocesso (sem fallback titulo); artigos já processados = fallback titulo até backfill (Task 3) | process_articles |
 | `migrar_noticia_cache_legado(noticia_data)` | Migra formato legado para formato atual | process_articles, processing |
 | `gerar_hash_unico(texto, url)` | SHA256 para deduplicacao de artigos | main |
 | `eh_lixo_publicitario(titulo, texto)` | Detecta conteudo publicitario (desabilitada) | - |
@@ -256,7 +259,7 @@ btg_alphafeed/
 
 ### Constantes Globais
 - `BATCH_SIZE_AGRUPAMENTO = 200`, `MAX_OUTPUT_TOKENS_STAGE2 = 32768`, `MAX_TRECHO_CHARS_STAGE2 = 120`
-- Gemini model: `gemini-2.0-flash` (configurado via `GEMINI_API_KEY`)
+- Gemini model: `gemini-2.5-flash` (configurado via `GEMINI_API_KEY`)
 
 ### Fluxo do `main()` (flags: `--stage`, `--modo`, `--limite`)
 
@@ -299,7 +302,7 @@ main()
 | `processar_artigo_sem_cluster(db, id, client)` | 2075-2238 | Etapa 1: extrai dados, embedding, marca pronto_agrupar | update_artigo_dados_sem_status, gerar_embedding, create_log |
 | `agrupar_noticias_incremental(db, client)` | 1359-1466 | Etapa 2: agrupa por tipo_fonte em lotes | processar_lote_incremental, marcar_artigos_processados |
 | `processar_lote_incremental(db, client, lote, clusters, n)` | 1484-1724 | Processa 1 lote incremental | associate_artigo_to_cluster, create_cluster, PROMPT_AGRUPAMENTO_INCREMENTAL_V2 |
-| `classificar_e_resumir_cluster(db, cluster_id, client, stats)` | 836-919 | Etapa 3: classifica+resume em 1 chamada LLM | get_cluster_by_id, get_artigos_by_cluster, PROMPT_ANALISE_E_SINTESE_CLUSTER_V1 |
+| `classificar_e_resumir_cluster(db, cluster_id, client, stats)` | 836-919 | Etapa 3: Agente 1 (materialidade) + classifica+resume (PROMPT_ANALISE_E_SINTESE_CLUSTER_V1) | get_cluster_by_id, get_artigos_by_cluster, PROMPT_AGENTE_MATERIALIDADE_V1, PROMPT_ANALISE_E_SINTESE_CLUSTER_V1 |
 | `consolidacao_final_clusters(db, client)` | 955-1240 | Etapa 4: merge duplicados | merge_clusters, update_cluster_title, PROMPT_CONSOLIDACAO_CLUSTERS_V1 |
 | `_corrigir_tag_deterministica_cluster(db, cluster_id)` | 235-264 | Correcao hardcoded por keywords (CDA, Divida Ativa, Precatorios, FCVS) | get_cluster_by_id, get_artigos_by_cluster |
 | `extrair_json_da_resposta(resposta)` | 100-159 | Extrai JSON do LLM com 5 estrategias de fallback | (nenhuma) |
@@ -357,6 +360,8 @@ Global M&A | Global Legal and Regulatory | Sovereign Debt and Credit | Global Di
 | `PROMPT_EXTRACAO_PDF_RAW_V1` | Ingestao | Extrair texto de PDFs (sem resumir) |
 | `PROMPT_AGRUPAMENTO_V1` | 2 (lote) | Agrupar artigos em clusters |
 | `PROMPT_AGRUPAMENTO_INCREMENTAL_V2` | 2 (incremental) | Anexar a clusters existentes |
+| `PROMPT_EXTRACAO_FATO_GERADOR_V1` | Etapa 1 | Extrai fato_gerador (FatoGeradorContract); processar_artigo_sem_cluster |
+| `PROMPT_AGENTE_MATERIALIDADE_V1` | 3 | Agente 1 (Advogado do Diabo): deve_ser_p3 + justificativa; injetado antes do classificador |
 | `PROMPT_ANALISE_E_SINTESE_CLUSTER_V1` | 3 | Classifica+resume cluster (substitui Gatekeeper V13 + Resumo V3) |
 | `PROMPT_CONSOLIDACAO_CLUSTERS_V1` | 4 | Merge de clusters duplicados |
 | `PROMPT_RESUMO_EXPANDIDO_V1` / `_FALLBACK` | On-demand | Resumo expandido (deep-dive) |

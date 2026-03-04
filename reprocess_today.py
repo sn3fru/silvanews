@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """
-Reprocessa um DIA específico (ou hoje por padrão) com os prompts atuais.
+Reprocessa um DIA específico (ou hoje por padrão) — sem misturar com outras datas.
+
+Usa o fluxo novo: fato gerador (Etapa 1), heurística da fonte + referente por qualidade (Etapa 2),
+multi-agent gating (Etapa 3), consolidação (Etapa 4).
 
 Passos:
 - Mantém os dados brutos (texto_bruto, metadados)
 - Reseta artigos da data para status 'pendente' e limpa campos processados
-- Desassocia artigos dos clusters da data
-- Remove clusters da data (e artefatos relacionados: chat, alterações, sínteses)
-- Executa o pipeline completo de reprocessamento (processar → agrupar → classificar → priorizar)
+- Remove clusters da data (e artefatos: chat, alterações, sínteses)
+- Executa o pipeline completo (processar → agrupar → classificar → priorizar)
 
-Uso (Windows CMD):
+Uso:
   python reprocess_today.py                    # Reprocessa hoje
-  python reprocess_today.py --day 2025-08-24  # Reprocessa data específica
+  python reprocess_today.py --day 2026-03-03   # Reprocessa data específica
 """
 
 import argparse
@@ -178,7 +180,8 @@ def reprocessar_data(day_str: Optional[str] = None) -> None:
 
     target_day = day_str or get_date_brasil_str()
     print("=" * 60)
-    print(f"🔄 Reprocessamento do dia: {target_day}")
+    print(f"🔄 Reprocessamento do dia: {target_day} (apenas esta data — sem misturar outras)")
+    print("   Fluxo novo: fato gerador, heurística fonte, referente qualidade, multi-agent gating")
     print("=" * 60)
 
     try:

@@ -69,7 +69,7 @@ class EstagiarioAgent:
             api_key = os.getenv("GEMINI_API_KEY")
             if api_key:
                 genai.configure(api_key=api_key)
-                self.model = genai.GenerativeModel('gemini-2.0-flash')
+                self.model = genai.GenerativeModel('gemini-2.5-flash')
                 print("[Estagiario] LLM configurado (Gemini)")
             else:
                 print("[Estagiario] LLM não configurado (GEMINI_API_KEY ausente)")

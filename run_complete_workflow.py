@@ -575,7 +575,7 @@ def main():
     print("   0. Verificação/inicialização do banco local")
     print("   *. Feedback Learning (analise de likes/dislikes)")
     print("   1. Carregamento de notícias (load_news.py --direct --yes)")
-    print("   2. Processamento de artigos (process_articles.py)")
+    print("   2. Processamento de artigos (process_articles.py) — fluxo novo: fato gerador, heurística fonte, referente qualidade, multi-agent gating")
     print("   3. Migração incremental do banco (migrate_incremental)")
     print("   4. Notificacoes Telegram individuais (se configurado)")
     print("   5. Daily Briefing sintetizado (se configurado)")

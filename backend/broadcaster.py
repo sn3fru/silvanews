@@ -152,7 +152,7 @@ class TelegramBroadcaster:
         try:
             import google.generativeai as genai
             genai.configure(api_key=api_key)
-            self._gemini_client = genai.GenerativeModel('gemini-2.0-flash')
+            self._gemini_client = genai.GenerativeModel('gemini-2.5-flash')
         except ImportError:
             from google import genai as genai_new
             client = genai_new.Client(api_key=api_key)
@@ -194,7 +194,7 @@ class TelegramBroadcaster:
         except AttributeError:
             # google.genai (Client)
             response = client.models.generate_content(
-                model='gemini-2.0-flash',
+                model='gemini-2.5-flash',
                 contents=prompt,
                 config={'temperature': 0.3, 'max_output_tokens': 4096}
             )

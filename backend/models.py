@@ -77,6 +77,36 @@ class NoticiaResumida(BaseModel):
     prioridade: PrioridadeType
 
 
+class FatoGeradorContract(BaseModel):
+    """
+    Contrato para extração de fato gerador (Etapa 1). Dados estruturados (entidade_alvo + acao_material)
+    para agrupamento lógico. fato_gerador_padronizado é derivado para compatibilidade com leitores antigos.
+    """
+    entidade_alvo: str = Field(
+        ...,
+        min_length=1,
+        max_length=80,
+        description="Sujeito/objeto principal do evento (máx. 5 palavras). Ex: Banco Master, Amazon."
+    )
+    acao_material: str = Field(
+        ...,
+        min_length=1,
+        max_length=120,
+        description="O que aconteceu concretamente (máx. 10 palavras). Ex: Decreta falência, Anuncia investimento."
+    )
+    valor_financeiro: str = Field(
+        default="N/A",
+        max_length=80,
+        description="Valor monetário se existir (ex: $18 bilhões), senão N/A."
+    )
+    # Retrocompatibilidade: leitores que esperam uma única string (entidade_alvo - acao_material)
+    fato_gerador_padronizado: Optional[str] = Field(
+        default=None,
+        max_length=200,
+        description="Derivado: entidade_alvo - acao_material. Preenchido ao salvar no pipeline."
+    )
+
+
 class FonteResumo(BaseModel):
     """Modelo para fontes de um resumo."""
     jornal: Optional[str] = Field(default=None, description="Nome do jornal")

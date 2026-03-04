@@ -52,6 +52,7 @@ from backend.processing import (
 )
 from backend.prompts import PROMPT_AGRUPAMENTO_V1, PROMPT_ANALISE_E_SINTESE_CLUSTER_V1, TAGS_SPECIAL_SITUATIONS
 from backend.prompts import _P1_BULLETS, _P2_BULLETS, _P3_BULLETS, GUIA_TAGS_FORMATADO
+from backend.prompts import PROMPT_HIGIENIZACAO_V1
 from backend.prompts import PROMPT_CONSOLIDACAO_CLUSTERS_V1, TAGS_SPECIAL_SITUATIONS_INTERNACIONAL
 from backend.prompts import LISTA_RELEVANCIA_HIERARQUICA_INTERNACIONAL
 from backend.utils import (
@@ -61,6 +62,8 @@ from backend.utils import (
     corrigir_prioridade_invalida,
     gerar_titulo_fallback_curto,
     titulo_e_generico,
+    normalizar_jornal,
+    FONTES_FLASHES,
 )
 from backend.agents.graph_crud import (
     link_artigo_to_entities,
@@ -87,8 +90,11 @@ if not api_key:
     sys.exit(1)
 
 genai.configure(api_key=api_key)
+# Etapa 1 (extração) e Etapa 3 (resumos): modelo mais barato
 client = genai.GenerativeModel('gemini-2.0-flash')
-print("SUCESSO: Gemini configurado com sucesso!")
+# Etapa 2 (agrupamento): modelo com mais capacidade de raciocínio para regras estritas
+client_agrupamento = genai.GenerativeModel('gemini-2.5-flash')
+print("SUCESSO: Gemini configurado (2.0 Flash para extração/resumos; 2.5 Flash para agrupamento).")
 
 # Funções auxiliares para escolher tags/prompts baseado no tipo_fonte
 def get_tags_for_tipo_fonte(tipo_fonte: str) -> dict:
@@ -594,7 +600,8 @@ def processar_artigos_pendentes(limite: int = 10, day_str: Optional[str] = None)
         artigos_erro = db.query(ArtigoBruto).filter(ArtigoBruto.status == "erro").count()
         clusters_existentes_count = db.query(ClusterEvento).count()
 
-        print(f"📊 {len(artigos_pendentes)} artigos pendentes | Total: {total_artigos} | Processados: {artigos_processados} | Erros: {artigos_erro} | Clusters: {clusters_existentes_count}")
+        print(f"📅 Escopo: apenas dia {target_day} (sem misturar outras datas)")
+        print(f"📊 {len(artigos_pendentes)} artigos pendentes | Total no DB: {total_artigos} | Processados: {artigos_processados} | Erros: {artigos_erro} | Clusters: {clusters_existentes_count}")
 
         # ETAPA 1 — paralela (v2: inclui embedding_v2 + NER + grafo)
         print(f"\n🔄 ETAPA 1: processar_artigo_sem_cluster + Graph-RAG v2 (workers={min(8, max(2, (os.cpu_count() or 4)))})")
@@ -636,6 +643,10 @@ def processar_artigos_pendentes(limite: int = 10, day_str: Optional[str] = None)
             print("❌ Nenhum artigo processado com sucesso. Abortando.")
             return False
 
+        # ETAPA 1.5 — Higienização: pré-filtro de ruído (receitas, desporto, fofoca sem ligação corporativa)
+        print(f"\n🔄 ETAPA 1.5: Pré-filtro de ruído (higienização)")
+        higienizar_lote_artigos(db, client, day_str=target_day)
+
         # ETAPA 2 — síncrona (v2: inclui dicas de similaridade semantica)
         print(f"\n🔄 ETAPA 2: Agrupamento + dicas v2 (similaridade) - target_day={target_day}")
 
@@ -646,11 +657,11 @@ def processar_artigos_pendentes(limite: int = 10, day_str: Optional[str] = None)
 
         if clusters_existentes_hoje > 0:
             print(f"🎯 MODO INCREMENTAL: {clusters_existentes_hoje} clusters existentes → agrupar_noticias_incremental()")
-            sucesso_agrupamento = agrupar_noticias_incremental(db, client, day_str=target_day)
+            sucesso_agrupamento = agrupar_noticias_incremental(db, client_agrupamento, day_str=target_day)
         else:
             print(f"🎯 MODO EM LOTE: Nenhum cluster existente → agrupar_noticias_com_prompt(day_str={target_day})")
             print(f"📝 Usando prompt: PROMPT_AGRUPAMENTO_V1")
-            sucesso_agrupamento = agrupar_noticias_com_prompt(db, client, day_str=target_day)
+            sucesso_agrupamento = agrupar_noticias_com_prompt(db, client_agrupamento, day_str=target_day)
 
         if not sucesso_agrupamento:
             print("❌ ETAPA 2 FALHOU: Erro no agrupamento")
@@ -751,7 +762,7 @@ def processar_artigos_pendentes(limite: int = 10, day_str: Optional[str] = None)
         except Exception:
             resumos_gerados = 0
 
-        print(f"\n🎉 PROCESSAMENTO CONCLUÍDO:")
+        print(f"\n🎉 PROCESSAMENTO CONCLUÍDO (dia {target_day} — fluxo novo: fato gerador, heurística fonte, referente qualidade, multi-agent gating)")
         print(f"   📈 Artigos processados: {sucessos}")
         print(f"   📝 Resumos gerados: {resumos_gerados}")
         print(f"   🔄 Etapa 4: {'✅ sucesso' if ok_cons else '⚠️ parcial'}")
@@ -861,6 +872,33 @@ def classificar_e_resumir_cluster(db: Session, cluster_id: int, client, stats: d
                 "texto_completo": art.texto_processado or art.texto_bruto or ""
             })
 
+        # 1.5 Multi-Agent Gating: Agente 1 (materialidade) antes do classificador
+        bloco_materialidade = ""
+        try:
+            from backend.prompts import PROMPT_AGENTE_MATERIALIDADE_V1
+            payload_agente1 = []
+            for art in artigos[:10]:
+                fg = (art.metadados or {}).get("fato_gerador") if isinstance(art.metadados, dict) else None
+                fato = (fg.get("fato_gerador_padronizado", "")) if isinstance(fg, dict) else ""
+                trecho = (art.texto_processado or art.texto_bruto or "")[:400]
+                payload_agente1.append({"titulo": art.titulo_extraido or "Sem título", "fato_gerador": fato or "-", "trecho": trecho})
+            prompt_ag1 = PROMPT_AGENTE_MATERIALIDADE_V1.strip() + "\n\nDADOS DO CLUSTER:\n" + json.dumps(payload_agente1, ensure_ascii=False, indent=2)
+            resp_ag1 = client.generate_content(prompt_ag1, generation_config={"temperature": 0.0, "max_output_tokens": 512})
+            status_ag1, dados_ag1 = extrair_json_da_resposta(resp_ag1.text or "")
+            if status_ag1.startswith("SUCESSO") and dados_ag1:
+                obj_ag1 = dados_ag1[0] if isinstance(dados_ag1, list) and dados_ag1 else dados_ag1
+                if isinstance(obj_ag1, dict):
+                    deve_p3 = obj_ag1.get("deve_ser_p3", True)
+                    just = (obj_ag1.get("justificativa_materialidade") or "").strip() or "Não informado"
+                    bloco_materialidade = (
+                        "\n\n--- TESTE DE MATERIALIDADE (Agente 1) ---\n"
+                        f"Justificativa: {just}\nRecomendação: preferir P3 = {deve_p3}\n"
+                        "---\nCom base nisso, classifique prioridade e elabore o resumo. "
+                        "Se deve_ser_p3 for true, só atribua P1 ou P2 se houver fato quantitativo ou gatilho explícito (valor em R$, decisão judicial vinculante, default anunciado).\n"
+                    )
+        except Exception:
+            pass
+
         # 2. Chamar o novo "Super-Prompt" UMA ÚNICA VEZ (com placeholders formais)
         prompt_completo = PROMPT_ANALISE_E_SINTESE_CLUSTER_V1.format(
             NOTICIAS_DO_CLUSTER=json.dumps(noticias_payload, ensure_ascii=False, indent=2),
@@ -869,7 +907,9 @@ def classificar_e_resumir_cluster(db: Session, cluster_id: int, client, stats: d
             P3_BULLETS=_P3_BULLETS,
             GUIA_TAGS_FORMATADO=GUIA_TAGS_FORMATADO
         )
-        
+        if bloco_materialidade:
+            prompt_completo = bloco_materialidade + prompt_completo
+
         # Injecao conservadora de regras aprendidas do feedback (Feature 4C)
         try:
             from backend.prompts import get_feedback_rules
@@ -1495,6 +1535,58 @@ def extrair_priorizacao_executiva_seguro(resposta: str) -> Optional[List[Dict[st
     except Exception:
         return None
 
+
+def higienizar_lote_artigos(db: Session, client, day_str: Optional[str] = None) -> int:
+    """
+    Etapa 1.5: Pré-filtro de rejeição. Marca como 'irrelevante' quando o FOCO CENTRAL do texto
+    é culinária, astrologia, desporto, entretenimento/fofoca, vida pessoal ou previsão do tempo.
+    Mera menção a "empresa"/"banco" no meio de texto de fofoca/desporto NÃO torna o artigo relevante.
+    Retorna o número de artigos marcados como irrelevantes (não entram na Etapa 2).
+    """
+    target_day = day_str or get_date_brasil_str()
+    query = db.query(ArtigoBruto).filter(
+        ArtigoBruto.status == "pronto_agrupar",
+        ArtigoBruto.cluster_id.is_(None),
+        func.date(ArtigoBruto.created_at) == target_day,
+    )
+    artigos = query.order_by(ArtigoBruto.id.asc()).all()
+    if not artigos:
+        return 0
+    BATCH_HIGIEN = 20
+    total_irrelevantes = 0
+    for inicio in range(0, len(artigos), BATCH_HIGIEN):
+        lote = artigos[inicio:inicio + BATCH_HIGIEN]
+        payload = []
+        for i, art in enumerate(lote):
+            titulo = (art.titulo_extraido or "Sem título")[:200]
+            trecho = (art.texto_processado or art.texto_bruto or "")[:1500]
+            payload.append({"id": i, "titulo": titulo, "trecho": trecho[:800]})
+        texto_payload = json.dumps(payload, ensure_ascii=False, indent=2)
+        prompt_completo = PROMPT_HIGIENIZACAO_V1.strip() + "\n\nARTIGOS:\n" + texto_payload
+        try:
+            resp = client.generate_content(
+                prompt_completo,
+                generation_config={"temperature": 0.0, "max_output_tokens": 1024},
+            )
+            status_json, raw = extrair_json_da_resposta(resp.text or "")
+            if not status_json.startswith("SUCESSO") or not raw:
+                continue
+            if isinstance(raw, list):
+                for item in raw:
+                    if isinstance(item, dict) and item.get("is_lixo") is True:
+                        idx = item.get("id", 0)
+                        if 0 <= idx < len(lote):
+                            art = lote[idx]
+                            update_artigo_status(db, art.id, "irrelevante")
+                            total_irrelevantes += 1
+        except Exception as e:
+            print(f"  ⚠️ Higienização lote {inicio//BATCH_HIGIEN + 1}: {e}")
+        db.commit()
+    if total_irrelevantes:
+        print(f"🧹 ETAPA 1.5: {total_irrelevantes} artigos marcados como irrelevantes (não entram na Etapa 2)")
+    return total_irrelevantes
+
+
 def agrupar_noticias_incremental(db: Session, client, day_str: Optional[str] = None) -> bool:
     """
     Agrupamento incremental: anexa novas notícias a clusters existentes ou cria novos clusters.
@@ -1525,7 +1617,8 @@ def agrupar_noticias_incremental(db: Session, client, day_str: Optional[str] = N
             ClusterEvento.status == 'ativo'
         ).all()
         
-        print(f"🔗 AGRUPAMENTO INCREMENTAL: {len(artigos_novos)} notícias novas, {len(clusters_existentes)} clusters existentes")
+        print(f"🔗 AGRUPAMENTO INCREMENTAL (apenas dia {target_day} — sem misturar outras datas)")
+        print(f"   📰 Notícias novas: {len(artigos_novos)} | Clusters existentes do dia: {len(clusters_existentes)}")
 
         # SEPARAÇÃO POR TRÊS TIPOS: Brasil Físico, Brasil Online, Internacional
         def _get_tipo_fonte_normalizado(obj):
@@ -1548,25 +1641,14 @@ def agrupar_noticias_incremental(db: Session, client, day_str: Optional[str] = N
         clusters_brasil_online = [c for c in clusters_existentes if _get_tipo_fonte_normalizado(c) == 'brasil_online']
         clusters_internacional = [c for c in clusters_existentes if _get_tipo_fonte_normalizado(c) == 'internacional']
         
-        # Mantém compatibilidade com o código existente agrupando Brasil Físico + Online como "nacional"
-        artigos_novos_nac = artigos_brasil_fisico + artigos_brasil_online
-        artigos_novos_int = artigos_internacional
-        clusters_existentes_nac = clusters_brasil_fisico + clusters_brasil_online
-        clusters_existentes_int = clusters_internacional
+        # Isolamento estrito: cada tipo_fonte é processado separadamente (sem misturar brasil_fisico com brasil_online)
+        print(f"   📊 Por tipo: artigos {len(artigos_brasil_fisico)} físicos, {len(artigos_brasil_online)} online, {len(artigos_internacional)} int. | clusters {len(clusters_brasil_fisico)} fís., {len(clusters_brasil_online)} onl., {len(clusters_internacional)} int.")
         
-        # CORREÇÃO: Log mais preciso mostrando clusters e artigos por tipo
-        print(f"📰 ARTIGOS POR TIPO: {len(artigos_brasil_fisico)} físicos, {len(artigos_brasil_online)} online, {len(artigos_internacional)} internacionais")
-        print(f"📁 CLUSTERS POR TIPO: {len(clusters_brasil_fisico)} físicos, {len(clusters_brasil_online)} online, {len(clusters_internacional)} internacionais")
-        print(f"🔗 COMPATIBILIDADE: {len(clusters_existentes_nac)} nacionais (fís+online), {len(clusters_existentes_int)} internacionais")
-        
-        # Determina se precisa processar em lotes
         TAMANHO_LOTE_MAXIMO = 100  # Reduzido para evitar truncamento de respostas do modelo
-        # Processamento por tipo_fonte
         def _processar_por_tipo(nome: str, artigos_lista, clusters_lista, numero_bloco_base: int = 1) -> tuple:
             if not artigos_lista:
                 return (0, 0)
             print(f"📦 Incremental ({nome}): {len(artigos_lista)} notícias | clusters compatíveis: {len(clusters_lista)}")
-            # Decide se processa em lotes
             _processar_em_lotes = len(artigos_lista) > TAMANHO_LOTE_MAXIMO
             if _processar_em_lotes:
                 print(f"📦 Lotes: {len(artigos_lista)} notícias em blocos de {TAMANHO_LOTE_MAXIMO}")
@@ -1587,10 +1669,11 @@ def agrupar_noticias_incremental(db: Session, client, day_str: Optional[str] = N
                 r = processar_lote_incremental(db, client, artigos_lista, clusters_lista, numero_bloco_base)
                 return r if r else (0, 0)
 
-        anex_nac, novos_nac = _processar_por_tipo('NACIONAL', artigos_novos_nac, clusters_existentes_nac, 1)
-        anex_int, novos_int = _processar_por_tipo('INTERNACIONAL', artigos_novos_int, clusters_existentes_int, 1)
-        anex_total = anex_nac + anex_int
-        novos_total = novos_nac + novos_int
+        anex_f, novos_f = _processar_por_tipo('BRASIL_FISICO', artigos_brasil_fisico, clusters_brasil_fisico, 1)
+        anex_o, novos_o = _processar_por_tipo('BRASIL_ONLINE', artigos_brasil_online, clusters_brasil_online, 1)
+        anex_int, novos_int = _processar_por_tipo('INTERNACIONAL', artigos_internacional, clusters_internacional, 1)
+        anex_total = anex_f + anex_o + anex_int
+        novos_total = novos_f + novos_o + novos_int
         
         # Marca artigos como "processado" após clusterização
         marcar_artigos_processados(db, artigos_novos)
@@ -1624,19 +1707,56 @@ def processar_lote_incremental(db: Session, client, artigos_lote: List[ArtigoBru
     """
     Processa um lote de artigos no agrupamento incremental.
     Retorna (anexacoes, novos_clusters) ou False se falhar.
+    Exige que todos os artigos do lote tenham o mesmo tipo_fonte; caso contrário lança exceção.
     """
     try:
+        # Isolamento estrito por tipo_fonte: lote não pode misturar brasil_fisico com brasil_online ou internacional
+        if artigos_lote:
+            def _tipo(a):
+                t = getattr(a, 'tipo_fonte', None) or 'brasil_fisico'
+                return 'brasil_fisico' if t == 'nacional' else t
+            tipos_no_lote = {_tipo(a) for a in artigos_lote}
+            if len(tipos_no_lote) > 1:
+                raise ValueError(
+                    f"Lote {numero_lote} mistura tipo_fonte: {tipos_no_lote}. "
+                    "Cada lote deve ter um único tipo_fonte (brasil_fisico, brasil_online ou internacional)."
+                )
         # Flag local para logs opcionais neste escopo (evita NameError em 'if debug')
         debug = False
         # Prepara dados para o prompt incremental
+        def _fato_gerador_artigo(a: ArtigoBruto) -> str:
+            m = (a.metadados or {}) or {}
+            fg = m.get("fato_gerador")
+            if isinstance(fg, dict) and fg.get("fato_gerador_padronizado"):
+                return (fg.get("fato_gerador_padronizado") or "").strip()
+            return (a.titulo_extraido or "Sem título")[:120]
+
+        # Excluir artigos sem fato gerador válido (evitar clusters "N/A - N/A")
+        artigos_lote_validos = []
+        for artigo in artigos_lote:
+            fg = _fato_gerador_artigo(artigo)
+            if not fg or not fg.strip() or fg.strip().upper() in ("N/A", "SEM TÍTULO", "SEM TITULO") or len(fg.strip()) < 5:
+                metadados_art = dict(artigo.metadados or {})
+                metadados_art["fato_gerador_erro"] = True
+                artigo.metadados = metadados_art
+                update_artigo_status(db, artigo.id, "erro")
+                db.commit()
+                continue
+            artigos_lote_validos.append(artigo)
+        artigos_lote = artigos_lote_validos
+        if not artigos_lote:
+            return (0, 0)
+
         novas_noticias = []
         for i, artigo in enumerate(artigos_lote):
             noticia_data = {
                 "id": i,
-                "titulo": artigo.titulo_extraido or "Sem título"
+                "titulo": artigo.titulo_extraido or "Sem título",
+                "jornal": normalizar_jornal(artigo.jornal) or "N/A",
+                "fato_gerador": _fato_gerador_artigo(artigo),
             }
             novas_noticias.append(noticia_data)
-        
+
         clusters_existentes_data = []
         for i, cluster in enumerate(clusters_existentes):
             artigos_cluster = get_artigos_by_cluster(db, cluster.id)
@@ -1644,12 +1764,26 @@ def processar_lote_incremental(db: Session, client, artigos_lote: List[ArtigoBru
                 a.titulo_extraido or (a.texto_processado[:80] + "...") if (a.texto_processado or "") else "Sem título"
                 for a in artigos_cluster
             ]
-            # Reduz contexto por cluster para evitar prompts gigantes (títulos mais representativos)
             titulos = titulos[:10]
+            jornais_no_cluster = list({normalizar_jornal(a.jornal) for a in artigos_cluster if normalizar_jornal(a.jornal)})
+            # Referente do cluster por qualidade: fato_gerador com length >= 20; senão o de maior length (evita gênese fraco)
+            MIN_LEN_REFERENTE = 20
+            artigos_ordenados = sorted(artigos_cluster, key=lambda a: (a.created_at is None, a.created_at or datetime.min))
+            referente_artigo = None
+            for a in artigos_ordenados:
+                fg = _fato_gerador_artigo(a)
+                if len(fg) >= MIN_LEN_REFERENTE:
+                    referente_artigo = a
+                    break
+            if not referente_artigo and artigos_ordenados:
+                referente_artigo = max(artigos_ordenados, key=lambda a: len(_fato_gerador_artigo(a)))
+            fato_gerador_referente = _fato_gerador_artigo(referente_artigo) if referente_artigo else (cluster.titulo_cluster or "Sem tema")
             cluster_data = {
                 "cluster_id": cluster.id,
                 "tema_principal": cluster.titulo_cluster,
-                "titulos_internos": titulos
+                "fato_gerador_referente": fato_gerador_referente,
+                "titulos_internos": titulos,
+                "jornais_no_cluster": jornais_no_cluster,
             }
             clusters_existentes_data.append(cluster_data)
         
@@ -1673,7 +1807,8 @@ def processar_lote_incremental(db: Session, client, artigos_lote: List[ArtigoBru
         from backend.prompts import PROMPT_AGRUPAMENTO_INCREMENTAL_V2
         prompt_completo = PROMPT_AGRUPAMENTO_INCREMENTAL_V2.format(
             NOVAS_NOTICIAS=json.dumps(novas_noticias, indent=2, ensure_ascii=False),
-            CLUSTERS_EXISTENTES=json.dumps(clusters_existentes_data, indent=2, ensure_ascii=False)
+            CLUSTERS_EXISTENTES=json.dumps(clusters_existentes_data, indent=2, ensure_ascii=False),
+            FONTES_FLASHES_LIST=", ".join(FONTES_FLASHES),
         )
         # Injeta dicas de similaridade v2 (sem alterar o template do prompt)
         if dicas_similaridade:
@@ -1746,7 +1881,7 @@ def processar_lote_incremental(db: Session, client, artigos_lote: List[ArtigoBru
 
             # CORREÇÃO: Cria mapa de cluster_ids válidos para validação
             cluster_ids_validos = {c.id for c in clusters_existentes}
-            print(f"  🔍 DEBUG: Cluster IDs válidos para lote {numero_lote}: {sorted(list(cluster_ids_validos))}")
+            print(f"  📎 Lote {numero_lote}: {len(cluster_ids_validos)} clusters válidos para anexação")
             
             # CORREÇÃO: Adiciona fallback para IDs inválidos baseado no array de clusters
             def _validar_cluster_id(cluster_id_bruto: int) -> tuple:
@@ -1764,6 +1899,8 @@ def processar_lote_incremental(db: Session, client, artigos_lote: List[ArtigoBru
                 return (None, None)
 
             tipos_encontrados: Dict[str, int] = {}
+            skip_tipo_fonte = 0
+            cluster_nao_encontrado = 0
             for classificacao in classificacoes:
                 try:
                     cls = _normalizar_classificacao(classificacao)
@@ -1791,7 +1928,7 @@ def processar_lote_incremental(db: Session, client, artigos_lote: List[ArtigoBru
                                 if cluster_tf == 'nacional':
                                     cluster_tf = artigo_tf
                                 if artigo_tf != cluster_tf:
-                                    print(f"  ↪ skip anexar: tipo_fonte mismatch artigo={artigo_tf} cluster={cluster_tf} (cluster_id={cluster_existente.id})")
+                                    skip_tipo_fonte += 1
                                     # Fallback: trata como novo cluster (o if abaixo captura)
                                     tipo = "novo_cluster"
                                 else:
@@ -1799,10 +1936,10 @@ def processar_lote_incremental(db: Session, client, artigos_lote: List[ArtigoBru
                                     anexacoes += 1
                                     continue
                             else:
-                                print(f"  ❌ Cluster {cluster_id_bruto} não encontrado → criando novo cluster")
+                                cluster_nao_encontrado += 1
                                 tipo = "novo_cluster"
                         else:
-                            print(f"  ⚠️ cluster_id_existente não definido → criando novo cluster")
+                            cluster_nao_encontrado += 1
                             tipo = "novo_cluster"
                     
                     # CORRECAO: if (nao elif) para capturar fallbacks de "anexar" que mudaram tipo
@@ -1867,9 +2004,10 @@ def processar_lote_incremental(db: Session, client, artigos_lote: List[ArtigoBru
                 except Exception as e:
                     print(f"  ❌ Erro ao processar classificação: {e}")
                     continue
-            # Diagnóstico quando não houve ações (só em debug)
+            if skip_tipo_fonte or cluster_nao_encontrado:
+                print(f"  ↪ Resumo lote: {anexacoes} anexações, {novos_clusters} novos clusters | skip tipo_fonte: {skip_tipo_fonte} | cluster não encontrado: {cluster_nao_encontrado}")
             if debug and (anexacoes + novos_clusters) == 0 and isinstance(classificacoes, list) and len(classificacoes) > 0:
-                print(f"  ⚠️ Diagnóstico Incremental: {len(classificacoes)} itens, nenhum anexado/criado. Tipos: {tipos_encontrados}")
+                print(f"  ⚠️ Diagnóstico: {len(classificacoes)} itens, nenhum anexado/criado. Tipos: {tipos_encontrados}")
             return (anexacoes, novos_clusters)
             
         except Exception as e:
@@ -1907,28 +2045,24 @@ def agrupar_noticias_com_prompt(db: Session, client, day_str: Optional[str] = No
         
         print(f"🔗 INICIANDO AGRUPAMENTO: {len(artigos_para_agrupar)} em lotes de {BATCH_SIZE_AGRUPAMENTO}.")
 
-        # Novo fluxo: processa em dois grupos (nacional/internacional) para não misturar no mesmo prompt
-        artigos_nacional = [a for a in artigos_para_agrupar if getattr(a, 'tipo_fonte', 'nacional') != 'internacional']
-        artigos_internacional = [a for a in artigos_para_agrupar if getattr(a, 'tipo_fonte', 'nacional') == 'internacional']
+        # Isolamento estrito por tipo_fonte: três grupos (brasil_fisico, brasil_online, internacional)
+        def _tipo_fonte(a):
+            t = getattr(a, 'tipo_fonte', None) or 'brasil_fisico'
+            return 'brasil_fisico' if t == 'nacional' else t
+        artigos_brasil_fisico = [a for a in artigos_para_agrupar if _tipo_fonte(a) == 'brasil_fisico']
+        artigos_brasil_online = [a for a in artigos_para_agrupar if _tipo_fonte(a) == 'brasil_online']
+        artigos_internacional = [a for a in artigos_para_agrupar if _tipo_fonte(a) == 'internacional']
+        print(f"   📊 Artigos: {len(artigos_brasil_fisico)} brasil_fisico, {len(artigos_brasil_online)} brasil_online, {len(artigos_internacional)} internacional.")
         
-        # Debug: mostra quantos artigos de cada tipo foram encontrados
-        print(f"🔍 DEBUG: Total artigos para agrupar: {len(artigos_para_agrupar)}")
-        print(f"🔍 DEBUG: Artigos nacionais: {len(artigos_nacional)}")
-        print(f"🔍 DEBUG: Artigos internacionais: {len(artigos_internacional)}")
-        
-        # Verifica se há artigos sem tipo_fonte definido
         artigos_sem_tipo = [a for a in artigos_para_agrupar if not hasattr(a, 'tipo_fonte') or a.tipo_fonte is None]
         if artigos_sem_tipo:
-            print(f"⚠️ AVISO: {len(artigos_sem_tipo)} artigos sem tipo_fonte definido")
-            # Mostra alguns exemplos
-            for a in artigos_sem_tipo[:3]:
-                print(f"   - ID {a.id}: jornal='{a.jornal}', titulo='{a.titulo_extraido}'")
+            print(f"⚠️ AVISO: {len(artigos_sem_tipo)} artigos sem tipo_fonte definido (tratados como brasil_fisico)")
         
-        # Ordena por título para pré-empacotar itens similares no mesmo lote
         def _titulo_key(a):
             t = (a.titulo_extraido or '').strip().lower()
             return t
-        artigos_nacional.sort(key=_titulo_key)
+        artigos_brasil_fisico.sort(key=_titulo_key)
+        artigos_brasil_online.sort(key=_titulo_key)
         artigos_internacional.sort(key=_titulo_key)
 
         def _processar_lotes(rotulo: str, artigos_lista: list) -> tuple:
@@ -1942,21 +2076,62 @@ def agrupar_noticias_com_prompt(db: Session, client, day_str: Optional[str] = No
             artigos_agrupados_local = 0
 
             for num_lote, lote_artigos in enumerate(lotes_local, 1):
+                # Isolamento estrito: lote não pode misturar tipo_fonte
+                tipos_lote = {_tipo_fonte(a) for a in lote_artigos}
+                if len(tipos_lote) > 1:
+                    raise ValueError(
+                        f"Lote {rotulo} {num_lote} mistura tipo_fonte: {tipos_lote}. "
+                        "Cada lote deve ter um único tipo_fonte (brasil_fisico, brasil_online ou internacional)."
+                    )
                 print(f"\n--- Lote {rotulo} {num_lote}/{len(lotes_local)} ({len(lote_artigos)} artigos) ---")
                 # Prepara dados apenas para o lote atual
                 noticias_lote_para_prompt = []
                 mapa_id_lote_para_artigo = {}
+                def _entidade_acao(a):
+                    m = (a.metadados or {}) or {}
+                    fg = m.get("fato_gerador")
+                    if isinstance(fg, dict):
+                        ent = (fg.get("entidade_alvo") or "").strip()
+                        acao = (fg.get("acao_material") or "").strip()
+                        if ent and acao:
+                            return (ent[:80], acao[:120])
+                        padrao = (fg.get("fato_gerador_padronizado") or "").strip()
+                        if padrao and " - " in padrao:
+                            parts = padrao.split(" - ", 1)
+                            return (parts[0].strip()[:80], parts[1].strip()[:120])
+                        if padrao:
+                            return (padrao[:80], "")
+                    titulo = (a.titulo_extraido or "Sem título")[:80]
+                    return (titulo, "")
+                # Excluir artigos sem fato gerador válido (evitar clusters "N/A - N/A"); marcar como erro para não reentrar
+                lote_valido = []
+                for art in lote_artigos:
+                    ent_alvo, acao_mat = _entidade_acao(art)
+                    titulo_item = (art.titulo_extraido or gerar_titulo_fallback_curto(art.texto_processado or art.texto_bruto or "") or "Sem título")[:120]
+                    ent_final = ent_alvo or "N/A"
+                    acao_final = acao_mat or titulo_item or "N/A"
+                    if ent_final == "N/A" or acao_final == "N/A" or (not (ent_alvo and ent_alvo.strip()) and not (acao_mat or titulo_item)):
+                        metadados_art = dict(art.metadados or {})
+                        metadados_art["fato_gerador_erro"] = True
+                        art.metadados = metadados_art
+                        update_artigo_status(db, art.id, "erro")
+                        db.commit()
+                        if num_lote == 1:
+                            print(f"  ⚠️ Artigo ID {art.id} excluído do lote (sem fato gerador válido); marcado como erro.")
+                        continue
+                    lote_valido.append(art)
+                if not lote_valido:
+                    print(f"  ⚠️ Lote {rotulo} {num_lote}: todos os artigos sem fato gerador válido; pulando.")
+                    continue
+                lote_artigos = lote_valido
                 for i, artigo in enumerate(lote_artigos):
-                    # O 'id' aqui é relativo ao lote, para o prompt.
+                    ent_alvo, acao_mat = _entidade_acao(artigo)
                     titulo_item = (artigo.titulo_extraido or gerar_titulo_fallback_curto(artigo.texto_processado or artigo.texto_bruto or "")) or "Sem título"
-                    trecho_item = artigo.texto_processado or ""
-                    if len(trecho_item) > MAX_TRECHO_CHARS_STAGE2:
-                        trecho_item = trecho_item[:MAX_TRECHO_CHARS_STAGE2] + "..."
                     noticia_data = {
                         "id": i,
-                        "titulo": titulo_item,
-                        "jornal": artigo.jornal or "Fonte desconhecida",
-                        "trecho": trecho_item
+                        "entidade_alvo": ent_alvo or "N/A",
+                        "acao_material": acao_mat or titulo_item[:120],
+                        "jornal": normalizar_jornal(artigo.jornal) or "N/A",
                     }
                     noticias_lote_para_prompt.append(noticia_data)
                     mapa_id_lote_para_artigo[i] = artigo  # Mapeia o ID do lote para o objeto artigo completo
@@ -2076,9 +2251,12 @@ IMPORTANTE: Retorne APENAS o JSON válido para este lote.
 
         clusters_criados_total = 0
         artigos_agrupados_total = 0
-        c_nac, a_nac = _processar_lotes('NACIONAL', artigos_nacional)
-        clusters_criados_total += c_nac
-        artigos_agrupados_total += a_nac
+        c_f, a_f = _processar_lotes('BRASIL_FISICO', artigos_brasil_fisico)
+        clusters_criados_total += c_f
+        artigos_agrupados_total += a_f
+        c_o, a_o = _processar_lotes('BRASIL_ONLINE', artigos_brasil_online)
+        clusters_criados_total += c_o
+        artigos_agrupados_total += a_o
         c_int, a_int = _processar_lotes('INTERNACIONAL', artigos_internacional)
         clusters_criados_total += c_int
         artigos_agrupados_total += a_int
@@ -2443,7 +2621,60 @@ def processar_artigo_sem_cluster(db: Session, id_artigo: int, client) -> bool:
                       f"Erro de validação Pydantic do artigo {id_artigo}: {e}")
             update_artigo_status(db, id_artigo, 'erro')
             return False
-        
+
+        # ETAPA 3.5: Extração de fato gerador (contrato estruturado: entidade_alvo + acao_material)
+        fato_gerador_ok = False
+        existing_fato = (metadados or {}).get("fato_gerador") if isinstance(metadados, dict) else None
+        if existing_fato and isinstance(existing_fato, dict):
+            # Aceita tanto novo formato (entidade_alvo, acao_material) quanto antigo (fato_gerador_padronizado)
+            if (existing_fato.get("entidade_alvo") and existing_fato.get("acao_material")) or existing_fato.get("fato_gerador_padronizado"):
+                fato_gerador_ok = True
+        if not fato_gerador_ok:
+            from backend.prompts import PROMPT_EXTRACAO_FATO_GERADOR_V1
+            from backend.models import FatoGeradorContract
+            trecho = (noticia_validada.get("texto_completo") or "")[:2000]
+            payload_fato = f"Título: {noticia_validada.get('titulo', '')}\n\nTrecho:\n{trecho}"
+            prompt_fato = PROMPT_EXTRACAO_FATO_GERADOR_V1.strip() + "\n\n" + payload_fato
+            try:
+                resp_fato = client.generate_content(
+                    prompt_fato,
+                    generation_config={"temperature": 0.1, "max_output_tokens": 512}
+                )
+                text_fato = (resp_fato.text or "").strip()
+                status_json, raw_json = extrair_json_da_resposta(text_fato)
+                if status_json.startswith("SUCESSO") and raw_json:
+                    obj = raw_json[0] if isinstance(raw_json, list) and raw_json else raw_json
+                    if isinstance(obj, dict):
+                        # Novo formato: entidade_alvo, acao_material, valor_financeiro
+                        ent = (obj.get("entidade_alvo") or "").strip() or (obj.get("entidade_primaria") or "").strip()
+                        acao = (obj.get("acao_material") or "").strip() or (obj.get("verbo_acao_financeira") or "").strip()
+                        val = (obj.get("valor_financeiro") or obj.get("valor_envolvido") or "N/A").strip() or "N/A"
+                        if ent and acao:
+                            contract = FatoGeradorContract(
+                                entidade_alvo=ent[:80],
+                                acao_material=acao[:120],
+                                valor_financeiro=val[:80] if val != "N/A" else "N/A",
+                            )
+                            metadados_novo = dict(artigo.metadados or {})
+                            dump = contract.model_dump()
+                            dump["fato_gerador_padronizado"] = dump.get("fato_gerador_padronizado") or f"{contract.entidade_alvo} - {contract.acao_material}"[:200]
+                            metadados_novo["fato_gerador"] = dump
+                            artigo.metadados = metadados_novo
+                            db.commit()
+                            fato_gerador_ok = True
+            except Exception as e_fato:
+                create_log(db, "WARNING", "processor", f"Extração fato gerador artigo {id_artigo}: {e_fato}")
+            if not fato_gerador_ok:
+                # Sem fallback fraco: artigos sem fato gerador extraído não entram na Etapa 2 (evitar clusters N/A - N/A)
+                metadados_novo = dict(artigo.metadados or {})
+                metadados_novo["fato_gerador_erro"] = True
+                artigo.metadados = metadados_novo
+                db.commit()
+                print(f"❌ Artigo {id_artigo}: extração de fato gerador falhou; marcado como erro (não entra na Etapa 2)")
+                create_log(db, "ERROR", "processor", f"Extração fato gerador falhou - {id_artigo}")
+                update_artigo_status(db, id_artigo, "erro")
+                return False
+
         # ETAPA 4: Gerar embedding
         from backend.processing import gerar_embedding
         texto_para_embedding = f"{noticia_validada['titulo']} {noticia_validada['texto_completo']}"
@@ -2567,10 +2798,11 @@ def main():
     print("=" * 60)
     
     # Configuração
-    # Le flags simples via args: --stage 1|2|3|4|all ; --modo incremental|lote ; --limite N
+    # Le flags: --stage 1|2|3|4|all ; --modo incremental|lote ; --limite N ; --day YYYY-MM-DD
     limite = 999
     modo_incremental = True
     stage = 'all'
+    day_str: Optional[str] = None
     args = sys.argv[1:]
     for i, arg in enumerate(args):
         if arg == '--stage' and i + 1 < len(args):
@@ -2582,10 +2814,14 @@ def main():
                 limite = int(args[i + 1])
             except Exception:
                 pass
+        if arg == '--day' and i + 1 < len(args):
+            day_str = (args[i + 1] or "").strip() or None
     
     print(f"📊 Limite de artigos: {limite}")
     print(f"🎯 Modo: {'Incremental' if modo_incremental else 'Em Lote'}")
     print(f"🧭 Stage: {stage}")
+    if day_str:
+        print(f"📅 Filtro data: {day_str}")
     
     # Verifica configuração inicial
     print(f"🔧 GEMINI_API_KEY configurada: {'Sim' if os.getenv('GEMINI_API_KEY') else 'Não'}")
@@ -2595,8 +2831,8 @@ def main():
     sucesso = True
     if stage in ('1', 'all'):
         if modo_incremental:
-            print(f"🎯 Modo INCREMENTAL: processar_artigos_pendentes(limite={limite})")
-            sucesso = processar_artigos_pendentes(limite)
+            print(f"🎯 Modo INCREMENTAL: processar_artigos_pendentes(limite={limite}, day_str={day_str})")
+            sucesso = processar_artigos_pendentes(limite=limite, day_str=day_str)
         else:
             print(f"🎯 Modo EM LOTE: processar_artigos_em_lote(limite={limite})")
             sucesso = processar_artigos_em_lote(limite)

@@ -159,9 +159,9 @@ if __name__ == "__main__":
         
         # Cenário 1: Estratégia Atual (usando o modelo antigo para tudo)
         cenario_atual = {
-            "agrupamento": "gemini-2.0-flash",
-            "classificacao": "gemini-2.0-flash",
-            "resumo": "gemini-2.0-flash"
+            "agrupamento": "gemini-2.5-flash",
+            "classificacao": "gemini-2.5-flash",
+            "resumo": "gemini-2.5-flash"
         }
         
         # Cenário 2: Estratégia Proposta (multi-modelo otimizado)
@@ -192,4 +192,3 @@ if __name__ == "__main__":
             print(f"Custo Cenário Proposto: ${analise_proposta['custo_total']:.6f}")
             print(f"Economia Estimada     : ${economia:.6f} ({reducao_percentual:.2f}% de redução)")
             print("="*80)
-

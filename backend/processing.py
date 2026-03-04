@@ -22,6 +22,8 @@ try:
         corrigir_prioridade_invalida,
         migrar_noticia_cache_legado,
         get_date_brasil_str,
+        normalizar_jornal,
+        FONTES_FLASHES,
     )
     from .crud import (
         get_artigo_by_id, update_artigo_processado, update_artigo_status,
@@ -33,7 +35,7 @@ except ImportError:
     # Fallback para import absoluto quando executado fora do pacote
     from backend.models import Noticia
     from backend.prompts import PROMPT_EXTRACAO_PERMISSIVO_V8, PROMPT_DECISAO_CLUSTER_DETALHADO_V1, PROMPT_RESUMO_FINAL_V3
-    from backend.utils import extrair_json_da_resposta, corrigir_tag_invalida, corrigir_prioridade_invalida, migrar_noticia_cache_legado, get_date_brasil_str
+    from backend.utils import extrair_json_da_resposta, corrigir_tag_invalida, corrigir_prioridade_invalida, migrar_noticia_cache_legado, get_date_brasil_str, normalizar_jornal, FONTES_FLASHES
     from backend.crud import (
         get_artigo_by_id, update_artigo_processado, update_artigo_status,
         get_active_clusters_today, create_cluster, associate_artigo_to_cluster,
@@ -419,25 +421,54 @@ def _consultar_llm_para_clusterizacao(
 ) -> str:
     """
     Consulta o LLM para decidir se um artigo pertence a um cluster existente.
-    
-    Args:
-        db: Sessão do banco de dados
-        artigo_analisado: Dados do artigo analisado
-        cluster_existente: Cluster existente para comparação
-        client: Cliente do Gemini
-        
-    Returns:
-        Resposta do LLM (sim/não)
+    Usa fato_gerador e referente do cluster (Task 7); aviso se mesmo jornal.
     """
     try:
-        # Monta o prompt para decisão de clusterização
+        def _fg_artigo(a) -> str:
+            m = getattr(a, "metadados", None) or {}
+            fg = m.get("fato_gerador") if isinstance(m, dict) else None
+            if isinstance(fg, dict) and fg.get("fato_gerador_padronizado"):
+                return (fg.get("fato_gerador_padronizado") or "").strip()
+            return (getattr(a, "titulo_extraido", None) or "Sem título")[:120]
+
+        artigos_cluster = get_artigos_by_cluster(db, cluster_existente.id)
+        jornais_no_cluster = list({normalizar_jornal(getattr(a, "jornal", None)) for a in artigos_cluster if normalizar_jornal(getattr(a, "jornal", None))})
+        # Referente por qualidade (fato_gerador length >= 20)
+        MIN_LEN = 20
+        artigos_ord = sorted(artigos_cluster, key=lambda a: (getattr(a, "created_at", None) is None, getattr(a, "created_at", None) or datetime.min))
+        referente_artigo = None
+        for a in artigos_ord:
+            if len(_fg_artigo(a)) >= MIN_LEN:
+                referente_artigo = a
+                break
+        if not referente_artigo and artigos_ord:
+            referente_artigo = max(artigos_ord, key=lambda a: len(_fg_artigo(a)))
+        fato_gerador_referente = _fg_artigo(referente_artigo) if referente_artigo else (cluster_existente.titulo_cluster or "Sem tema")
+
+        jornal_norm = artigo_analisado.get("jornal_normalizado") or normalizar_jornal(artigo_analisado.get("jornal"))
+        aviso = ""
+        if jornal_norm and jornal_norm in jornais_no_cluster:
+            if jornal_norm in (FONTES_FLASHES or []):
+                aviso = "\n**CUIDADO (fonte flash):** Esta notícia é do mesmo jornal que já está no cluster. Seja MUITO rigoroso: só responda SIM se for exatamente o mesmo fato (entidade + ação).\n"
+            else:
+                aviso = "\n**CUIDADO (mesmo jornal):** Esta notícia é do mesmo jornal que já está no cluster. Só responda SIM se for claramente o mesmo evento ou consequência imediata.\n"
+
+        nova_noticia = {
+            "titulo": artigo_analisado.get("titulo", ""),
+            "jornal": artigo_analisado.get("jornal", ""),
+            "fato_gerador": artigo_analisado.get("fato_gerador", (artigo_analisado.get("titulo") or "Sem título")[:120]),
+            "trecho": (artigo_analisado.get("texto_completo") or "")[:800],
+        }
+        cluster_info = {
+            "titulo_cluster": cluster_existente.titulo_cluster,
+            "fato_gerador_referente": fato_gerador_referente,
+            "jornais_no_cluster": jornais_no_cluster,
+            "tag": cluster_existente.tag,
+        }
         prompt = PROMPT_DECISAO_CLUSTER_DETALHADO_V1.format(
-            titulo_artigo=artigo_analisado['titulo'],
-            jornal_artigo=artigo_analisado['jornal'],
-            texto_artigo=artigo_analisado['texto_completo'][:1000],  # Primeiros 1000 chars
-            titulo_cluster=cluster_existente.titulo_cluster,
-            resumo_cluster=cluster_existente.resumo_cluster or "Sem resumo",
-            tag_cluster=cluster_existente.tag
+            NOVA_NOTICIA=json.dumps(nova_noticia, ensure_ascii=False, indent=2),
+            CLUSTER_EXISTENTE=json.dumps(cluster_info, ensure_ascii=False, indent=2),
+            AVISO_MESMO_JORNAL=aviso,
         )
         
         print(f"    🤖 Consultando LLM para clusterização...")
@@ -594,9 +625,16 @@ def processar_artigo_pipeline(db: Session, id_artigo: int, client) -> bool:
         try:
             print(f"    🔍 Validando dados com Pydantic...")
             print(f"    📋 Dados para validação: {noticia_data}")
-            
+
             noticia_obj = Noticia(**noticia_data)
             noticia_validada = noticia_obj.model_dump()
+            # Fato gerador e jornal normalizado para find_or_create_cluster (Task 7)
+            fg = (artigo.metadados or {}).get("fato_gerador")
+            if isinstance(fg, dict) and fg.get("fato_gerador_padronizado"):
+                noticia_validada["fato_gerador"] = (fg.get("fato_gerador_padronizado") or "").strip()
+            else:
+                noticia_validada["fato_gerador"] = (noticia_validada.get("titulo") or "Sem título")[:120]
+            noticia_validada["jornal_normalizado"] = normalizar_jornal(noticia_validada.get("jornal") or "")
             print(f"    ✅ Validação Pydantic bem-sucedida")
         except Exception as e:
             print(f"    ❌ Erro de validação Pydantic: {e}")

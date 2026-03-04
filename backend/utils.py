@@ -7,7 +7,8 @@ import re
 import os
 import json
 import hashlib
-from typing import Any, Dict, Optional
+import unicodedata
+from typing import Any, Dict, List, Optional
 import PyPDF2
 from datetime import datetime, timezone, timedelta
 
@@ -464,6 +465,54 @@ def titulo_e_generico(titulo: Optional[str]) -> bool:
     return any(t.startswith(p) for p in padroes)
 
 
+# Fontes que emitem updates fragmentados (flashes). Para estas, a heurística "mesmo jornal"
+# aplica-se com prompt MAIS RIGOROSO (não isenção): só agrupar se Entidade e Ação forem
+# exatamente continuação do fato anterior. Usado em agrupamento (docs/GUIA_IMPLEMENTACAO_AGRUPAMENTO_PRIORIZACAO.md).
+FONTES_FLASHES: List[str] = [
+    "valor economico",
+    "valor pro",
+    "valor economico pro",
+    "bloomberg",
+    "reuters",
+]
+
+
+def normalizar_jornal(nome: Optional[str]) -> str:
+    """
+    Normaliza o nome do jornal para chave canônica (lowercase, sem acentos, aliases mapeados).
+    Usado pela heurística da fonte no agrupamento: mesmo jornal no cluster exige critério mais rigoroso.
+    """
+    if not nome or not isinstance(nome, str):
+        return ""
+    s = nome.strip()
+    if not s:
+        return ""
+    # Remove acentos (NFKD + remove combining chars)
+    s = "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
+    s = s.lower()
+    # Normaliza separadores e espaços
+    s = re.sub(r"[^a-z0-9]+", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    # Aliases para chave canônica (evita "o estado de s. paulo" vs "estadao" diferentes)
+    ALIASES_JORNAL = {
+        "o estado de s paulo": "estadao",
+        "estado de s paulo": "estadao",
+        "estadao": "estadao",
+        "estadão": "estadao",
+        "valor economico": "valor economico",
+        "valor": "valor economico",
+        "valor pro": "valor economico",
+        "valor economico pro": "valor economico",
+        "brazil journal": "brazil journal",
+        "folha de s paulo": "folha",
+        "folha": "folha",
+        "exame": "exame",
+        "infomoney": "infomoney",
+        "investing": "investing",
+    }
+    return ALIASES_JORNAL.get(s, s)
+
+
 def inferir_tipo_fonte_por_jornal(nome_jornal: Optional[str]) -> str:
     """
     Inferência heurística de tipo de fonte ('nacional' ou 'internacional') a partir do nome do jornal.
@@ -535,7 +584,7 @@ def get_gemini_model():
     
     genai.configure(api_key=api_key)
     # Usa o modelo Pro (mais capaz) especificamente para o chat do modal
-    return genai.GenerativeModel('gemini-2.0-flash')
+    return genai.GenerativeModel('gemini-2.5-flash')
 
 # ==============================================================================
 # UTILITÁRIOS DE DATA E FUSO HORÁRIO (GMT-3)
