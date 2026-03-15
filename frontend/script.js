@@ -493,6 +493,7 @@ function setupEventListeners() {
         await carregarContadoresSimples(currentDate);
         await carregarFeed();
         await carregarSourcersDisponiveis();
+        carregarResumoDoDia();
     });
 
     // Abas Brasil/Internacional
@@ -848,9 +849,10 @@ async function navegarData(dias) {
     console.log('📅 Nova data selecionada:', currentDate);
     atualizarDataTexto();
 
-    // Recarrega contadores para a nova data
+    // Recarrega contadores, feed E resumo para a nova data
     await carregarContadoresSimples(currentDate);
     carregarFeed();
+    carregarResumoDoDia();
 }
 
 // Função removida - agora usa carregamento progressivo por prioridade
@@ -4348,10 +4350,12 @@ async function carregarResumoDoDia() {
     const content = document.getElementById('summary-content');
     if (!hero) return;
 
+    const dataParam = currentDate || getTodayDate();
+
     try {
-        const resp = await fetchAuth(`${API_BASE}/api/resumo/hoje`);
+        const resp = await fetchAuth(`${API_BASE}/api/resumo/hoje?data=${dataParam}`);
         if (!resp.ok) {
-            content.innerHTML = '<p style="color:#6b7280;font-size:.9rem;margin:0;">Nenhum resumo disponivel hoje. Clique em "Atualizar Resumo" ou aguarde o processamento automatico.</p>';
+            content.innerHTML = '<p style="color:#6b7280;font-size:.9rem;margin:0;">Nenhum resumo disponivel. Clique em "Atualizar Resumo" para gerar.</p>';
             return;
         }
         const data = await resp.json();
@@ -4378,7 +4382,7 @@ async function carregarResumoDoDia() {
             }
         } else {
             content.innerHTML = '<p style="color:#6b7280;font-size:.9rem;margin:0;">' +
-                (data.message || 'Nenhum resumo disponivel ainda. Clique em "Atualizar Resumo" ou aguarde o processamento automatico.') + '</p>';
+                (data.message || 'Nenhum resumo disponivel ainda. Clique em "Atualizar Resumo" para gerar.') + '</p>';
         }
     } catch {
         content.innerHTML = '<p style="color:#ef4444;font-size:.9rem;margin:0;">Erro ao carregar resumo.</p>';
@@ -4391,15 +4395,21 @@ async function gerarResumoDoDia() {
     if (loading) loading.style.display = 'flex';
     if (btn) btn.disabled = true;
 
+    const dataParam = currentDate || getTodayDate();
+
     try {
-        const resp = await fetchAuth(`${API_BASE}/api/resumo/gerar`, { method: 'POST' });
+        const resp = await fetchAuth(`${API_BASE}/api/resumo/gerar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data: dataParam }),
+        });
         if (resp.ok) {
             // Poll ate o resumo estar pronto (max 120s)
             let tries = 0;
             const poll = async () => {
                 if (tries++ > 24) { if (loading) loading.style.display = 'none'; if (btn) btn.disabled = false; return; }
                 await new Promise(r => setTimeout(r, 5000));
-                const check = await fetchAuth(`${API_BASE}/api/resumo/hoje`);
+                const check = await fetchAuth(`${API_BASE}/api/resumo/hoje?data=${dataParam}`);
                 if (check.ok) {
                     const d = await check.json();
                     if (d.texto_gerado) { if (loading) loading.style.display = 'none'; if (btn) btn.disabled = false; carregarResumoDoDia(); return; }

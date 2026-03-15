@@ -593,40 +593,69 @@ async def api_copy_template(template_id: int, db: Session = Depends(get_db),
 # ==============================================================================
 
 @app.get("/api/resumo/hoje")
-async def api_get_resumo_hoje(db: Session = Depends(get_db),
+async def api_get_resumo_hoje(data: Optional[str] = None,
+                               db: Session = Depends(get_db),
                                current_user: Optional[Dict] = Depends(get_current_user)):
-    """Retorna o resumo do dia do usuario logado (ou o resumo global se anonimo)."""
-    today = get_date_brasil()
+    """Retorna o resumo do dia do usuario logado para a data informada (padrao: hoje).
+
+    ?data=YYYY-MM-DD permite consultar resumos de dias anteriores.
+    """
+    if data:
+        try:
+            target = datetime.strptime(data, "%Y-%m-%d").date()
+        except ValueError:
+            target = get_date_brasil()
+    else:
+        target = get_date_brasil()
+
     resumo = None
     if current_user:
-        resumo = get_resumo_usuario(db, current_user["id"], today)
+        resumo = get_resumo_usuario(db, current_user["id"], target)
     if not resumo:
         try:
             from backend.database import ResumoUsuario
             resumo = db.query(ResumoUsuario).filter(
-                ResumoUsuario.data_referencia == today,
+                func.date(ResumoUsuario.data_referencia) == target,
                 ResumoUsuario.texto_gerado.isnot(None),
             ).order_by(ResumoUsuario.created_at.desc()).first()
         except Exception:
             db.rollback()
     if resumo:
         return {
-            "id": resumo.id, "data": resumo.data_referencia.isoformat() if resumo.data_referencia else today.isoformat(),
+            "id": resumo.id, "data": resumo.data_referencia.isoformat() if resumo.data_referencia else target.isoformat(),
             "texto_gerado": resumo.texto_gerado, "texto_whatsapp": resumo.texto_whatsapp,
             "clusters_escolhidos_ids": resumo.clusters_escolhidos_ids or [],
             "prompt_version": resumo.prompt_version, "metadados": resumo.metadados or {},
             "created_at": resumo.created_at.isoformat() if resumo.created_at else None,
         }
-    return {"data": today.isoformat(), "texto_gerado": None, "message": "Nenhum resumo gerado ainda hoje."}
+    return {"data": target.isoformat(), "texto_gerado": None, "message": f"Nenhum resumo gerado para {target.isoformat()}."}
+
+
+class GerarResumoPayload(BaseModel):
+    data: Optional[str] = None  # YYYY-MM-DD; None = hoje
 
 
 @app.post("/api/resumo/gerar")
-async def api_gerar_resumo(background_tasks: BackgroundTasks, db: Session = Depends(get_db),
+async def api_gerar_resumo(payload: GerarResumoPayload = GerarResumoPayload(),
+                            background_tasks: BackgroundTasks = None,
+                            db: Session = Depends(get_db),
                             current_user: Dict = Depends(require_auth)):
-    """Dispara geracao do resumo diario para o usuario logado (background task)."""
-    today = get_date_brasil()
-    background_tasks.add_task(_generate_user_summary, current_user["id"], today)
-    return {"status": "processing", "message": "Resumo sendo gerado. Consulte GET /api/resumo/hoje."}
+    """Dispara geracao do resumo diario para o usuario logado.
+
+    Aceita { "data": "YYYY-MM-DD" } no body para gerar resumo de datas anteriores.
+    Sem body (ou data: null), gera para hoje.
+    """
+    if payload.data:
+        try:
+            target = datetime.strptime(payload.data, "%Y-%m-%d").date()
+        except ValueError:
+            target = get_date_brasil()
+    else:
+        target = get_date_brasil()
+
+    background_tasks.add_task(_generate_user_summary, current_user["id"], target)
+    return {"status": "processing", "data": target.isoformat(),
+            "message": f"Resumo sendo gerado para {target.isoformat()}. Consulte GET /api/resumo/hoje?data={target.isoformat()}."}
 
 
 def _generate_user_summary(user_id: int, target_date):
