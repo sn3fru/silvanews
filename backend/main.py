@@ -202,13 +202,24 @@ async def serve_root_index():
         return HTMLResponse(content=f.read(), status_code=200)
 
 @app.get("/api/health")
-async def health_check():
-    """Endpoint simples de health check para verificar se o servidor está funcionando."""
-    return {
-        "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
-        "service": "btg-alphafeed-backend"
-    }
+async def health_check(db: Session = Depends(get_db)):
+    """Health check com diagnostico do banco."""
+    diag = {"status": "healthy", "timestamp": datetime.utcnow().isoformat(), "service": "btg-alphafeed-backend"}
+    try:
+        from sqlalchemy import text
+        tables = [r[0] for r in db.execute(text(
+            "SELECT tablename FROM pg_tables WHERE schemaname='public'"
+        )).fetchall()]
+        diag["tables_count"] = len(tables)
+        diag["has_usuarios"] = "usuarios" in tables
+        diag["has_preferencias"] = "preferencias_usuario" in tables
+        if "usuarios" in tables:
+            count = db.execute(text("SELECT count(*) FROM usuarios")).scalar()
+            diag["usuarios_count"] = count
+    except Exception as e:
+        diag["db_error"] = str(e)
+        db.rollback()
+    return diag
 
 # Removido catch-all para não interferir nas rotas /api
 
@@ -314,39 +325,54 @@ async def require_admin(
 async def api_login(req: LoginRequest, db: Session = Depends(get_db)):
     """Login com email+senha. Retorna JWT token."""
     email = req.email.strip().lower()
-    if email == "admin" or "@" not in email:
-        email_lookup = "admin@enforcegroup.com.br" if email == "admin" else email
-    else:
-        email_lookup = email
+    is_admin_attempt = (email == "admin" or email.startswith("admin@"))
+
+    # Garante que tabelas existem
+    try:
+        from backend.database import create_tables
+        create_tables()
+    except Exception:
+        pass
 
     user = None
-    try:
-        user = get_usuario_by_email(db, email_lookup)
-    except Exception:
-        db.rollback()
+    if is_admin_attempt:
+        for candidate in ["admin@enforcegroup.com.br", "admin@enforce.com.br"]:
+            try:
+                user = get_usuario_by_email(db, candidate)
+                if user:
+                    break
+            except Exception:
+                db.rollback()
+    else:
+        email_lookup = email
+        try:
+            user = get_usuario_by_email(db, email_lookup)
+        except Exception:
+            db.rollback()
 
-    if email_lookup == "admin@enforcegroup.com.br" and not user:
+    if is_admin_attempt and not user:
         try:
             senha_hash = _hash_password(req.senha)
             user = create_usuario(db, "Administrador", "admin@enforcegroup.com.br", senha_hash, "admin")
-            print(f"[Auth] Usuario admin auto-criado em producao (id={user.id})")
+            print(f"[Auth] Admin auto-criado (id={user.id})")
         except Exception as e:
             db.rollback()
             print(f"[Auth] Falha ao auto-criar admin: {e}")
 
     if not user or not user.ativo:
-        raise HTTPException(status_code=401, detail="Credenciais invalidas")
+        raise HTTPException(status_code=401, detail="Credenciais invalidas. Verifique email e senha.")
+
     if not _verify_password(req.senha, user.senha_hash):
-        if email_lookup == "admin@enforcegroup.com.br":
+        if is_admin_attempt:
             try:
                 user.senha_hash = _hash_password(req.senha)
                 db.commit()
-                print("[Auth] Senha do admin resetada.")
             except Exception:
                 db.rollback()
                 raise HTTPException(status_code=401, detail="Credenciais invalidas")
         else:
             raise HTTPException(status_code=401, detail="Credenciais invalidas")
+
     token = _create_token(user.id, user.email, user.role)
     return {
         "access_token": token,
@@ -366,15 +392,24 @@ _ALLOWED_DOMAINS = {"enforcegroup.com.br", "btgpactual.com", "btg.com", "btg.com
 
 @app.post("/api/auth/signup")
 async def api_self_register(req: UsuarioCreate, db: Session = Depends(get_db)):
-    """Auto-cadastro restrito a dominios permitidos (@enforce, @btg)."""
+    """Auto-cadastro restrito a dominios permitidos (@enforcegroup, @btg)."""
     email = req.email.strip().lower()
     domain = email.split("@")[-1] if "@" in email else ""
     if domain not in _ALLOWED_DOMAINS:
         raise HTTPException(
             status_code=403,
-            detail=f"Cadastro permitido apenas para emails @enforce.com.br ou @btg. Dominio '{domain}' nao autorizado."
+            detail=f"Cadastro permitido apenas para @enforcegroup.com.br ou @btg. Dominio '{domain}' nao autorizado."
         )
-    existing = get_usuario_by_email(db, email)
+    try:
+        existing = get_usuario_by_email(db, email)
+    except Exception:
+        db.rollback()
+        try:
+            from backend.database import create_tables
+            create_tables()
+            existing = get_usuario_by_email(db, email)
+        except Exception as e2:
+            raise HTTPException(status_code=500, detail=f"Banco de dados indisponivel: {e2}")
     if existing:
         raise HTTPException(status_code=409, detail="Email ja cadastrado. Use o login.")
     senha_hash = _hash_password(req.senha)

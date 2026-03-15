@@ -746,22 +746,18 @@ def init_database():
         # Verifica se já existem configurações de coleta
         existing_configs = db.query(ConfiguracaoColeta).count()
         
-        # Seed de usuário admin se não existir
-        admin_exists = db.query(Usuario).filter(Usuario.email == "admin@enforcegroup.com.br").first()
-        if not admin_exists:
-            old_admin = db.query(Usuario).filter(Usuario.email == "admin@enforce.com.br").first()
-            if old_admin:
-                old_admin.email = "admin@enforcegroup.com.br"
+        # Seed de usuario admin (login endpoint handles auto-creation as fallback)
+        try:
+            admin_exists = db.query(Usuario).filter(
+                Usuario.email.in_(["admin@enforcegroup.com.br", "admin@enforce.com.br"])
+            ).first()
+            if admin_exists and admin_exists.email == "admin@enforce.com.br":
+                admin_exists.email = "admin@enforcegroup.com.br"
                 db.commit()
                 print("✅ Email do admin atualizado para admin@enforcegroup.com.br")
-            else:
-                print("📝 Criando usuario admin inicial...")
-                try:
-                    from passlib.hash import bcrypt
-                    senha = bcrypt.hash(os.getenv("ADMIN_PASSWORD", "admin"))
-                except ImportError:
-                    import hashlib
-                    senha = hashlib.sha256(os.getenv("ADMIN_PASSWORD", "admin").encode()).hexdigest()
+            elif not admin_exists:
+                import hashlib
+                senha = hashlib.sha256(os.getenv("ADMIN_PASSWORD", "admin").encode()).hexdigest()
                 admin_user = Usuario(
                     nome="Administrador",
                     email="admin@enforcegroup.com.br",
@@ -772,6 +768,9 @@ def init_database():
                 db.add(admin_user)
                 db.commit()
                 print("✅ Usuario admin criado (admin@enforcegroup.com.br)")
+        except Exception as e:
+            db.rollback()
+            print(f"⚠️ Seed admin falhou (login vai auto-criar): {e}")
 
         if existing_configs == 0:
             print("📝 Criando configurações iniciais de coleta...")
