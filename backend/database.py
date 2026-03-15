@@ -747,25 +747,31 @@ def init_database():
         existing_configs = db.query(ConfiguracaoColeta).count()
         
         # Seed de usuário admin se não existir
-        admin_exists = db.query(Usuario).filter(Usuario.email == "admin@enforce.com.br").first()
+        admin_exists = db.query(Usuario).filter(Usuario.email == "admin@enforcegroup.com.br").first()
         if not admin_exists:
-            print("📝 Criando usuário admin inicial...")
-            try:
-                from passlib.hash import bcrypt
-                senha = bcrypt.hash(os.getenv("ADMIN_PASSWORD", "admin"))
-            except ImportError:
-                import hashlib
-                senha = hashlib.sha256(os.getenv("ADMIN_PASSWORD", "admin").encode()).hexdigest()
-            admin_user = Usuario(
-                nome="Administrador",
-                email="admin@enforce.com.br",
-                senha_hash=senha,
-                role="admin",
-                ativo=True,
-            )
-            db.add(admin_user)
-            db.commit()
-            print("✅ Usuário admin criado (admin@enforce.com.br)")
+            old_admin = db.query(Usuario).filter(Usuario.email == "admin@enforce.com.br").first()
+            if old_admin:
+                old_admin.email = "admin@enforcegroup.com.br"
+                db.commit()
+                print("✅ Email do admin atualizado para admin@enforcegroup.com.br")
+            else:
+                print("📝 Criando usuario admin inicial...")
+                try:
+                    from passlib.hash import bcrypt
+                    senha = bcrypt.hash(os.getenv("ADMIN_PASSWORD", "admin"))
+                except ImportError:
+                    import hashlib
+                    senha = hashlib.sha256(os.getenv("ADMIN_PASSWORD", "admin").encode()).hexdigest()
+                admin_user = Usuario(
+                    nome="Administrador",
+                    email="admin@enforcegroup.com.br",
+                    senha_hash=senha,
+                    role="admin",
+                    ativo=True,
+                )
+                db.add(admin_user)
+                db.commit()
+                print("✅ Usuario admin criado (admin@enforcegroup.com.br)")
 
         if existing_configs == 0:
             print("📝 Criando configurações iniciais de coleta...")

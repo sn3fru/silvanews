@@ -315,7 +315,7 @@ async def api_login(req: LoginRequest, db: Session = Depends(get_db)):
     """Login com email+senha. Retorna JWT token."""
     email = req.email.strip().lower()
     if email == "admin" or "@" not in email:
-        email_lookup = "admin@enforce.com.br" if email == "admin" else email
+        email_lookup = "admin@enforcegroup.com.br" if email == "admin" else email
     else:
         email_lookup = email
 
@@ -325,10 +325,10 @@ async def api_login(req: LoginRequest, db: Session = Depends(get_db)):
     except Exception:
         db.rollback()
 
-    if email_lookup == "admin@enforce.com.br" and not user:
+    if email_lookup == "admin@enforcegroup.com.br" and not user:
         try:
             senha_hash = _hash_password(req.senha)
-            user = create_usuario(db, "Administrador", "admin@enforce.com.br", senha_hash, "admin")
+            user = create_usuario(db, "Administrador", "admin@enforcegroup.com.br", senha_hash, "admin")
             print(f"[Auth] Usuario admin auto-criado em producao (id={user.id})")
         except Exception as e:
             db.rollback()
@@ -337,7 +337,7 @@ async def api_login(req: LoginRequest, db: Session = Depends(get_db)):
     if not user or not user.ativo:
         raise HTTPException(status_code=401, detail="Credenciais invalidas")
     if not _verify_password(req.senha, user.senha_hash):
-        if email_lookup == "admin@enforce.com.br":
+        if email_lookup == "admin@enforcegroup.com.br":
             try:
                 user.senha_hash = _hash_password(req.senha)
                 db.commit()
@@ -359,6 +359,32 @@ async def api_login(req: LoginRequest, db: Session = Depends(get_db)):
 async def api_get_me(current_user: Dict = Depends(require_auth)):
     """Retorna dados do usuario logado."""
     return current_user
+
+
+_ALLOWED_DOMAINS = {"enforcegroup.com.br", "btgpactual.com", "btg.com", "btg.com.br"}
+
+
+@app.post("/api/auth/signup")
+async def api_self_register(req: UsuarioCreate, db: Session = Depends(get_db)):
+    """Auto-cadastro restrito a dominios permitidos (@enforce, @btg)."""
+    email = req.email.strip().lower()
+    domain = email.split("@")[-1] if "@" in email else ""
+    if domain not in _ALLOWED_DOMAINS:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Cadastro permitido apenas para emails @enforce.com.br ou @btg. Dominio '{domain}' nao autorizado."
+        )
+    existing = get_usuario_by_email(db, email)
+    if existing:
+        raise HTTPException(status_code=409, detail="Email ja cadastrado. Use o login.")
+    senha_hash = _hash_password(req.senha)
+    user = create_usuario(db, req.nome, email, senha_hash, "user")
+    token = _create_token(user.id, user.email, user.role)
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {"id": user.id, "nome": user.nome, "email": user.email, "role": user.role}
+    }
 
 
 @app.post("/api/auth/register")
