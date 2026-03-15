@@ -355,7 +355,7 @@ async function carregarClustersPorPrioridade(date, token) {
         updateLoadingProgress('P1 (Crítico)', 10);
         console.log('📊 Carregando P1 (todas as páginas)...');
 
-        let metricas = { coletadas: 0, eventos: 0, fontes: 0 };
+        let metricas = null;
         const p1 = await fetchTodasPaginasPorPrioridade(
             date,
             'P1_CRITICO',
@@ -365,7 +365,7 @@ async function carregarClustersPorPrioridade(date, token) {
         if (token !== feedLoadToken) return;
         clustersP1 = p1.itens;
         clustersCarregados = [...clustersP1];
-        if (p1.metricas) {
+        if (p1.metricas && (p1.metricas.coletadas || p1.metricas.eventos)) {
             metricas = p1.metricas;
             if (token !== feedLoadToken) return;
             atualizarMetricas(metricas);
@@ -432,12 +432,8 @@ async function carregarClustersPorPrioridade(date, token) {
 
         console.log(`🎉 Carregamento completo: ${clustersCarregados.length} clusters`);
 
-        // Garante que as métricas sejam sempre atualizadas
-        if (!metricas || Object.keys(metricas).length === 0) {
-            console.warn('⚠️ Métricas vazias, definindo valores padrão');
-            metricas = { coletadas: 0, eventos: 0, fontes: 0 };
-            if (token !== feedLoadToken) return;
-            atualizarMetricas(metricas);
+        if (metricas) {
+            saveToCache(date, { clusters: clustersCarregados, p1: clustersP1, p2: clustersP2, p3: clustersP3, metricas });
         }
 
     } catch (error) {
@@ -4297,72 +4293,54 @@ function renderResumoHtml(text) {
 
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
-        if (!line) continue;
+        if (!line) { out.push('<div style="height:.3rem;"></div>'); continue; }
 
-        // Skip footer "Gerado pelo AlphaFeed"
         if (line.includes('Gerado pelo AlphaFeed')) continue;
-
-        // Old header "🚨 RESUMO DO DIA..." → skip (replaced by new format)
         if (line.match(/^🚨.*🚨$/) || line.startsWith('📅')) continue;
 
-        // New header: *Resumo do dia 15/03 — Special Situations*
-        const headerMatch = line.match(/^\*Resumo do dia(.+)\*$/);
-        if (headerMatch) {
-            out.push(`<div style="font-size:1rem;font-weight:700;color:#1e3a5f;margin:0 0 .5rem;padding-bottom:.4rem;border-bottom:2px solid #e5e7eb;">Resumo do dia${headerMatch[1]}</div>`);
+        // Header: *Resumo do dia 15/03 — Special Situations*
+        const hdr = line.match(/^\*(.+)\*$/);
+        if (hdr && line.includes('Resumo do dia')) {
+            out.push(`<div style="font-size:1rem;font-weight:700;color:#1e3a5f;margin:0 0 .4rem;padding-bottom:.3rem;border-bottom:1px solid #e5e7eb;">${hdr[1]}</div>`);
             continue;
         }
 
-        // TL;DR italic block: _Destaques: ..._
+        // TL;DR: _Destaques: ..._
         if (line.startsWith('_') && line.endsWith('_') && !line.startsWith('_Fontes') && !line.startsWith('_Fonte')) {
-            const inner = line.slice(1, -1);
-            out.push(`<div style="padding:.6rem .8rem;background:#f0f4ff;border-left:3px solid #3b82f6;border-radius:0 6px 6px 0;margin:0 0 .8rem;font-size:.87rem;color:#1e40af;line-height:1.5;">${inner}</div>`);
+            out.push(`<div style="font-size:.87rem;color:#475569;font-style:italic;margin:0 0 .5rem;line-height:1.5;">${line.slice(1, -1)}</div>`);
             continue;
         }
 
-        // Section header: emoji(s) + *TITLE* or emoji + TITLE (all caps or mixed)
-        const secMatch = line.match(/^(.{1,4})\s+\*([^*]+)\*\s*$/);
-        if (secMatch) {
-            out.push(`<div style="margin:.8rem 0 .3rem;padding:.45rem .7rem;background:linear-gradient(135deg,#1e3a5f,#334155);border-radius:5px;color:#fff;font-weight:600;font-size:.88rem;">${secMatch[1]} ${secMatch[2]}</div>`);
-            continue;
-        }
-        // Section header without asterisks (e.g. "📋 DESTAQUES GERAIS")
-        const secPlain = line.match(/^([\u{1F000}-\u{1FFFF}][\u{FE00}-\u{FE0F}]?\s+)([A-ZÀ-Ú\s&]{5,})$/u);
-        if (secPlain) {
-            out.push(`<div style="margin:.8rem 0 .3rem;padding:.45rem .7rem;background:linear-gradient(135deg,#1e3a5f,#334155);border-radius:5px;color:#fff;font-weight:600;font-size:.88rem;">${line}</div>`);
+        // Section: emoji + *TITLE*
+        const sec = line.match(/^(.{1,4})\s+\*([^*]+)\*\s*$/);
+        if (sec) {
+            out.push(`<div style="font-size:.92rem;font-weight:700;color:#1e3a5f;margin:.6rem 0 .25rem;padding-top:.25rem;border-top:1px solid #e5e7eb;">${sec[1]} ${sec[2]}</div>`);
             continue;
         }
 
-        // Item title: *emoji Title* OR just emoji + Title (not a bullet)
-        const itemBold = line.match(/^\*(.+)\*$/);
-        if (itemBold) {
-            out.push(`<div style="font-weight:700;font-size:.9rem;color:#111827;margin:.7rem 0 .15rem;">${itemBold[1]}</div>`);
-            continue;
-        }
-        // Item title without asterisks: starts with emoji, not a bullet, not a source
-        if (!line.startsWith('•') && !line.startsWith('_') && /^[\u{1F000}-\u{1FFFF}]/u.test(line) && !line.startsWith('📅') && !line.startsWith('📋')) {
-            out.push(`<div style="font-weight:700;font-size:.9rem;color:#111827;margin:.7rem 0 .15rem;">${line}</div>`);
+        // Item title: *emoji Titulo*
+        if (hdr) {
+            out.push(`<div style="font-weight:700;font-size:.9rem;color:#111827;margin:.5rem 0 .1rem;">${hdr[1]}</div>`);
             continue;
         }
 
-        // Bullet point: • text
+        // Bullet: • text (keep the bullet symbol, no background)
         if (line.startsWith('•')) {
-            const bullet = line.slice(1).trim();
-            out.push(`<div style="font-size:.87rem;color:#374151;line-height:1.55;margin:0 0 .15rem 0;padding:.3rem .6rem .3rem .9rem;border-left:2px solid #dbeafe;background:#fafbff;border-radius:0 4px 4px 0;">${bullet}</div>`);
+            out.push(`<div style="font-size:.87rem;color:#374151;line-height:1.55;margin:0 0 .1rem .2rem;">${line}</div>`);
             continue;
         }
 
-        // Source: _Fontes: ..._ or _Fonte: ..._
+        // Source: _Fontes: ..._
         if (line.startsWith('_Fontes:') || line.startsWith('_Fonte:')) {
-            const src = line.replace(/^_/, '').replace(/_$/, '');
-            out.push(`<div style="font-size:.73rem;color:#9ca3af;margin:0 0 .5rem .9rem;font-style:italic;">${src}</div>`);
+            out.push(`<div style="font-size:.73rem;color:#9ca3af;margin:0 0 .3rem .2rem;font-style:italic;">${line.replace(/^_/, '').replace(/_$/, '')}</div>`);
             continue;
         }
 
-        // Generic fallback
-        let processed = line.replace(/\*([^*]+)\*/g, '<strong>$1</strong>').replace(/_([^_]+)_/g, '<em>$1</em>');
-        out.push(`<div style="font-size:.87rem;color:#374151;margin:.2rem 0;">${processed}</div>`);
+        // Fallback
+        let p = line.replace(/\*([^*]+)\*/g, '<strong>$1</strong>').replace(/_([^_]+)_/g, '<em>$1</em>');
+        out.push(`<div style="font-size:.87rem;color:#374151;margin:.1rem 0;line-height:1.5;">${p}</div>`);
     }
-    return `<div style="line-height:1.5;">${out.join('')}</div>`;
+    return `<div style="line-height:1.55;">${out.join('')}</div>`;
 }
 
 async function carregarResumoDoDia() {
