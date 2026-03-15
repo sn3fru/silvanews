@@ -4312,7 +4312,7 @@ async function carregarResumoDoDia() {
     try {
         const resp = await fetchAuth(`${API_BASE}/api/resumo/hoje`);
         if (!resp.ok) {
-            content.innerHTML = '<p style="color:#6b7280;font-size:.9rem;margin:0;">Clique em "Gerar Resumo" para criar seu resumo personalizado do dia.</p>';
+            content.innerHTML = '<p style="color:#6b7280;font-size:.9rem;margin:0;">Nenhum resumo disponivel hoje. Clique em "Atualizar Resumo" ou aguarde o processamento automatico.</p>';
             return;
         }
         const data = await resp.json();
@@ -4339,7 +4339,7 @@ async function carregarResumoDoDia() {
             }
         } else {
             content.innerHTML = '<p style="color:#6b7280;font-size:.9rem;margin:0;">' +
-                (data.message || 'Clique em "Gerar Resumo" para criar seu resumo personalizado do dia.') + '</p>';
+                (data.message || 'Nenhum resumo disponivel ainda. Clique em "Atualizar Resumo" ou aguarde o processamento automatico.') + '</p>';
         }
     } catch {
         content.innerHTML = '<p style="color:#ef4444;font-size:.9rem;margin:0;">Erro ao carregar resumo.</p>';

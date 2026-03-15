@@ -588,8 +588,10 @@ def _ensure_env_loaded():
 
 def run_resumo_diario():
     """
-    Gera o resumo do dia (1 chamada unificada) e imprime no terminal.
-    Roda in-process para capturar o resultado formatado.
+    Gera o resumo do dia em 2 fases:
+    1. Resumo UNIFICADO (terminal/WhatsApp) — 1 chamada LLM generica
+    2. Resumos PER-USER — 1 chamada LLM por usuario ativo com preferencias personalizadas
+       Salva no banco para que o frontend ja tenha o resumo pronto ao abrir.
     Nao bloqueia o pipeline em caso de falha.
     """
     try:
@@ -599,28 +601,70 @@ def run_resumo_diario():
         print("  ETAPA 3: RESUMO DO DIA")
         print(f"{'=' * 60}")
 
-        from agents.resumo_diario.agent import gerar_resumo_diario, formatar_whatsapp
+        from agents.resumo_diario.agent import gerar_resumo_diario, gerar_resumo_para_usuario, formatar_whatsapp
         from backend.utils import get_date_brasil
 
         target_date = get_date_brasil()
         print(f"  Data: {target_date.isoformat()}")
 
+        # --- Fase 1: Resumo unificado (terminal) ---
         resultado = gerar_resumo_diario(target_date=target_date)
 
         if not resultado.get("ok"):
             err = resultado.get("error", "desconhecido")
-            print(f"  [AVISO] Resumo falhou: {err}")
-            return True
-
-        mensagens = formatar_whatsapp(resultado)
-        print()
-        for msg in mensagens:
-            print(msg)
+            print(f"  [AVISO] Resumo unificado falhou: {err}")
+        else:
+            mensagens = formatar_whatsapp(resultado)
             print()
+            for msg in mensagens:
+                print(msg)
+                print()
+            total = len(resultado.get("todos_clusters_escolhidos_ids", []))
+            avaliados = len(resultado.get("clusters_avaliados_ids", []))
+            print(f"  [OK] Resumo terminal: {total} clusters de {avaliados} avaliados.")
 
-        total = len(resultado.get("todos_clusters_escolhidos_ids", []))
-        avaliados = len(resultado.get("clusters_avaliados_ids", []))
-        print(f"  [OK] Resumo: {total} clusters selecionados de {avaliados} avaliados.")
+        # --- Fase 2: Resumos per-user (salva no banco para frontend) ---
+        try:
+            from backend.database import SessionLocal
+            from backend.crud import list_usuarios, create_resumo_usuario
+            db = SessionLocal()
+            try:
+                usuarios = list_usuarios(db, apenas_ativos=True)
+            except Exception:
+                usuarios = []
+            db.close()
+
+            if usuarios:
+                print(f"\n  Gerando resumos personalizados para {len(usuarios)} usuario(s)...")
+                for user in usuarios:
+                    try:
+                        res_user = gerar_resumo_para_usuario(user_id=user.id, target_date=target_date)
+                        if res_user.get("ok"):
+                            texto_wpp = formatar_whatsapp(res_user)
+                            texto_full = "\n\n---\n\n".join(texto_wpp) if texto_wpp else None
+                            db2 = SessionLocal()
+                            try:
+                                create_resumo_usuario(
+                                    db2, user.id, target_date, template_id=None,
+                                    clusters_avaliados=res_user.get("clusters_avaliados_ids", []),
+                                    clusters_escolhidos=res_user.get("todos_clusters_escolhidos_ids", []),
+                                    texto=texto_full, texto_whatsapp=texto_full,
+                                    prompt_version=res_user.get("prompt_version"),
+                                    metadados=res_user.get("contract_dict", {}),
+                                )
+                            finally:
+                                db2.close()
+                            n = len(res_user.get("todos_clusters_escolhidos_ids", []))
+                            print(f"    [OK] {user.nome or user.email}: {n} itens salvos")
+                        else:
+                            print(f"    [AVISO] {user.nome or user.email}: {res_user.get('error', '?')}")
+                    except Exception as e:
+                        print(f"    [ERRO] {user.nome or user.email}: {e}")
+            else:
+                print("  [INFO] Nenhum usuario ativo — resumos per-user nao gerados.")
+        except Exception as e:
+            print(f"  [AVISO] Fase per-user falhou: {e}")
+
         return True
 
     except Exception as e:

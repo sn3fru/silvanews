@@ -1,21 +1,20 @@
 """
-Script de teste para o Agente de Resumo Diário — Chamada Unificada v3.
+Script de teste para o Agente de Resumo Diario.
 
 Uso:
-    cd <RAIZ_DO_PROJETO>
-    python test_resumo_diario.py
+    python test_resumo_diario.py                  # modo unificado (generico, terminal)
+    python test_resumo_diario.py --user 1         # modo per-user (personalizado, como o frontend)
+    python test_resumo_diario.py --user 1 --save  # gera e salva no banco (como o pipeline)
 
-O script:
-  1. Importa o agente unificado
-  2. Chama gerar_resumo_diario() — 1 chamada LLM cobrindo todos os angulos
-  3. Imprime resultado por secao + mensagem WhatsApp formatada
-  4. Salva resultado em test_resumo_output.json
+O modo unificado usa PROMPT_RESUMO_UNIFICADO_V1 (sem preferencias de usuario).
+O modo per-user usa gerar_resumo_para_usuario(user_id) com as preferencias do banco.
 """
 
 import json
 import sys
 import os
 import time
+import argparse
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 if ROOT not in sys.path:
@@ -35,10 +34,13 @@ if not api_key:
     print("[ERRO] GEMINI_API_KEY nao encontrada. Verifique backend/.env")
     sys.exit(1)
 
-print(f"[Test] GEMINI_API_KEY ok ({api_key[:8]}...)")
+parser = argparse.ArgumentParser(description="Teste do agente de resumo diario")
+parser.add_argument("--user", type=int, default=None, help="User ID para modo per-user (personalizado)")
+parser.add_argument("--save", action="store_true", help="Salvar resumo no banco (como o pipeline)")
+args = parser.parse_args()
 
 try:
-    from agents.resumo_diario.agent import gerar_resumo_diario, formatar_whatsapp
+    from agents.resumo_diario.agent import gerar_resumo_diario, gerar_resumo_para_usuario, formatar_whatsapp
     print("[Test] Imports ok")
 except Exception as e:
     print(f"[ERRO] Import falhou: {e}")
@@ -46,13 +48,43 @@ except Exception as e:
     traceback.print_exc()
     sys.exit(1)
 
-print(f"\n{'='*60}")
-print("  TESTE — AGENTE DE RESUMO DIARIO (v3 Unificado)")
-print(f"{'='*60}\n")
+if args.user:
+    print(f"\n{'='*60}")
+    print(f"  TESTE PER-USER — user_id={args.user}")
+    print(f"{'='*60}")
 
-t0 = time.time()
-resultado = gerar_resumo_diario()
-elapsed = time.time() - t0
+    try:
+        from backend.database import SessionLocal
+        from backend.crud import get_usuario_by_id, get_preferencias_usuario
+        db = SessionLocal()
+        user = get_usuario_by_id(db, args.user)
+        if not user:
+            print(f"[ERRO] Usuario id={args.user} nao encontrado.")
+            db.close()
+            sys.exit(1)
+        print(f"  Usuario: {user.nome} ({user.email})")
+        prefs = get_preferencias_usuario(db, args.user)
+        if prefs:
+            print(f"  Tags interesse: {prefs.tags_interesse or []}")
+            print(f"  Tamanho resumo: {prefs.tamanho_resumo or 'medio'}")
+        else:
+            print("  [AVISO] Sem preferencias definidas — usara prompt padrao.")
+        db.close()
+    except Exception as e:
+        print(f"  [AVISO] Nao conseguiu ler preferencias: {e}")
+
+    print()
+    t0 = time.time()
+    resultado = gerar_resumo_para_usuario(user_id=args.user)
+    elapsed = time.time() - t0
+else:
+    print(f"\n{'='*60}")
+    print("  TESTE UNIFICADO — Prompt generico (sem preferencias de usuario)")
+    print(f"{'='*60}\n")
+
+    t0 = time.time()
+    resultado = gerar_resumo_diario()
+    elapsed = time.time() - t0
 
 print(f"\n{'='*60}")
 print(f"  RESULTADO ({elapsed:.1f}s)")
@@ -62,6 +94,7 @@ if resultado.get("ok"):
     print(f"  Data: {resultado['data']}")
     print(f"  Clusters avaliados: {len(resultado['clusters_avaliados_ids'])}")
     print(f"  Total selecionados: {len(resultado['todos_clusters_escolhidos_ids'])}")
+    print(f"  Prompt version: {resultado.get('prompt_version', '?')}")
 
     contract = resultado.get("contract_dict", {})
     fontes_map = resultado.get("fontes_map", {})
@@ -87,7 +120,7 @@ if resultado.get("ok"):
                 print(f"     Fontes: {fontes_str}")
 
     print(f"\n{'='*60}")
-    print("  MENSAGEM WHATSAPP (copiar abaixo)")
+    print("  MENSAGEM WHATSAPP")
     print(f"{'='*60}")
 
     mensagens = formatar_whatsapp(resultado)
@@ -95,7 +128,26 @@ if resultado.get("ok"):
         print(msg)
         print()
 
-    print(f"  ({sum(len(m) for m in mensagens)} chars, {len(mensagens)} mensagem(ns))")
+    print(f"  ({sum(len(m) for m in mensagens)} chars, {len(mensagens)} msg)")
+
+    if args.save and args.user:
+        try:
+            from backend.database import SessionLocal
+            from backend.crud import create_resumo_usuario
+            texto_full = "\n\n---\n\n".join(mensagens) if mensagens else None
+            db = SessionLocal()
+            create_resumo_usuario(
+                db, args.user, resultado["data"], template_id=None,
+                clusters_avaliados=resultado.get("clusters_avaliados_ids", []),
+                clusters_escolhidos=resultado.get("todos_clusters_escolhidos_ids", []),
+                texto=texto_full, texto_whatsapp=texto_full,
+                prompt_version=resultado.get("prompt_version"),
+                metadados=resultado.get("contract_dict", {}),
+            )
+            db.close()
+            print(f"\n  [OK] Resumo salvo no banco para user_id={args.user}")
+        except Exception as e:
+            print(f"\n  [ERRO] Falha ao salvar: {e}")
 
     resultado_json = dict(resultado)
     if "fontes_map" in resultado_json:
@@ -103,12 +155,7 @@ if resultado.get("ok"):
     output_path = os.path.join(ROOT, "test_resumo_output.json")
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(resultado_json, f, ensure_ascii=False, indent=2)
-    print(f"\n  JSON salvo: {output_path}")
-
-    whatsapp_path = os.path.join(ROOT, "test_resumo_whatsapp.txt")
-    with open(whatsapp_path, "w", encoding="utf-8") as f:
-        f.write("\n\n---\n\n".join(mensagens))
-    print(f"  WhatsApp salvo: {whatsapp_path}")
+    print(f"  JSON salvo: {output_path}")
 
 else:
     print(f"  FALHOU: {resultado.get('error', 'Desconhecido')}")
