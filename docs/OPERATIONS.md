@@ -15,8 +15,12 @@ conda activate pymc2
 cd btg_alphafeed
 pip install -r requirements.txt
 
+# Dependencias v3.0 (ja incluidas em requirements.txt): python-jose[cryptography], passlib[bcrypt]
+
 # Criar tabelas ORM
 python -c "from backend.database import create_tables; create_tables()"
+
+# v3.0: init_database() (executado no startup do servidor) auto-cria o usuario admin admin@enforce.com.br
 
 # v2.0: Tabelas do grafo + extensoes (pgvector, pg_trgm)
 python scripts/migrate_graph_tables.py
@@ -118,6 +122,25 @@ FEEDBACK_RULES_ENABLED=0
 | `FEEDBACK_RULES_ENABLED` | `1` | `0` desliga injecao de feedback rules |
 | `V2_SHADOW_MODE` | `0` | Workflow v2 em modo sombra (debug) |
 | `ESTAGIARIO_REACT` | `0` | Modo ReAct do agente |
+| `JWT_SECRET` | (fallback interno) | Chave para assinar tokens JWT; definir em producao |
+| `TIVALY_API_KEY` | (opcional) | Busca web para o agente de resumo diario |
+| `ADMIN_INITIAL_PASSWORD` | `admin` | Senha inicial do usuario admin (admin@enforce.com.br) |
+
+---
+
+### Pipeline Micro-Batch (v3.0)
+
+Modo de monitoramento continuo que processa PDFs em lotes a cada N minutos:
+
+```bash
+# Modo micro-batch (monitoramento continuo com lock)
+python run_complete_workflow.py --microbatch --batch-interval 3
+```
+
+- **Monitora** o diretorio `../pdfs/` (ou pasta configurada)
+- **Processa em lotes** a cada N minutos (padrao: 3)
+- **Lock file** (`.microbatch.lock`) evita execucao concorrente — se o ciclo anterior ainda estiver ativo, o proximo e abortado e espera o intervalo
+- **PDFs processados** sao movidos para `../pdfs/_processed/`
 
 ---
 
@@ -156,11 +179,66 @@ python -m migrate_incremental --source ... --dest ... --include-all --since 2026
 | `--include-estagiario` | estagiario_chat_sessions + estagiario_chat_messages |
 | `--include-research` | deep_research_jobs + social_research_jobs |
 | `--include-logs` | logs_processamento (desabilitado, nao essencial) |
+| `--include-usuarios` | usuarios, preferencias, templates_resumo, resumos_diarios |
 | `--no-update-existing` | Apenas insere novos, nao atualiza existentes |
 
 ---
 
-## 4. Referencia Completa de Endpoints (60+)
+## 4. Autenticacao JWT (v3.0)
+
+| Metodo | Rota | Body | Descricao |
+|---|---|---|---|
+| POST | `/api/auth/login` | email, senha | Retorna JWT token |
+| GET | `/api/auth/me` | (Authorization: Bearer) | Retorna dados do usuario atual |
+| POST | `/api/auth/register` | (admin only) email, senha, nome, role | Cria novo usuario |
+
+**Usuario admin padrao**: `admin@enforce.com.br` / `admin` (ou valor de `ADMIN_INITIAL_PASSWORD`)
+
+---
+
+## 5. Endpoints Multi-Tenant (v3.0)
+
+### Preferencias do Usuario
+
+| Metodo | Rota | Descricao |
+|---|---|---|
+| GET | `/api/user/preferencias` | Obtem preferencias do usuario |
+| PUT | `/api/user/preferencias` | Atualiza preferencias |
+
+### Templates de Resumo
+
+| Metodo | Rota | Descricao |
+|---|---|---|
+| GET | `/api/templates-resumo/` | Lista templates |
+| POST | `/api/templates-resumo/` | Cria template |
+| PUT | `/api/templates-resumo/{id}` | Atualiza template |
+| DELETE | `/api/templates-resumo/{id}` | Remove template |
+
+### Resumo Diario
+
+| Metodo | Rota | Descricao |
+|---|---|---|
+| GET | `/api/resumo/hoje` | Resumo do dia atual |
+| POST | `/api/resumo/gerar` | Dispara geracao em background |
+| GET | `/api/resumo/historico` | Lista resumos gerados |
+
+### Admin Prompts
+
+| Metodo | Rota | Descricao |
+|---|---|---|
+| GET | `/api/admin/prompts` | Lista prompts disponiveis |
+| POST | `/api/admin/prompts/{chave}/validate` | Valida prompt por chave |
+
+### Documentos
+
+| Metodo | Rota | Descricao |
+|---|---|---|
+| GET | `/api/docs` | Lista arquivos de documentacao |
+| GET | `/api/docs/{filename}` | Obtem conteudo do documento |
+
+---
+
+## 6. Referencia Completa de Endpoints (60+)
 
 ### Feed
 
@@ -276,16 +354,21 @@ python -m migrate_incremental --source ... --dest ... --include-all --since 2026
 
 ---
 
-## 5. Deploy Heroku
+## 7. Deploy Heroku
 
 | Arquivo | Conteudo |
 |---|---|
 | `Procfile` | `web: PYTHONPATH=. uvicorn backend.main:app --host 0.0.0.0 --port ${PORT}` |
 | `runtime.txt` | `python-3.11.9` |
 
+**v3.0**:
+- `requirements.txt` inclui `python-jose[cryptography]` e `passlib[bcrypt]` para autenticacao
+- Definir `JWT_SECRET` no Heroku (ou usa fallback interno — nao recomendado em producao)
+- Para sincronizar usuarios e dados multi-tenant: `python -m migrate_incremental ... --include-usuarios`
+
 ---
 
-## 6. Troubleshooting
+## 8. Troubleshooting
 
 | Problema | Solucao |
 |---|---|

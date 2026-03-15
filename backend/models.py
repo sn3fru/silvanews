@@ -272,3 +272,125 @@ class FeedbackItem(BaseModel):
     feedback: Literal['like', 'dislike']
     processed: bool
     created_at: datetime
+
+
+# --- MODELOS PARA SISTEMA DE USUARIOS (v3.0 Multi-Tenant) ---
+
+class LoginRequest(BaseModel):
+    """Credenciais de login."""
+    email: str = Field(..., description="Email ou username do usuário")
+    senha: str = Field(..., description="Senha do usuário")
+
+
+class TokenResponse(BaseModel):
+    """JWT token retornado no login."""
+    access_token: str
+    token_type: str = "bearer"
+    user: Dict[str, Any]
+
+
+class UsuarioCreate(BaseModel):
+    """Criação de novo usuário (admin only)."""
+    nome: str = Field(..., min_length=2, max_length=200)
+    email: str = Field(..., min_length=5, max_length=300)
+    senha: str = Field(..., min_length=4, max_length=200)
+    role: Literal['admin', 'user'] = 'user'
+
+
+class UsuarioUpdate(BaseModel):
+    """Atualização de perfil."""
+    nome: Optional[str] = Field(default=None, max_length=200)
+    email: Optional[str] = Field(default=None, max_length=300)
+    senha: Optional[str] = Field(default=None, min_length=4, max_length=200)
+
+
+class UsuarioResponse(BaseModel):
+    """Dados públicos de um usuário."""
+    id: int
+    nome: str
+    email: str
+    role: str
+    ativo: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class PreferenciasUpdate(BaseModel):
+    """Atualização de preferências do usuário."""
+    tags_interesse: Optional[List[str]] = None
+    tags_ignoradas: Optional[List[str]] = None
+    fontes_ignoradas: Optional[List[str]] = None
+    prioridade_minima: Optional[str] = None
+    tipo_fonte_preferido: Optional[str] = None
+    tamanho_resumo: Optional[Literal['curto', 'medio', 'longo']] = None
+    template_resumo_id: Optional[int] = None
+    config_extra: Optional[Dict[str, Any]] = None
+
+
+class PreferenciasResponse(BaseModel):
+    """Preferências do usuário."""
+    id: int
+    user_id: int
+    tags_interesse: List[str] = []
+    tags_ignoradas: List[str] = []
+    fontes_ignoradas: List[str] = []
+    prioridade_minima: str = "P3_MONITORAMENTO"
+    tipo_fonte_preferido: Optional[str] = None
+    tamanho_resumo: str = "medio"
+    template_resumo_id: Optional[int] = None
+    config_extra: Dict[str, Any] = {}
+
+    model_config = {"from_attributes": True}
+
+
+class TemplateResumoCreate(BaseModel):
+    """Criação de template de resumo."""
+    nome: str = Field(..., min_length=2, max_length=200)
+    descricao: Optional[str] = None
+    system_prompt: str = Field(..., min_length=10)
+    publico: bool = False
+    tools_habilitadas: List[str] = []
+    restricoes: Dict[str, Any] = {}
+
+
+class TemplateResumoUpdate(BaseModel):
+    """Atualização de template de resumo."""
+    nome: Optional[str] = Field(default=None, max_length=200)
+    descricao: Optional[str] = None
+    system_prompt: Optional[str] = None
+    publico: Optional[bool] = None
+    tools_habilitadas: Optional[List[str]] = None
+    restricoes: Optional[Dict[str, Any]] = None
+
+
+class TemplateResumoResponse(BaseModel):
+    """Dados de um template de resumo."""
+    id: int
+    nome: str
+    descricao: Optional[str] = None
+    criado_por_user_id: Optional[int] = None
+    publico: bool
+    system_prompt: str
+    tools_habilitadas: List[str] = []
+    restricoes: Dict[str, Any] = {}
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ResumoUsuarioResponse(BaseModel):
+    """Resumo diário gerado para um usuário."""
+    id: int
+    user_id: int
+    data_referencia: datetime
+    template_id: Optional[int] = None
+    clusters_avaliados_ids: List[int] = []
+    clusters_escolhidos_ids: List[int] = []
+    texto_gerado: Optional[str] = None
+    texto_whatsapp: Optional[str] = None
+    prompt_version: Optional[str] = None
+    metadados: Dict[str, Any] = {}
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

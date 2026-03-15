@@ -29,10 +29,10 @@ import sys
 import argparse
 import hashlib
 from typing import Dict, Optional, Tuple, List, Iterable, Set
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta, date as date_type
 
 from sqlalchemy import create_engine, func, and_, or_, text
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker, Session, load_only
 
 try:
     # Execução como módulo
@@ -56,6 +56,10 @@ try:
         GraphEdge,
         DeepResearchJob,
         SocialResearchJob,
+        Usuario,
+        PreferenciaUsuario,
+        TemplateResumoUsuario,
+        ResumoUsuario,
     )
 except Exception:
     # Execução direta
@@ -80,6 +84,10 @@ except Exception:
         GraphEdge,
         DeepResearchJob,
         SocialResearchJob,
+        Usuario,
+        PreferenciaUsuario,
+        TemplateResumoUsuario,
+        ResumoUsuario,
     )
 
 
@@ -210,6 +218,38 @@ def hash_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def _batch_resolve_artigo_ids(
+    db_src: Session, db_dst: Session, src_artigo_ids: List[int]
+) -> Dict[int, int]:
+    """
+    Dado um lote de artigo_ids do source, retorna {src_artigo_id: dst_artigo_id}.
+    Faz 2 queries (source + dest) em vez de 2N.
+    hash_unico tem índice único — IN(...) já é rápido sem filtro de data.
+    """
+    if not src_artigo_ids:
+        return {}
+    src_rows = (
+        db_src.query(ArtigoBruto.id, ArtigoBruto.hash_unico)
+        .filter(ArtigoBruto.id.in_(src_artigo_ids))
+        .all()
+    )
+    id_to_hash = {r.id: r.hash_unico for r in src_rows if r.hash_unico}
+    if not id_to_hash:
+        return {}
+    hashes = list(set(id_to_hash.values()))
+    dst_rows = (
+        db_dst.query(ArtigoBruto.id, ArtigoBruto.hash_unico)
+        .filter(ArtigoBruto.hash_unico.in_(hashes))
+        .all()
+    )
+    hash_to_dst = {r.hash_unico: r.id for r in dst_rows}
+    return {
+        src_id: hash_to_dst[h]
+        for src_id, h in id_to_hash.items()
+        if h in hash_to_dst
+    }
+
+
 # ==============================================================================
 # Migrações idempotentes e incrementais
 # ==============================================================================
@@ -226,13 +266,18 @@ def migrate_clusters(db_src: Session, db_dst: Session, since: datetime, no_updat
 
     for batch in chunked(q.yield_per(500), 500):
         for cluster in batch:
-            created_date = cluster.created_at.date() if cluster.created_at else None
+            day_start = datetime.combine(cluster.created_at.date(), datetime.min.time()) if cluster.created_at else None
+            day_end = datetime.combine(cluster.created_at.date() + timedelta(days=1), datetime.min.time()) if cluster.created_at else None
+            date_filters = [
+                ClusterEvento.created_at >= day_start,
+                ClusterEvento.created_at < day_end,
+            ] if day_start else []
             existing = (
                 db_dst.query(ClusterEvento)
                 .filter(
                     ClusterEvento.titulo_cluster == cluster.titulo_cluster,
                     ClusterEvento.tag == cluster.tag,
-                    func.date(ClusterEvento.created_at) == created_date,
+                    *date_filters,
                 )
                 .first()
             )
@@ -294,17 +339,31 @@ def migrate_artigos(db_src: Session, db_dst: Session, since: datetime, cluster_i
         or_(ArtigoBruto.created_at > since, ArtigoBruto.processed_at > since)
     ).order_by(ArtigoBruto.created_at.asc())
 
+    _light_cols = load_only(
+        ArtigoBruto.id, ArtigoBruto.hash_unico,
+        ArtigoBruto.cluster_id, ArtigoBruto.tipo_fonte, ArtigoBruto.embedding_v2,
+    )
+
     for batch in chunked(q.yield_per(500), 500):
+        batch_hashes = [a.hash_unico for a in batch if a.hash_unico]
+        existing_map: Dict[str, ArtigoBruto] = {}
+        if batch_hashes:
+            rows = (
+                db_dst.query(ArtigoBruto)
+                .options(_light_cols)
+                .filter(ArtigoBruto.hash_unico.in_(batch_hashes))
+                .all()
+            )
+            for r in rows:
+                existing_map[r.hash_unico] = r
+
         for artigo in batch:
-            exists = db_dst.query(ArtigoBruto).filter(ArtigoBruto.hash_unico == artigo.hash_unico).first()
+            exists = existing_map.get(artigo.hash_unico)
             if exists:
-                # Atualiza vínculo de cluster se necessário
                 if artigo.cluster_id and not exists.cluster_id:
                     exists.cluster_id = cluster_id_map.get(artigo.cluster_id)
-                # Atualiza tipo_fonte se necessário
                 if hasattr(artigo, 'tipo_fonte') and artigo.tipo_fonte and artigo.tipo_fonte != exists.tipo_fonte:
                     exists.tipo_fonte = artigo.tipo_fonte
-                # Sincroniza embedding_v2 do local para destino (evita refazer backfill)
                 if artigo.embedding_v2 and not exists.embedding_v2:
                     exists.embedding_v2 = artigo.embedding_v2
                 continue
@@ -330,7 +389,7 @@ def migrate_artigos(db_src: Session, db_dst: Session, since: datetime, cluster_i
                 relevance_score=artigo.relevance_score,
                 relevance_reason=artigo.relevance_reason,
                 embedding=artigo.embedding,
-                embedding_v2=artigo.embedding_v2,  # Migra embedding v2 (ambos BYTEA)
+                embedding_v2=artigo.embedding_v2,
                 cluster_id=cluster_id_map.get(artigo.cluster_id) if artigo.cluster_id else None,
                 tipo_fonte=artigo.tipo_fonte or 'nacional',
             )
@@ -705,9 +764,11 @@ def migrate_graph_entities(db_src: Session, db_dst: Session, since: datetime, no
 
 def migrate_graph_edges(
     db_src: Session, db_dst: Session, since: datetime,
-    entity_uuid_map: Dict[str, str], artigo_hash_map: Dict[str, int]
+    entity_uuid_map: Dict[str, str],
 ) -> int:
     """Migra graph_edges (arestas). DEVE rodar APÓS graph_entities e artigos."""
+    import uuid as uuid_mod
+
     print("➡️ Migrando arestas do grafo (incremental)...")
     total = 0
     skipped = 0
@@ -715,37 +776,31 @@ def migrate_graph_edges(
     q = db_src.query(GraphEdge).filter(GraphEdge.created_at > since).order_by(GraphEdge.created_at.asc())
 
     for batch in chunked(q.yield_per(500), 500):
+        batch_artigo_ids = list(set(e.artigo_id for e in batch))
+        artigo_map = _batch_resolve_artigo_ids(db_src, db_dst, batch_artigo_ids)
+
         for edge in batch:
-            # Precisamos mapear artigo_id (pode ter mudado no destino)
-            # e entity_id (UUID, geralmente preservado)
             mapped_entity_id_str = entity_uuid_map.get(str(edge.entity_id))
             if not mapped_entity_id_str:
                 skipped += 1
                 continue
 
-            # Para artigo_id: buscar pelo hash no destino
-            src_artigo = db_src.query(ArtigoBruto).filter(ArtigoBruto.id == edge.artigo_id).first()
-            if not src_artigo:
-                skipped += 1
-                continue
-            dst_artigo = db_dst.query(ArtigoBruto).filter(ArtigoBruto.hash_unico == src_artigo.hash_unico).first()
-            if not dst_artigo:
+            dst_artigo_id = artigo_map.get(edge.artigo_id)
+            if not dst_artigo_id:
                 skipped += 1
                 continue
 
-            # Chave de negócio: (artigo_id, entity_id) é UNIQUE
-            import uuid as uuid_mod
             mapped_entity_uuid = uuid_mod.UUID(mapped_entity_id_str)
             existing = (
                 db_dst.query(GraphEdge)
-                .filter_by(artigo_id=dst_artigo.id, entity_id=mapped_entity_uuid)
+                .filter_by(artigo_id=dst_artigo_id, entity_id=mapped_entity_uuid)
                 .first()
             )
             if existing:
                 continue
 
             clone = GraphEdge(
-                artigo_id=dst_artigo.id,
+                artigo_id=dst_artigo_id,
                 entity_id=mapped_entity_uuid,
                 relation_type=edge.relation_type,
                 sentiment_score=edge.sentiment_score,
@@ -769,26 +824,24 @@ def migrate_feedback(db_src: Session, db_dst: Session, since: datetime) -> int:
     q = db_src.query(FeedbackNoticia).filter(FeedbackNoticia.created_at > since).order_by(FeedbackNoticia.created_at.asc())
 
     for batch in chunked(q.yield_per(500), 500):
+        batch_artigo_ids = list(set(fb.artigo_id for fb in batch))
+        artigo_map = _batch_resolve_artigo_ids(db_src, db_dst, batch_artigo_ids)
+
         for fb in batch:
-            # Busca artigo no destino pelo hash
-            src_artigo = db_src.query(ArtigoBruto).filter(ArtigoBruto.id == fb.artigo_id).first()
-            if not src_artigo:
-                continue
-            dst_artigo = db_dst.query(ArtigoBruto).filter(ArtigoBruto.hash_unico == src_artigo.hash_unico).first()
-            if not dst_artigo:
+            dst_artigo_id = artigo_map.get(fb.artigo_id)
+            if not dst_artigo_id:
                 continue
 
-            # Deduplica por (artigo_id, feedback, created_at)
             existing = (
                 db_dst.query(FeedbackNoticia)
-                .filter_by(artigo_id=dst_artigo.id, feedback=fb.feedback, created_at=fb.created_at)
+                .filter_by(artigo_id=dst_artigo_id, feedback=fb.feedback, created_at=fb.created_at)
                 .first()
             )
             if existing:
                 continue
 
             clone = FeedbackNoticia(
-                artigo_id=dst_artigo.id,
+                artigo_id=dst_artigo_id,
                 feedback=fb.feedback,
                 processed=fb.processed,
                 created_at=fb.created_at,
@@ -933,6 +986,146 @@ def migrate_research_jobs(
 # ==============================================================================
 
 
+# ==============================================================================
+# Migração: Usuários e dados multi-tenant (v3.0)
+# ==============================================================================
+
+
+def migrate_usuarios(
+    db_src: Session, db_dst: Session, since: datetime, no_update: bool = False
+) -> Dict[int, int]:
+    """Migra usuarios. Retorna mapa {src_id: dst_id}."""
+    id_map: Dict[int, int] = {}
+    rows = db_src.query(Usuario).filter(Usuario.created_at >= since).all()
+    if not rows:
+        print("  ⏭️ Nenhum usuário novo.")
+        return id_map
+    print(f"  📦 Migrando {len(rows)} usuarios...")
+    for u in rows:
+        existing = db_dst.query(Usuario).filter(Usuario.email == u.email).first()
+        if existing:
+            id_map[u.id] = existing.id
+            if not no_update:
+                existing.nome = u.nome
+                existing.senha_hash = u.senha_hash
+                existing.role = u.role
+                existing.ativo = u.ativo
+                existing.updated_at = u.updated_at
+        else:
+            new_u = Usuario(
+                nome=u.nome, email=u.email, senha_hash=u.senha_hash,
+                role=u.role, ativo=u.ativo, created_at=u.created_at, updated_at=u.updated_at,
+            )
+            db_dst.add(new_u)
+            db_dst.flush()
+            id_map[u.id] = new_u.id
+    db_dst.commit()
+    print(f"  ✅ {len(id_map)} usuarios migrados.")
+    return id_map
+
+
+def migrate_preferencias_usuario(
+    db_src: Session, db_dst: Session, since: datetime, user_id_map: Dict[int, int]
+) -> None:
+    """Migra preferencias de usuario."""
+    rows = db_src.query(PreferenciaUsuario).filter(PreferenciaUsuario.updated_at >= since).all()
+    if not rows:
+        print("  ⏭️ Nenhuma preferência nova.")
+        return
+    print(f"  📦 Migrando {len(rows)} preferencias...")
+    for p in rows:
+        dst_uid = user_id_map.get(p.user_id)
+        if not dst_uid:
+            continue
+        existing = db_dst.query(PreferenciaUsuario).filter(PreferenciaUsuario.user_id == dst_uid).first()
+        if existing:
+            for col in ["tags_interesse", "tags_ignoradas", "fontes_ignoradas", "prioridade_minima",
+                         "tipo_fonte_preferido", "tamanho_resumo", "config_extra"]:
+                setattr(existing, col, getattr(p, col))
+            existing.updated_at = p.updated_at
+        else:
+            new_p = PreferenciaUsuario(
+                user_id=dst_uid, tags_interesse=p.tags_interesse, tags_ignoradas=p.tags_ignoradas,
+                fontes_ignoradas=p.fontes_ignoradas, prioridade_minima=p.prioridade_minima,
+                tipo_fonte_preferido=p.tipo_fonte_preferido, tamanho_resumo=p.tamanho_resumo,
+                config_extra=p.config_extra, created_at=p.created_at, updated_at=p.updated_at,
+            )
+            db_dst.add(new_p)
+    db_dst.commit()
+    print(f"  ✅ Preferências migradas.")
+
+
+def migrate_templates_resumo(
+    db_src: Session, db_dst: Session, since: datetime, user_id_map: Dict[int, int]
+) -> Dict[int, int]:
+    """Migra templates de resumo. Retorna mapa {src_id: dst_id}."""
+    tpl_map: Dict[int, int] = {}
+    rows = db_src.query(TemplateResumoUsuario).filter(TemplateResumoUsuario.updated_at >= since).all()
+    if not rows:
+        print("  ⏭️ Nenhum template novo.")
+        return tpl_map
+    print(f"  📦 Migrando {len(rows)} templates de resumo...")
+    for t in rows:
+        dst_uid = user_id_map.get(t.criado_por_user_id) if t.criado_por_user_id else None
+        existing = db_dst.query(TemplateResumoUsuario).filter(
+            TemplateResumoUsuario.nome == t.nome,
+            TemplateResumoUsuario.criado_por_user_id == dst_uid,
+        ).first()
+        if existing:
+            tpl_map[t.id] = existing.id
+            existing.system_prompt = t.system_prompt
+            existing.publico = t.publico
+            existing.tools_habilitadas = t.tools_habilitadas
+            existing.restricoes = t.restricoes
+            existing.updated_at = t.updated_at
+        else:
+            new_t = TemplateResumoUsuario(
+                nome=t.nome, descricao=t.descricao, criado_por_user_id=dst_uid,
+                publico=t.publico, system_prompt=t.system_prompt,
+                tools_habilitadas=t.tools_habilitadas, restricoes=t.restricoes,
+                created_at=t.created_at, updated_at=t.updated_at,
+            )
+            db_dst.add(new_t)
+            db_dst.flush()
+            tpl_map[t.id] = new_t.id
+    db_dst.commit()
+    print(f"  ✅ {len(tpl_map)} templates migrados.")
+    return tpl_map
+
+
+def migrate_resumos_usuario(
+    db_src: Session, db_dst: Session, since: datetime,
+    user_id_map: Dict[int, int], tpl_id_map: Dict[int, int]
+) -> None:
+    """Migra resumos de usuario."""
+    rows = db_src.query(ResumoUsuario).filter(ResumoUsuario.created_at >= since).all()
+    if not rows:
+        print("  ⏭️ Nenhum resumo de usuário novo.")
+        return
+    print(f"  📦 Migrando {len(rows)} resumos de usuário...")
+    for r in rows:
+        dst_uid = user_id_map.get(r.user_id)
+        if not dst_uid:
+            continue
+        dst_tpl = tpl_id_map.get(r.template_id) if r.template_id else None
+        existing = db_dst.query(ResumoUsuario).filter(
+            ResumoUsuario.user_id == dst_uid,
+            func.date(ResumoUsuario.data_referencia) == func.date(r.data_referencia),
+            ResumoUsuario.created_at == r.created_at,
+        ).first()
+        if existing:
+            continue
+        new_r = ResumoUsuario(
+            user_id=dst_uid, data_referencia=r.data_referencia, template_id=dst_tpl,
+            clusters_avaliados_ids=r.clusters_avaliados_ids, clusters_escolhidos_ids=r.clusters_escolhidos_ids,
+            texto_gerado=r.texto_gerado, texto_whatsapp=r.texto_whatsapp,
+            prompt_version=r.prompt_version, metadados=r.metadados, created_at=r.created_at,
+        )
+        db_dst.add(new_r)
+    db_dst.commit()
+    print(f"  ✅ Resumos de usuário migrados.")
+
+
 def main() -> None:
     default_meta = os.path.join(os.path.dirname(__file__), "last_migration.txt")
 
@@ -949,8 +1142,9 @@ def main() -> None:
     parser.add_argument("--include-feedback", action="store_true", help="Migrar feedback (likes/dislikes)")
     parser.add_argument("--include-research", action="store_true", help="Migrar research jobs")
     parser.add_argument("--include-estagiario", action="store_true", help="Migrar chat do Estagiário")
+    parser.add_argument("--include-usuarios", action="store_true", help="Migrar usuarios, preferencias, templates e resumos")
     parser.add_argument("--include-all", action="store_true", help="Migrar TODAS as entidades (equivale a todas as flags --include-*)")
-    parser.add_argument("--only", default="", help="Lista de entidades a migrar (ex: clusters,artigos,sinteses,configs,alteracoes,chat,logs,prompts,graph,feedback,research,estagiario)")
+    parser.add_argument("--only", default="", help="Lista de entidades a migrar (ex: clusters,artigos,sinteses,configs,alteracoes,chat,logs,prompts,graph,feedback,research,estagiario,usuarios)")
 
     args = parser.parse_args()
     if not args.dest:
@@ -980,6 +1174,7 @@ def main() -> None:
         args.include_feedback = True
         args.include_research = True
         args.include_estagiario = True
+        args.include_usuarios = True
 
     try:
         cluster_id_map: Dict[int, int] = {}
@@ -1017,7 +1212,7 @@ def main() -> None:
 
         if (args.include_graph or args.include_all) and want("graph"):
             entity_uuid_map = migrate_graph_entities(db_src, db_dst, since, args.no_update_existing)
-            migrate_graph_edges(db_src, db_dst, since, entity_uuid_map, {})
+            migrate_graph_edges(db_src, db_dst, since, entity_uuid_map)
 
         if (args.include_feedback or args.include_all) and want("feedback"):
             migrate_feedback(db_src, db_dst, since)
@@ -1027,6 +1222,13 @@ def main() -> None:
 
         if (args.include_research or args.include_all) and want("research"):
             migrate_research_jobs(db_src, db_dst, since, cluster_id_map)
+
+        # ---- v3.0: Usuários Multi-Tenant ----
+        if (args.include_usuarios or args.include_all) and want("usuarios"):
+            user_id_map = migrate_usuarios(db_src, db_dst, since, args.no_update_existing)
+            migrate_preferencias_usuario(db_src, db_dst, since, user_id_map)
+            tpl_id_map = migrate_templates_resumo(db_src, db_dst, since, user_id_map)
+            migrate_resumos_usuario(db_src, db_dst, since, user_id_map, tpl_id_map)
 
         # Atualiza timestamp somente se nenhuma exceção ocorreu
         write_last_run(args.meta_file, datetime.now(timezone.utc))

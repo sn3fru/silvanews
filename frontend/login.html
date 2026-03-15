@@ -24,18 +24,63 @@
     document.addEventListener('DOMContentLoaded', function(){
       const form = document.getElementById('login-form');
       const errorBox = document.getElementById('login-error');
-      form.addEventListener('submit', function(e){
+      const btn = form.querySelector('.btn-login');
+
+      form.addEventListener('submit', async function(e){
         e.preventDefault();
-        const username = (document.getElementById('username').value || '').trim();
-        const password = (document.getElementById('password').value || '').trim();
-        if (username === 'admin' && password === 'admin') {
-          const payload = { username: 'admin', token: 'admin', ts: Date.now() };
-          localStorage.setItem('silva_auth', JSON.stringify(payload));
-          const next = new URLSearchParams(location.search).get('next') || 'index.html';
-          window.location.href = next;
-        } else {
-          errorBox.style.display = 'block';
-          errorBox.textContent = 'Usuário ou senha inválidos';
+        const email = (document.getElementById('username').value || '').trim();
+        const senha = (document.getElementById('password').value || '').trim();
+        errorBox.style.display = 'none';
+        btn.disabled = true;
+        btn.textContent = 'Entrando...';
+
+        try {
+          const resp = await fetch(window.location.origin + '/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, senha }),
+          });
+
+          if (resp.ok) {
+            const data = await resp.json();
+            const payload = {
+              username: data.user.nome || data.user.email,
+              email: data.user.email,
+              role: data.user.role,
+              user_id: data.user.id,
+              token: data.access_token,
+              ts: Date.now(),
+            };
+            localStorage.setItem('silva_auth', JSON.stringify(payload));
+            const next = new URLSearchParams(location.search).get('next') || 'index.html';
+            window.location.href = next;
+          } else {
+            // Fallback: login legado hardcoded (retrocompatibilidade durante transicao)
+            if (email === 'admin' && senha === 'admin') {
+              const payload = { username: 'admin', token: 'admin', role: 'admin', ts: Date.now() };
+              localStorage.setItem('silva_auth', JSON.stringify(payload));
+              const next = new URLSearchParams(location.search).get('next') || 'index.html';
+              window.location.href = next;
+            } else {
+              const errData = await resp.json().catch(() => ({}));
+              errorBox.style.display = 'block';
+              errorBox.textContent = errData.detail || 'Credenciais inválidas';
+            }
+          }
+        } catch (err) {
+          // API indisponivel: fallback legado
+          if (email === 'admin' && senha === 'admin') {
+            const payload = { username: 'admin', token: 'admin', role: 'admin', ts: Date.now() };
+            localStorage.setItem('silva_auth', JSON.stringify(payload));
+            const next = new URLSearchParams(location.search).get('next') || 'index.html';
+            window.location.href = next;
+          } else {
+            errorBox.style.display = 'block';
+            errorBox.textContent = 'Erro de conexão com o servidor';
+          }
+        } finally {
+          btn.disabled = false;
+          btn.textContent = 'Entrar';
         }
       });
     });

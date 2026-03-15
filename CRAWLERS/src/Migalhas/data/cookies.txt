@@ -1,0 +1,6 @@
+__cf_bm	I9z.HilX_KE7wYcMkIpCWCK.3zGiXFISppRlMAdus84-1753991627-1.0.1.1-V7umLdfCANDVPzJ8txeliKDu7eDo_rYJz.DelsgfvSb_Z.JWJK7iuuXR03O4z5EXHA5..uBZcACUTHerS7Y2fJzrrjw68qjClwDDQXoRte4	.onesignal.com	/	2025-07-31T20:23:47.154Z	177	✓	✓	None			Medium
+_fbp	fb.2.1753991627432.553401746677879920	.migalhas.com.br	/	2025-10-29T19:55:32.000Z	41			Lax			Medium
+_ga	GA1.1.1770460542.1753991625	.migalhas.com.br	/	2026-09-04T19:53:45.446Z	30						Medium
+_ga_QRFDNT1QDT	GS2.1.s1753991625$o1$g1$t1753991731$j40$l0$h0	.migalhas.com.br	/	2026-09-04T19:55:31.011Z	59						Medium
+excepttoken	B827636C-B95	.migalhas.com.br	/	2026-07-31T19:54:10.000Z	23						Medium
+sessionToken	ZmJvkVjK7WvBsQQqxKzsDbk6SdZ8eGCD	.migalhas.com.br	/	Session	44						Medium

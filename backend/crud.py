@@ -10,12 +10,17 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc, func, text
 
 try:
-    from .database import ArtigoBruto, ClusterEvento, SinteseExecutiva, LogProcessamento, ConfiguracaoColeta, EstagiarioChatSession, EstagiarioChatMessage, PromptTag, PromptPrioridadeItem, PromptTemplate
+    from .database import (ArtigoBruto, ClusterEvento, SinteseExecutiva, LogProcessamento,
+                           ConfiguracaoColeta, EstagiarioChatSession, EstagiarioChatMessage,
+                           PromptTag, PromptPrioridadeItem, PromptTemplate,
+                           Usuario, PreferenciaUsuario, TemplateResumoUsuario, ResumoUsuario)
     from .models import ArtigoBrutoCreate, ClusterEventoCreate
     from .utils import get_date_brasil
 except ImportError:
-    # Fallback para import absoluto quando executado fora do pacote
-    from backend.database import ArtigoBruto, ClusterEvento, SinteseExecutiva, LogProcessamento, ConfiguracaoColeta, EstagiarioChatSession, EstagiarioChatMessage, PromptTag, PromptPrioridadeItem, PromptTemplate
+    from backend.database import (ArtigoBruto, ClusterEvento, SinteseExecutiva, LogProcessamento,
+                                  ConfiguracaoColeta, EstagiarioChatSession, EstagiarioChatMessage,
+                                  PromptTag, PromptPrioridadeItem, PromptTemplate,
+                                  Usuario, PreferenciaUsuario, TemplateResumoUsuario, ResumoUsuario)
     from backend.models import ArtigoBrutoCreate, ClusterEventoCreate
     from backend.utils import get_date_brasil
 
@@ -1927,3 +1932,238 @@ def create_cluster_for_artigo(db: Session, artigo: ArtigoBruto, tema_principal: 
     associate_artigo_to_cluster(db, artigo.id, cluster.id)
     
     return cluster
+
+
+# ==============================================================================
+# CRUD - USUARIOS (v3.0 Multi-Tenant)
+# ==============================================================================
+
+def create_usuario(db: Session, nome: str, email: str, senha_hash: str, role: str = "user") -> Usuario:
+    """Cria um novo usuário."""
+    user = Usuario(nome=nome, email=email, senha_hash=senha_hash, role=role, ativo=True)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def get_usuario_by_email(db: Session, email: str) -> Optional[Usuario]:
+    """Busca usuário por email."""
+    return db.query(Usuario).filter(Usuario.email == email).first()
+
+
+def get_usuario_by_id(db: Session, user_id: int) -> Optional[Usuario]:
+    """Busca usuário por ID."""
+    return db.query(Usuario).filter(Usuario.id == user_id).first()
+
+
+def list_usuarios(db: Session, apenas_ativos: bool = True) -> List[Usuario]:
+    """Lista todos os usuários."""
+    q = db.query(Usuario)
+    if apenas_ativos:
+        q = q.filter(Usuario.ativo == True)
+    return q.order_by(Usuario.nome).all()
+
+
+def update_usuario(db: Session, user_id: int, **kwargs) -> Optional[Usuario]:
+    """Atualiza campos de um usuário."""
+    user = db.query(Usuario).filter(Usuario.id == user_id).first()
+    if not user:
+        return None
+    for key, value in kwargs.items():
+        if value is not None and hasattr(user, key):
+            setattr(user, key, value)
+    user.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def deactivate_usuario(db: Session, user_id: int) -> bool:
+    """Desativa um usuário (soft delete)."""
+    user = db.query(Usuario).filter(Usuario.id == user_id).first()
+    if not user:
+        return False
+    user.ativo = False
+    user.updated_at = datetime.utcnow()
+    db.commit()
+    return True
+
+
+# ==============================================================================
+# CRUD - PREFERENCIAS DE USUARIO
+# ==============================================================================
+
+def get_preferencias_usuario(db: Session, user_id: int) -> Optional[PreferenciaUsuario]:
+    """Busca preferências de um usuário."""
+    return db.query(PreferenciaUsuario).filter(PreferenciaUsuario.user_id == user_id).first()
+
+
+def upsert_preferencias_usuario(db: Session, user_id: int, **kwargs) -> PreferenciaUsuario:
+    """Cria ou atualiza preferências de um usuário."""
+    prefs = db.query(PreferenciaUsuario).filter(PreferenciaUsuario.user_id == user_id).first()
+    if prefs:
+        for key, value in kwargs.items():
+            if value is not None and hasattr(prefs, key):
+                setattr(prefs, key, value)
+        prefs.updated_at = datetime.utcnow()
+    else:
+        prefs = PreferenciaUsuario(user_id=user_id, **{k: v for k, v in kwargs.items() if v is not None})
+        db.add(prefs)
+    db.commit()
+    db.refresh(prefs)
+    return prefs
+
+
+# ==============================================================================
+# CRUD - TEMPLATES DE RESUMO
+# ==============================================================================
+
+def create_template_resumo(db: Session, nome: str, system_prompt: str, criado_por: Optional[int] = None,
+                           publico: bool = False, descricao: Optional[str] = None,
+                           tools_habilitadas: Optional[list] = None,
+                           restricoes: Optional[dict] = None) -> TemplateResumoUsuario:
+    """Cria um novo template de resumo."""
+    tpl = TemplateResumoUsuario(
+        nome=nome,
+        descricao=descricao,
+        system_prompt=system_prompt,
+        criado_por_user_id=criado_por,
+        publico=publico,
+        tools_habilitadas=tools_habilitadas or [],
+        restricoes=restricoes or {},
+    )
+    db.add(tpl)
+    db.commit()
+    db.refresh(tpl)
+    return tpl
+
+
+def list_templates_resumo(db: Session, user_id: Optional[int] = None,
+                          incluir_publicos: bool = True) -> List[TemplateResumoUsuario]:
+    """Lista templates: do próprio usuário + públicos."""
+    from sqlalchemy import or_
+    q = db.query(TemplateResumoUsuario)
+    conditions = []
+    if user_id is not None:
+        conditions.append(TemplateResumoUsuario.criado_por_user_id == user_id)
+    if incluir_publicos:
+        conditions.append(TemplateResumoUsuario.publico == True)
+    if conditions:
+        q = q.filter(or_(*conditions))
+    return q.order_by(TemplateResumoUsuario.nome).all()
+
+
+def get_template_resumo(db: Session, template_id: int) -> Optional[TemplateResumoUsuario]:
+    """Busca template por ID."""
+    return db.query(TemplateResumoUsuario).filter(TemplateResumoUsuario.id == template_id).first()
+
+
+def update_template_resumo(db: Session, template_id: int, **kwargs) -> Optional[TemplateResumoUsuario]:
+    """Atualiza um template de resumo."""
+    tpl = db.query(TemplateResumoUsuario).filter(TemplateResumoUsuario.id == template_id).first()
+    if not tpl:
+        return None
+    for key, value in kwargs.items():
+        if value is not None and hasattr(tpl, key):
+            setattr(tpl, key, value)
+    tpl.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(tpl)
+    return tpl
+
+
+def delete_template_resumo(db: Session, template_id: int) -> bool:
+    """Deleta um template de resumo."""
+    tpl = db.query(TemplateResumoUsuario).filter(TemplateResumoUsuario.id == template_id).first()
+    if not tpl:
+        return False
+    db.delete(tpl)
+    db.commit()
+    return True
+
+
+# ==============================================================================
+# CRUD - RESUMOS DE USUARIO
+# ==============================================================================
+
+def create_resumo_usuario(db: Session, user_id: int, data_referencia, template_id: Optional[int],
+                          clusters_avaliados: list, clusters_escolhidos: list,
+                          texto: Optional[str], texto_whatsapp: Optional[str],
+                          prompt_version: Optional[str] = None,
+                          metadados: Optional[dict] = None) -> ResumoUsuario:
+    """Cria um novo resumo para um usuário."""
+    resumo = ResumoUsuario(
+        user_id=user_id,
+        data_referencia=data_referencia,
+        template_id=template_id,
+        clusters_avaliados_ids=clusters_avaliados,
+        clusters_escolhidos_ids=clusters_escolhidos,
+        texto_gerado=texto,
+        texto_whatsapp=texto_whatsapp,
+        prompt_version=prompt_version,
+        metadados=metadados or {},
+    )
+    db.add(resumo)
+    db.commit()
+    db.refresh(resumo)
+    return resumo
+
+
+def get_resumo_usuario(db: Session, user_id: int, data_referencia) -> Optional[ResumoUsuario]:
+    """Busca o resumo mais recente de um usuário para uma data."""
+    return db.query(ResumoUsuario).filter(
+        ResumoUsuario.user_id == user_id,
+        func.date(ResumoUsuario.data_referencia) == data_referencia,
+    ).order_by(desc(ResumoUsuario.created_at)).first()
+
+
+def list_resumos_usuario(db: Session, user_id: int, limit: int = 30) -> List[ResumoUsuario]:
+    """Lista os últimos resumos de um usuário."""
+    return db.query(ResumoUsuario).filter(
+        ResumoUsuario.user_id == user_id,
+    ).order_by(desc(ResumoUsuario.created_at)).limit(limit).all()
+
+
+def count_clusters_since(db: Session, since: datetime) -> int:
+    """Conta clusters criados ou atualizados desde um timestamp (para indicador de novos conteúdos)."""
+    return db.query(func.count(ClusterEvento.id)).filter(
+        ClusterEvento.status == 'ativo',
+        ClusterEvento.updated_at > since,
+    ).scalar() or 0
+
+
+# ==============================================================================
+# CLEANUP — Limpeza de dados antigos (>90 dias)
+# ==============================================================================
+
+def cleanup_old_data(db: Session, days: int = 90) -> Dict[str, int]:
+    """
+    Remove artigos brutos e clusters com mais de N dias. Preserva resumos do dia (curtos).
+
+    Ordem: artigos primeiro (FK), depois clusters orfaos.
+    Nao deleta: resumos_usuario, templates, preferencias, usuarios.
+    """
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    stats = {"artigos_deleted": 0, "clusters_deleted": 0, "chat_deleted": 0}
+
+    artigos_deleted = db.query(ArtigoBruto).filter(
+        ArtigoBruto.created_at < cutoff,
+    ).delete(synchronize_session=False)
+    stats["artigos_deleted"] = artigos_deleted
+
+    clusters_deleted = db.query(ClusterEvento).filter(
+        ClusterEvento.created_at < cutoff,
+    ).delete(synchronize_session=False)
+    stats["clusters_deleted"] = clusters_deleted
+
+    try:
+        from backend.database import ChatSession, ChatMessage, EstagiarioChatSession, EstagiarioChatMessage
+        chat_sessions = db.query(ChatSession).filter(ChatSession.created_at < cutoff).delete(synchronize_session=False)
+        estagiario_sessions = db.query(EstagiarioChatSession).filter(EstagiarioChatSession.created_at < cutoff).delete(synchronize_session=False)
+        stats["chat_deleted"] = chat_sessions + estagiario_sessions
+    except Exception:
+        pass
+
+    db.commit()
+    return stats

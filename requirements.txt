@@ -41,6 +41,11 @@ pgvector
 PyMuPDF
 PyPDF2
 
+# --- Autenticacao e Seguranca (v3.0 Multi-Tenant) ---
+# JWT para tokens de sessao e passlib para hash de senhas.
+python-jose[cryptography]
+passlib[bcrypt]
+
 # --- Utilitarios ---
 # 'rich' para logs e saidas formatadas no console, o que e util para debug dos scripts.
 # 'APScheduler' para tarefas agendadas, como descrito na tabela 'configuracoes_coleta'.

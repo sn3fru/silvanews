@@ -1,90 +1,144 @@
-# .cursorrules - BTG AlphaFeed (v2.0 Graph-RAG Agentic)
+# .cursorrules - BTG AlphaFeed (v3.0 Multi-Tenant Agentic)
 #
 # ANTES DE QUALQUER IMPLEMENTACAO: Leia docs/SYSTEM.md para entender
-# onde cada funcao mora. Leia docs/OPERATIONS.md para os endpoints da API.
+# onde cada funcao mora. Leia docs/OPERATIONS.md para os endpoints e setup.
 
-# ARQUITETURA
+# ARQUITETURA v3.0
 # Pipeline DUAL: v1 (producao, linear em process_articles.py) + v2 (sombra, LangGraph Graph-RAG em backend/workflow.py).
 # Stack: Python 3.11, FastAPI, SQLAlchemy, PostgreSQL (pgvector), LangGraph, Gemini 2.0 Flash.
 # Estrategia: Strangler Fig - v2 roda em paralelo sem afetar v1.
+# Deploy: Heroku (gunicorn + PostgreSQL). Sync via migrate_incremental.py.
+#
+# Multi-Tenant v3.0:
+#   - JWT auth (python-jose + passlib[bcrypt])
+#   - Tabelas: usuarios, preferencias_usuario, templates_resumo_usuario, resumos_usuario
+#   - Onboarding: modal de tags ao primeiro login (script.js verificarOnboarding)
+#   - Resumo personalizado: UMA chamada LLM por usuario (gerar_resumo_para_usuario)
+#     Contexto compartilhado via _build_context_block (cache por updated_at)
+#   - Hero section no frontend (index.html #daily-summary-hero)
+#   - Pipeline micro-batch com lock file (run_microbatch_cycle + .microbatch.lock)
+#   - Tools do agente: obter_textos_brutos_cluster + buscar_na_web (Tivaly)
 
 # DOCUMENTACAO (OBRIGATORIA para contexto)
-# docs/SYSTEM.md             -> REFERENCIA COMPLETA: todas as tabelas (17), funcoes CRUD (79), pipeline v1 (31 funcoes),
-#                               pipeline v2 (5 nos LangGraph), prompts (10+), frontend (200+ funcoes JS), agente estagiario
-# docs/OPERATIONS.md         -> REFERENCIA DE API: todos os 60+ endpoints com params, bodies e funcoes que chamam,
-#                               setup, deploy, troubleshooting
-# docs/V2-MIGRATION-PLAN.md  -> Status do Graph-RAG: fases concluidas, como usar, proximos passos
+# docs/SYSTEM.md             -> REFERENCIA COMPLETA: todas as tabelas (21+), funcoes CRUD (100+), pipeline v1/v2,
+#                               prompts, frontend, agente estagiario, sistema multi-tenant, tools
+# docs/OPERATIONS.md         -> REFERENCIA DE API: setup, deploy, pipeline diario, endpoints, troubleshooting
+# docs/V2-MIGRATION-PLAN.md  -> Status do Graph-RAG: historico v2.0 (concluido)
 #
-# Implementacao Agrupamento/Priorizacao (1.A, 2.A, 2.B, 3.A):
-#   docs/GUIA_IMPLEMENTACAO_AGRUPAMENTO_PRIORIZACAO.md  -> Guia tecnico completo (passos, decisões, riscos)
-#   docs/TASK_IMPLEMENTACAO_AGRUPAMENTO_PRIORIZACAO.md  -> TASK com regras de ouro: pesquisar impactos antes,
-#                                                          atualizar docs apos cada passo, estudar doc+codigo antes do proximo
+# Agente Resumo Diario (IMPLEMENTADO):
+#   docs/AGENTE_RESUMO_DIARIO_SPEC.md  -> SPEC: tools, fluxo multi-persona / per-user, formato WhatsApp
+#   agents/resumo_diario/agent.py      -> Orquestrador (gerar_resumo_diario, gerar_resumo_para_usuario)
+#   agents/resumo_diario/tools/        -> Tools (obter_textos_brutos, buscar_na_web/Tivaly)
+#
+# Implementacao Agrupamento/Priorizacao (CONCLUIDO):
+#   docs/GUIA_IMPLEMENTACAO_AGRUPAMENTO_PRIORIZACAO.md  -> Design reference (1.A, 2.A, 2.B, 3.A)
+#   docs/PROBLEMA_AGRUPAMENTO_NOTICIAS.md               -> Problem framing (falsos pos/neg, P1/P2/P3)
 
 # LEIS IMUTAVEIS
 # 1. Gatekeeper V13 (backend/prompts.py PROMPT_ANALISE_E_SINTESE_CLUSTER_V1) - encapsular, nunca reescrever
-# 2. Nacional e Internacional NUNCA se misturam no mesmo cluster (campo tipo_fonte em artigos e clusters)
+# 2. Nacional e Internacional NUNCA se misturam no mesmo cluster (campo tipo_fonte)
 # 3. texto_bruto e somente leitura (campo IMUTAVEL em artigos_brutos)
 # 4. v2 roda em shadow mode (V2_SHADOW_MODE=1) sem afetar v1
+# 5. Prioridade P1/P2/P3 e GLOBAL — o resumo do usuario e uma VIEW, nunca muta prioridade no banco
+# 6. Cache de _build_context_block() invalidado por max(updated_at) de clusters_eventos
+# 7. Prompts editaveis via banco (get_prompt() com fallback para constantes locais)
+# 8. Cada usuario = UMA chamada LLM no resumo. Contexto compartilhado, prompt personalizado.
+# 9. Micro-batch com lock file — nunca processar 2 lotes simultaneamente
 
 # MAPA DE NAVEGACAO - "Onde implementar X?"
 #
 # Nova feature de DADOS/TABELA:
-#   1. Modelo ORM: backend/database.py
-#   2. CRUD: backend/crud.py (seguir padrao existente: funcoes puras db+session)
-#   3. Endpoint: backend/main.py (seguir padrao: depende de get_db, chama crud)
-#   4. Migration SQL: scripts/migrate_*.py (se producao Heroku)
+#   1. Modelo ORM: backend/database.py (21+ tabelas)
+#   2. CRUD: backend/crud.py (100+ funcoes, seguir padrao: session como 1o param)
+#   3. Endpoint: backend/main.py (80+ endpoints, Depends(get_db), Depends(require_auth))
+#   4. Migration SQL: scripts/migrate_*.py + migrate_incremental.py
+#   5. Pydantic models: backend/models.py
 #
 # Nova feature de PROCESSAMENTO/LLM:
-#   1. Prompt: backend/prompts.py (SEMPRE centralizar aqui)
-#   2. Logica v1: process_articles.py (funcao dedicada, integrar no main())
-#   3. Logica v2: backend/agents/nodes.py (novo no ou extender existente)
-#   4. Orquestracao v2: backend/workflow.py (adicionar no ao StateGraph)
+#   1. Prompt: backend/prompts.py (SEMPRE centralizar aqui, registrar em PROMPT_REQUIRED_VARS)
+#   2. Logica v1: process_articles.py
+#   3. Logica v2: backend/agents/nodes.py
+#   4. Orquestracao v2: backend/workflow.py (StateGraph)
 #
 # Nova feature de FRONTEND:
-#   1. Feed/Deep-dive: frontend/script.js (120+ funcoes, cache em Map)
-#   2. Admin/Settings: frontend/settings.js (80+ funcoes, 5 abas)
-#   3. Layout: frontend/index.html ou settings.html
+#   1. Feed/Deep-dive: frontend/script.js (120+ funcoes, fetchAuth() com JWT, verificarOnboarding)
+#   2. Admin/Settings: frontend/settings.js (80+ funcoes, getAuthHeaders())
+#   3. Layout: frontend/index.html (Hero Section resumo) ou settings.html
 #   4. Estilo: frontend/style.css
+#   5. Documentacao: frontend/docs.html (Markdown + Mermaid via marked.js + mermaid.js)
+#   6. Login: frontend/login.html (API /api/auth/login com fallback legado)
 #
 # Nova feature de BUSCA/RAG:
-#   1. Embeddings v1 (OpenAI 384d): semantic_search/embedder.py + store.py + search.py
-#   2. Embeddings v2 (pgvector 768d): coluna embedding_v2 em artigos_brutos + indice HNSW
-#   3. Grafo: backend/agents/graph_crud.py (entidades, arestas, queries temporais)
+#   1. Embeddings v1 (OpenAI 384d): semantic_search/
+#   2. Embeddings v2 (pgvector 768d): coluna embedding_v2
+#   3. Grafo: backend/agents/graph_crud.py
 #
 # Nova feature de AGENTE/CHAT:
-#   1. Chat por cluster: endpoints /api/chat/* em main.py, CRUD em crud.py
-#   2. Estagiario: agents/estagiario/agent.py (classificacao de intencao + roteamento)
-#   3. Ferramentas: agents/estagiario/tools/definitions.py
+#   1. Chat por cluster: endpoints /api/chat/* em main.py
+#   2. Estagiario: agents/estagiario/
+#   3. Resumo Diario: agents/resumo_diario/ (2 modos: multi-persona legado, per-user v3)
+#      Tools: obter_textos_brutos_cluster, buscar_na_web (Tivaly)
+#      Entry points: gerar_resumo_diario() (multi-persona), gerar_resumo_para_usuario() (per-user)
+#
+# Nova feature de AUTENTICACAO:
+#   1. JWT auth: POST /api/auth/login, GET /api/auth/me, POST /api/auth/register
+#   2. Depends: get_current_user (opcional), require_auth (obrigatorio), require_admin
+#   3. Frontend: fetchAuth(), login.html, onboarding modal
+#
+# Nova feature de MULTI-TENANT:
+#   1. Tabelas: usuarios, preferencias_usuario, templates_resumo_usuario, resumos_usuario
+#   2. Endpoints: /api/user/preferencias, /api/templates-resumo/*, /api/resumo/*
+#   3. Onboarding: verificarOnboarding() em script.js (detecta prefs vazias -> modal)
+#   4. Agente: gerar_resumo_para_usuario() le prefs + template do banco, monta prompt unico
 
-# ARQUIVOS CRITICOS (ler ANTES de editar qualquer coisa relacionada)
-# backend/prompts.py          -> Tags (9 nacionais, 8 internacionais), prioridades P1/P2/P3, todos os prompts LLM
-# backend/crud.py             -> 79 funcoes. Qualquer operacao de banco DEVE passar por aqui.
-# backend/main.py             -> 60+ endpoints. Estado global: upload_progress, processing_state.
-# process_articles.py         -> Pipeline v1 completo. 4 etapas + modo sombra v2. Funcoes de extracao JSON com 5 fallbacks.
-# backend/database.py         -> 17 tabelas ORM. Mudanca aqui = migration SQL para producao.
+# ARQUIVOS CRITICOS (ler ANTES de editar)
+# backend/prompts.py          -> Tags, prioridades, prompts, get_prompt(), validar_prompt_update(), PERSONAS_RESUMO_DIARIO
+# backend/crud.py             -> 100+ funcoes. Toda op de banco aqui. Incl. CRUD usuarios/prefs/templates/resumos.
+# backend/main.py             -> 80+ endpoints. Auth JWT (python-jose). Estado global: upload_progress, processing_state.
+# backend/database.py         -> 21+ tabelas ORM. Incl. usuarios, preferencias, templates, resumos.
+# backend/models.py           -> Pydantic models (auth, usuarios, prefs, templates, resumos + legado).
+# process_articles.py         -> Pipeline v1 completo. 4 etapas + modo sombra v2.
+# run_complete_workflow.py     -> Orquestrador: --single, --scheduler, --microbatch (com lock file).
+# agents/resumo_diario/agent.py -> Agente resumo: gerar_resumo_diario + gerar_resumo_para_usuario.
+# agents/resumo_diario/tools/definitions.py -> Tools: obter_textos_brutos, buscar_na_web (Tivaly).
 
 # DEPLOYMENT & SYNC (CRITICO)
-# Workflow do usuario: cola PDFs em ../pdfs/ e roda run_complete_workflow.py
-# Esse script executa: load_news.py -> process_articles.py -> migrate_incremental --include-all
-# O migrate_incremental.py sincroniza LOCAL -> HEROKU (producao).
+# Heroku: gunicorn + PostgreSQL. requirements.txt inclui python-jose[cryptography] e passlib[bcrypt].
+# Workflow: PDFs em ../pdfs/ -> run_complete_workflow.py -> load -> process -> migrate -> notify
+# Micro-batch: --microbatch --batch-interval 3 (lock file previne race condition)
+# migrate_incremental.py: sync LOCAL -> HEROKU (21+ tabelas). Flags: --include-all, --include-usuarios
 #
 # REGRA OBRIGATORIA: Se criar/alterar tabela em database.py:
-#   1. Adicionar import no migrate_incremental.py (ambos os blocos try/except)
-#   2. Criar funcao migrate_<entidade>() seguindo o padrao existente (idempotente, incremental)
-#   3. Adicionar flag --include-<entidade> e chamar no bloco main()
-#   4. Fornecer SQL raw de migracao para producao Heroku (scripts/migrate_*.py)
-#   SEM ISSO: a inteligencia fica PRESA no localhost e producao nao recebe os dados.
+#   1. Adicionar import no migrate_incremental.py
+#   2. Criar funcao migrate_<entidade>() idempotente
+#   3. Adicionar flag --include-<entidade>
+#   SEM ISSO: dados ficam PRESOS no localhost.
 #
-# Arquivos de sync:
-#   run_complete_workflow.py   -> Orquestrador: DB check -> load_news -> process_articles -> migrate
-#   migrate_incremental.py     -> Sync incremental (18 tabelas). Flags: --include-all para tudo
-#   last_migration.txt         -> Timestamp da ultima sync (ISO UTC)
+# ENV VARS OBRIGATORIAS (Heroku + local):
+#   DATABASE_URL, GEMINI_API_KEY, JWT_SECRET (default: fallback sha256)
+# ENV VARS OPCIONAIS:
+#   TIVALY_API_KEY (web search), TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID,
+#   V2_SHADOW_MODE (default: 1), ADMIN_INITIAL_PASSWORD (default: admin)
 
 # REGRAS DE CODIGO
-# - Type hints estrito. Pydantic para validacao entre nos.
-# - Erros em LLM: fallback gracioso (Writer sem contexto, NER vazio). Nunca crashar o pipeline.
-# - Se modificar database.py: OBRIGATORIO atualizar migrate_incremental.py (ver regra acima).
+# - Type hints estrito. Pydantic para validacao.
+# - Erros em LLM: fallback gracioso. Nunca crashar o pipeline.
+# - Se modificar database.py: OBRIGATORIO atualizar migrate_incremental.py.
 # - Novos CRUD: seguir padrao de crud.py (session como 1o param, returns tipados).
-# - Frontend: toda chamada API deve ter tratamento de erro + notification toast.
+# - Frontend: toda chamada API deve usar fetchAuth() + tratamento de erro.
 # - Se criar arquivo de teste: deletar apos uso (nao guardar lixo).
-# - Manter docs/SYSTEM.md e docs/OPERATIONS.md atualizados ao implementar features.
+# - Credenciais/cookies NUNCA no Git. Usar .env ou .gitignore.
+
+# REGRA OBRIGATORIA: TESTAR + DOCUMENTAR APOS IMPLEMENTAR
+# Apos CADA implementacao significativa (nova feature, bugfix, refactor):
+#   1. TESTAR: Criar um script temporario (tmp_test_*.py) que valide a funcionalidade.
+#      Rodar o teste e confirmar que funciona. Deletar o script temporario apos confirmar.
+#   2. DOCUMENTAR: Atualizar IMEDIATAMENTE os arquivos de documentacao afetados:
+#      - docs/SYSTEM.md (se alterou arquitetura, tabelas, funcoes)
+#      - docs/OPERATIONS.md (se alterou endpoints, setup, deploy)
+#      - docs/AGENTE_RESUMO_DIARIO_SPEC.md (se alterou agente de resumo)
+#      - README.md (se alterou pipeline, comandos, setup)
+#      - .cursorrules (se adicionou tabela, endpoint, tool ou regra nova)
+#   3. VERIFICAR imports: Garantir que todas as funcoes chamadas existem e estao importadas.
+#   4. VERIFICAR caminhos: Testar que os caminhos de arquivos/pastas existem no filesystem.
+#   Nao considerar a tarefa concluida ate que os testes passem e a documentacao esteja atualizada.

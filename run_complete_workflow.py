@@ -20,6 +20,9 @@ if os.name == 'nt':
     except Exception:
         pass
 
+# URL do banco de produção (usada na migração e no resumo diário)
+PRODUCTION_DATABASE_URL = "postgres://u71uif3ajf4qqh:pbfa5924f245d80b107c9fb38d5496afc0c1372a3f163959faa933e5b9f7c47d6@c3v5n5ajfopshl.cluster-czrs8kj4isg7.us-east-1.rds.amazonaws.com:5432/daoetg9ahbmcff"
+
 def check_conda_env():
     """Verifica se está no ambiente conda correto."""
     conda_env = os.environ.get('CONDA_DEFAULT_ENV')
@@ -167,6 +170,104 @@ def check_and_start_local_db():
         print(f"[ERRO] Erro ao verificar/iniciar banco local: {e}")
         return False
 
+def run_crawlers():
+    """ETAPA 0.5: Roda crawlers de noticias online e copia dump.json para pasta pdfs.
+
+    Fluxo:
+      1. Executa CRAWLERS/src/news_manager.py (roda cada crawler + gera dump global)
+      2. Procura o dump mais recente em CRAWLERS/dump/
+      3. Copia para ../pdfs/ (mesma pasta que load_news.py le)
+
+    Se os crawlers falharem, tenta copiar dumps existentes de rodadas anteriores.
+    """
+    try:
+        project_root = Path(__file__).parent
+        crawlers_src = project_root / "CRAWLERS" / "src"
+        news_manager = crawlers_src / "news_manager.py"
+        pdfs_dir = project_root.parent / "pdfs"
+        dump_dir = project_root / "CRAWLERS" / "dump"
+
+        if not news_manager.exists():
+            print("[CRAWLERS] CRAWLERS/src/news_manager.py nao encontrado. Pulando.")
+            return True
+
+        print("\n" + "=" * 60)
+        print("  ETAPA 0.5: CRAWLERS DE NOTICIAS ONLINE")
+        print("=" * 60)
+        print(f"  Script: {news_manager}")
+        print(f"  CWD: {crawlers_src}")
+
+        crawlers_ok = False
+        try:
+            result = subprocess.run(
+                [sys.executable, str(news_manager)],
+                cwd=str(crawlers_src),
+                capture_output=True, text=True, encoding='utf-8', errors='replace',
+                env=_subprocess_env(),
+                timeout=600,
+            )
+            if result.stdout:
+                for line in result.stdout.strip().split("\n")[-10:]:
+                    print(f"  | {line}")
+            if result.returncode == 0:
+                crawlers_ok = True
+                print("[CRAWLERS] Crawlers concluidos com sucesso.")
+            else:
+                print(f"[CRAWLERS] Crawlers falharam (code={result.returncode})")
+                if result.stderr:
+                    print(f"  stderr: {result.stderr[:300]}")
+                print("[CRAWLERS] Tentando copiar dump existente...")
+
+        except subprocess.TimeoutExpired:
+            print("[CRAWLERS] Timeout (600s). Tentando copiar dump existente...")
+        except Exception as e:
+            print(f"[CRAWLERS] Erro ao rodar crawlers: {e}")
+            print("[CRAWLERS] Tentando copiar dump existente...")
+
+        # Mesmo se crawlers falharam, tenta copiar o dump mais recente
+        if not dump_dir.exists():
+            print("[CRAWLERS] Pasta CRAWLERS/dump/ nao existe. Nada a copiar.")
+            return crawlers_ok
+
+        from datetime import datetime as dt_mod
+        data_hoje = dt_mod.today().strftime("%Y%m%d")
+        dump_hoje = dump_dir / f"dump_crawlers_{data_hoje}.json"
+
+        if dump_hoje.exists():
+            dump_file = dump_hoje
+        else:
+            all_dumps = sorted(dump_dir.glob("dump_crawlers_*.json"), reverse=True)
+            dump_file = all_dumps[0] if all_dumps else None
+
+        if not dump_file or not dump_file.exists():
+            print("[CRAWLERS] Nenhum dump encontrado em CRAWLERS/dump/.")
+            return crawlers_ok
+
+        # Verifica tamanho do dump (um dump vazio/corrompido nao serve)
+        dump_size = dump_file.stat().st_size
+        if dump_size < 100:
+            print(f"[CRAWLERS] Dump {dump_file.name} muito pequeno ({dump_size} bytes). Ignorando.")
+            return crawlers_ok
+
+        pdfs_dir.mkdir(parents=True, exist_ok=True)
+        dest = pdfs_dir / dump_file.name
+
+        if dest.exists():
+            print(f"[CRAWLERS] Dump ja existe em pdfs/: {dest.name} ({dump_size:,} bytes)")
+        else:
+            import shutil
+            shutil.copy2(str(dump_file), str(dest))
+            print(f"[CRAWLERS] Dump copiado: {dump_file.name} ({dump_size:,} bytes) -> {pdfs_dir}")
+
+        return True
+
+    except Exception as e:
+        import traceback
+        print(f"[CRAWLERS] Erro inesperado: {e}")
+        traceback.print_exc()
+        return False
+
+
 def run_load_news():
     """Executa o carregamento de notícias."""
     try:
@@ -239,32 +340,26 @@ def run_process_articles():
 def run_migrate_incremental():
     """Executa a migração incremental do banco de dados."""
     try:
-        print("\nETAPA 3: Executando migração incremental do banco...")
+        print("\nMIGRAÇÃO: Executando migração incremental do banco...")
         
-        # Configurações de conexão (hardcoded para evitar parâmetros)
         SOURCE_DB = "postgresql+psycopg2://postgres_local@localhost:5433/devdb"
-        DEST_DB = "postgres://u71uif3ajf4qqh:pbfa5924f245d80b107c9fb38d5496afc0c1372a3f163959faa933e5b9f7c47d6@c3v5n5ajfopshl.cluster-czrs8kj4isg7.us-east-1.rds.amazonaws.com:5432/daoetg9ahbmcff"
-        
+        DEST_DB = PRODUCTION_DATABASE_URL
+
         print(f"[INFO] Origem: {SOURCE_DB}")
         print(f"[INFO] Destino: {DEST_DB}")
         
-        # Executa a migração com --include-all para sincronizar TODAS as entidades
-        # (clusters, artigos, sinteses, configs, alteracoes, chat, prompts,
-        #  grafo v2, feedback, estagiario, research jobs)
         result = subprocess.run([
             sys.executable, "-m", "migrate_incremental", 
             "--source", SOURCE_DB,
             "--dest", DEST_DB,
             "--include-all"
-        ], cwd=Path(__file__).parent, capture_output=True, text=True, encoding='utf-8', errors='replace', env=_subprocess_env())
+        ], cwd=Path(__file__).parent, capture_output=False, text=True, encoding='utf-8', errors='replace', env=_subprocess_env())
         
         if result.returncode == 0:
             print("[OK] SUCESSO: Migração incremental concluída!")
-            print(result.stdout)
             return True
         else:
-            print("[ERRO] ERRO: Erro na migração incremental:")
-            print(result.stderr)
+            print("[ERRO] ERRO: Erro na migração incremental")
             return False
             
     except Exception as e:
@@ -355,6 +450,28 @@ def run_feedback_learning():
         return True  # Nao bloqueia pipeline
 
 
+def run_cleanup(days: int = 90):
+    """Remove artigos e clusters com mais de N dias. Preserva resumos do dia."""
+    try:
+        print(f"CLEANUP: Removendo dados com mais de {days} dias...")
+        from backend.database import SessionLocal
+        from backend.crud import cleanup_old_data as _cleanup
+
+        db = SessionLocal()
+        try:
+            stats = _cleanup(db, days=days)
+            total = sum(stats.values())
+            if total > 0:
+                print(f"[CLEANUP] Removidos: {stats['artigos_deleted']} artigos, "
+                      f"{stats['clusters_deleted']} clusters, {stats['chat_deleted']} chats")
+            else:
+                print("[CLEANUP] Nenhum dado antigo para remover.")
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"[CLEANUP] Erro: {e}")
+
+
 def run_notify():
     """Envia notificacoes Telegram de clusters pendentes (notificacoes individuais)."""
     try:
@@ -427,6 +544,160 @@ def run_telegram_briefing():
         return True  # Nao bloqueia pipeline
 
 
+def run_resumo_diario():
+    """
+    Gera o resumo do dia (multi-persona) e imprime no terminal formatado para WhatsApp.
+    Usa o banco LOCAL (dados ja processados, antes da migracao).
+    Nao bloqueia o pipeline em caso de falha.
+    """
+    try:
+        print("\n" + "=" * 60)
+        print("  RESUMO DO DIA — Multi-Persona (WhatsApp)")
+        print("=" * 60)
+
+        from agents.resumo_diario.agent import gerar_resumo_diario, formatar_whatsapp
+        from backend.prompts import PERSONAS_RESUMO_DIARIO
+        from backend.utils import get_date_brasil
+
+        target_date = get_date_brasil()
+        print(f"  Data: {target_date.isoformat()}")
+        print(f"  Personas: {list(PERSONAS_RESUMO_DIARIO.keys())}")
+        print()
+
+        resultado = gerar_resumo_diario(target_date=target_date)
+
+        if not resultado.get("ok"):
+            print(f"[AVISO] Resumo falhou: {resultado.get('error', 'desconhecido')}")
+            return True
+
+        # Formata e imprime no terminal
+        mensagens = formatar_whatsapp(resultado)
+        print("\n" + "-" * 60)
+        print("  MENSAGEM WHATSAPP (pronta para enviar):")
+        print("-" * 60)
+        for msg in mensagens:
+            print(msg)
+            print()
+
+        # Resumo estatistico
+        total = len(resultado.get("todos_clusters_escolhidos_ids", []))
+        avaliados = len(resultado.get("clusters_avaliados_ids", []))
+        print(f"[OK] Resumo gerado: {total} clusters selecionados de {avaliados} avaliados.")
+        return True
+
+    except Exception as e:
+        print(f"[AVISO] Erro ao gerar resumo do dia: {e}")
+        import traceback
+        traceback.print_exc()
+        return True
+
+
+_MICROBATCH_LOCK_FILE = ".microbatch.lock"
+
+
+def _acquire_lock(lock_path: Path) -> bool:
+    """Tenta adquirir lock file. Retorna False se ja existe um processo ativo."""
+    if lock_path.exists():
+        try:
+            content = lock_path.read_text().strip()
+            pid = int(content.split("|")[0])
+            import psutil
+            if psutil.pid_exists(pid):
+                print(f"[Lock] Processo {pid} ainda ativo. Abortando este ciclo.")
+                return False
+            else:
+                print(f"[Lock] PID {pid} morto. Removendo lock stale.")
+                lock_path.unlink(missing_ok=True)
+        except (ImportError, ValueError, OSError):
+            age = time.time() - lock_path.stat().st_mtime
+            if age < 600:  # 10min safety
+                print(f"[Lock] Lock file existe ({age:.0f}s). Abortando.")
+                return False
+            print(f"[Lock] Lock file stale ({age:.0f}s). Removendo.")
+            lock_path.unlink(missing_ok=True)
+    lock_path.write_text(f"{os.getpid()}|{time.strftime('%Y-%m-%d %H:%M:%S')}")
+    return True
+
+
+def _release_lock(lock_path: Path):
+    """Libera lock file."""
+    try:
+        lock_path.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def run_microbatch_cycle(pdfs_dir: str = None, batch_interval_minutes: int = 3):
+    """
+    Processa PDFs em micro-lotes: acumula por N minutos, processa o lote inteiro de uma vez.
+    Evita o overhead de levantar um subprocess por PDF individual.
+    Reutiliza conexoes e modelos carregados.
+
+    Protecao contra race condition: usa lock file para evitar sobreposicao de ciclos.
+    Se o lock estiver ativo, o ciclo é abortado e espera o proximo intervalo.
+    """
+    if pdfs_dir is None:
+        pdfs_dir = str(Path(__file__).parent.parent / "pdfs")
+
+    pdfs_path = Path(pdfs_dir)
+    processed_dir = pdfs_path / "_processed"
+    processed_dir.mkdir(exist_ok=True)
+    lock_path = pdfs_path / _MICROBATCH_LOCK_FILE
+
+    print(f"\n{'='*60}")
+    print(f"  MICRO-BATCH PIPELINE (intervalo: {batch_interval_minutes} min)")
+    print(f"  Diretório monitorado: {pdfs_path}")
+    print(f"{'='*60}")
+
+    ciclo = 0
+    try:
+        while True:
+            ciclo += 1
+
+            if not _acquire_lock(lock_path):
+                print(f"[Micro-batch #{ciclo}] Ciclo anterior ainda ativo. Pulando.")
+                time.sleep(batch_interval_minutes * 60)
+                continue
+
+            try:
+                pending = sorted(pdfs_path.glob("*.pdf"))
+                if not pending:
+                    print(f"[Micro-batch #{ciclo}] Nenhum PDF pendente. Aguardando {batch_interval_minutes} min...")
+                    time.sleep(batch_interval_minutes * 60)
+                    continue
+
+                print(f"\n[Micro-batch #{ciclo}] {len(pending)} PDFs encontrados. Processando lote...")
+
+                if not run_load_news():
+                    print("[AVISO] Falha no carregamento (continuando...)")
+
+                if not run_process_articles():
+                    print("[AVISO] Falha no processamento (continuando...)")
+
+                for pdf in pending:
+                    try:
+                        dest = processed_dir / pdf.name
+                        pdf.rename(dest)
+                    except Exception as e:
+                        print(f"[AVISO] Falha ao mover {pdf.name}: {e}")
+
+                run_migrate_incremental()
+                run_notify()
+
+                if ciclo % 10 == 0:
+                    run_cleanup(days=90)
+
+                print(f"[Micro-batch #{ciclo}] Lote concluido. {len(pending)} PDFs processados.")
+                print(f"Aguardando {batch_interval_minutes} min para proximo lote...")
+                time.sleep(batch_interval_minutes * 60)
+            finally:
+                _release_lock(lock_path)
+
+    except KeyboardInterrupt:
+        _release_lock(lock_path)
+        print(f"\n[PARADO] Micro-batch encerrado apos {ciclo} ciclos.")
+
+
 def run_single_cycle(skip_load: bool = False):
     """Executa um unico ciclo do pipeline (para uso incremental de hora em hora)."""
     print("=" * 60)
@@ -445,7 +716,11 @@ def run_single_cycle(skip_load: bool = False):
     
     # PRE-STEP: Feedback Learning (atualiza regras antes do processamento)
     run_feedback_learning()
-    
+
+    # ETAPA 0.5: Crawlers (roda ANTES do load para gerar dump.json na pasta pdfs)
+    if not skip_load:
+        run_crawlers()
+
     # ETAPA 1: Carregamento de noticias (opcional - pode pular se nao tem PDFs novos)
     if not skip_load:
         if not run_load_news():
@@ -456,16 +731,22 @@ def run_single_cycle(skip_load: bool = False):
         print("[ERRO] Falha no processamento de artigos")
         return False
     
-    # ETAPA 3: Migracao incremental
+    # ETAPA 3: Resumo do dia (banco local — roda ANTES da migracao para liberar rapido)
+    run_resumo_diario()
+
+    # ETAPA 4: Migracao incremental (local → producao)
     if not run_migrate_incremental():
         print("[AVISO] Falha na migracao (continuando...)")
     
-    # ETAPA 4: Notificacoes Telegram (individuais)
+    # ETAPA 5: Notificacoes Telegram (individuais)
     run_notify()
     
-    # ETAPA 5: Daily Briefing sintetizado
+    # ETAPA 6: Daily Briefing sintetizado
     run_telegram_briefing()
-    
+
+    # ETAPA 7: Limpeza de dados antigos (>90 dias — preserva resumos)
+    run_cleanup(days=90)
+
     print(f"\n[OK] Ciclo concluido em {time.strftime('%H:%M:%S')}")
     return True
 
@@ -531,7 +812,22 @@ def main():
                         help="Executa um unico ciclo e sai (modo incremental)")
     parser.add_argument("--notify-only", action="store_true",
                         help="Apenas envia notificacoes pendentes")
+    parser.add_argument("--microbatch", action="store_true",
+                        help="Modo micro-batch: monitora pasta de PDFs e processa em lotes")
+    parser.add_argument("--batch-interval", type=int, default=3,
+                        help="Intervalo entre micro-lotes em minutos (default: 3)")
     args = parser.parse_args()
+    
+    # --microbatch: monitora pasta e processa em lotes
+    if args.microbatch:
+        if not check_conda_env():
+            sys.exit(1)
+        if not check_env_file():
+            sys.exit(1)
+        if not check_and_start_local_db():
+            sys.exit(1)
+        run_microbatch_cycle(batch_interval_minutes=args.batch_interval)
+        return
     
     # --notify-only: so envia notificacoes
     if args.notify_only:
@@ -575,10 +871,11 @@ def main():
     print("   0. Verificação/inicialização do banco local")
     print("   *. Feedback Learning (analise de likes/dislikes)")
     print("   1. Carregamento de notícias (load_news.py --direct --yes)")
-    print("   2. Processamento de artigos (process_articles.py) — fluxo novo: fato gerador, heurística fonte, referente qualidade, multi-agent gating")
+    print("   2. Processamento de artigos (process_articles.py)")
     print("   3. Migração incremental do banco (migrate_incremental)")
     print("   4. Notificacoes Telegram individuais (se configurado)")
     print("   5. Daily Briefing sintetizado (se configurado)")
+    print("   6. Resumo do dia (multi-persona — banco local, printado no final)")
     
     # PRE-STEP: Feedback Learning (atualiza regras antes do processamento)
     run_feedback_learning()
@@ -593,18 +890,25 @@ def main():
         print("[ERRO] Falha no processamento de artigos")
         sys.exit(1)
     
-    # ETAPA 3: Migração incremental do banco
+    # ETAPA 3: Resumo do dia foi movido para o final do pipeline conforme pedido do usuário
+
+    # ETAPA 4: Migração incremental do banco
     if not run_migrate_incremental():
         print("[ERRO] Falha na migração incremental")
         sys.exit(1)
     
-    # ETAPA 4: Notificacoes individuais
+    # ETAPA 5: Notificacoes individuais
     run_notify()
     
-    # ETAPA 5: Daily Briefing sintetizado
+    # ETAPA 6: Daily Briefing sintetizado
     run_telegram_briefing()
-    
+
     print("\n[OK] Pipeline completo concluido!")
+
+    print("\n" + "=" * 60)
+    print("  ETAPA FINAL: Gerando Resumo para o WhatsApp")
+    print("=" * 60)
+    run_resumo_diario()
 
 if __name__ == "__main__":
     main() 

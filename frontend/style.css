@@ -1990,3 +1990,47 @@ hr { border: none; border-top: 1px solid var(--cor-borda); margin: 1.5rem 0; }
     stroke: #f59e0b;
     stroke-dasharray: 4 2;
 }
+
+/* ===== Hero: Resumo do Dia ===== */
+.daily-summary-hero {
+    background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+    border: 1px solid #bae6fd;
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.25rem;
+}
+.summary-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: .75rem;
+    flex-wrap: wrap;
+    gap: .5rem;
+}
+.summary-content {
+    line-height: 1.65;
+    font-size: .92rem;
+    color: #1e293b;
+    white-space: pre-wrap;
+}
+.summary-content p { margin: 0 0 .5rem; }
+.summary-empty { color: #94a3b8; font-style: italic; }
+.summary-new-alert { color: #d97706; font-weight: 600; font-size: .85rem; }
+.pulse-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    background: #f59e0b;
+    border-radius: 50%;
+    margin-right: 4px;
+    animation: pulse-dot 1.5s infinite;
+}
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .3; }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.summary-loading {
+    display: flex;
+    align-items: center;
+    padding: .5rem 0;
+}

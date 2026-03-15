@@ -1,0 +1,74 @@
+ad-id	A7_fe-ws1E4Aifm7kKKkXy4	.amazon-adsystem.com	/	2026-04-01T20:03:33.965Z	28	✓	✓	None			Medium
+ad-privacy	0	.amazon-adsystem.com	/	2026-09-04T20:03:33.965Z	11	✓	✓	None			Medium
+IDSYNC	"18z8~2qkc:18yl~2qfu:19cx~2q6e:1967~2q6e:199z~2qfp:19bu~2qfq:19cu~2pv0:19du~2q4i:19dc~2q6e:195n~2q6g"	.analytics.yahoo.com	/	2026-07-28T12:06:54.788Z	107		✓	None			Medium
+ar_debug	1	.creativecdn.com	/	2026-07-09T15:02:28.732Z	9	✓	✓	None			Medium
+g	qaQN0JKmwptI3dw6xNOm_1746919974030	.creativecdn.com	/	2026-07-28T15:31:53.054Z	35		✓	None			Medium
+APC	AfxxVi4cGZxfrNtQL2OgguAkw0tgUWapYtCzwMn2A2GTh6w2BdXokg	.doubleclick.net	/	2026-01-18T12:27:34.339Z	57		✓	None	https://estadao.com.br	✓	Medium
+ar_debug	1	.doubleclick.net	/	2025-08-30T19:57:37.194Z	9	✓	✓	None			Medium
+IDE	AHWqTUnG-MkiLplfO1GRDMopBFnpKdwAgLzxQN7_IZfSO7ESqKLmal2U9t7dDI-brMc	.doubleclick.net	/	2026-09-04T17:58:04.750Z	70	✓	✓	None			Medium
+receive-cookie-deprecation	1	.doubleclick.net	/	2026-01-21T17:01:05.108Z	27	✓	✓	None	https://estadao.com.br	✓	Medium
+___nrbi	%7B%22firstVisit%22%3A1751897982%2C%22userId%22%3A%22d79327a9-85b4-4637-b396-16b29efc1d57%22%2C%22userVars%22%3A%5B%5D%2C%22futurePreviousVisit%22%3A1751904126%2C%22timesVisited%22%3A2%7D	.estadao.com.br	/	2026-01-03T16:02:07.000Z	194		✓				Medium
+___nrbic	%7B%22landingPage%22%3A%22https%3A//einvestidor.estadao.com.br/%22%2C%22referrer%22%3A%22https%3A//www.google.com/%22%2C%22lpti%22%3Anull%2C%22previousVisit%22%3A1751897982%2C%22lastBeat%22%3A1751904126%2C%22currentVisitStarted%22%3A1751904126%2C%22sessionId%22%3A%220733a8c5-7ed2-4b76-b94b-36acafca3b56%22%2C%22sessionVars%22%3A%5B%5D%2C%22visitedInThisSession%22%3Atrue%2C%22pagesViewed%22%3A1%7D	.estadao.com.br	/	2026-01-03T16:02:07.000Z	406		✓				Medium
+__eoi	ID=16ac004bcd31b13c:T=1751897982:RT=1753992214:S=AA-AfjZLyKUeKgmdv2fvcONJZmez	.estadao.com.br	/	2026-01-03T14:19:42.000Z	82		✓	None			Medium
+__gads	ID=3360823323d2a675:T=1753450096:RT=1753992214:S=ALNI_MafyJcHaFFZ_yjoq0T5vwApqmos6w	.estadao.com.br	/	2026-08-19T13:28:16.000Z	89		✓	None			Medium
+__gpi	UID=000010f5396d184f:T=1753450096:RT=1753992214:S=ALNI_MZIPhnEth7FDPUWzASTO7sizgROlg	.estadao.com.br	/	2026-08-19T13:28:16.000Z	89		✓	None			Medium
+__rc	1	.estadao.com.br	/	Session	5		✓	None			Medium
+__rc2	1	.estadao.com.br	/	Session	6		✓	None			Medium
+_cb	DB5RoRBc6dgRCx_FMS	.estadao.com.br	/	2026-08-30T20:03:32.000Z	21		✓				Medium
+_cb_svref	external	.estadao.com.br	/	2025-07-31T20:33:32.000Z	17		✓				Medium
+_chartbeat2	.1707400207306.1753992212354.0000000001000001.DTo5miBpgPHZF1ANA2f6lQCrHawB.1	.estadao.com.br	/	2026-08-30T20:03:32.000Z	87		✓				Medium
+_clck	11wibrj%7C2%7Cfxf%7C0%7C2014	.estadao.com.br	/	2026-07-08T01:24:12.000Z	33						Medium
+_ea	GA1.3.202883367.860019000	.estadao.com.br	/	2026-08-26T12:28:04.290Z	28		✓	None			Medium
+_es_predict	t%3D1753992214042	.estadao.com.br	/	2025-08-31T20:03:32.000Z	28		✓	None			Medium
+_es_predict_data	guid%3D9128965%26pv%3D58%26pvs%3D4%26se%3D9%26ed%3DUnknown%26de%3DUnknown%26or%3DUnknown%26ti%3D92%26ex%3D1%26dn%3D5%26t%3D1753992213327	.estadao.com.br	/	2025-08-31T20:03:32.000Z	152		✓	None			Medium
+_es_user_cluster	%5Bmodelo_propensao%3Da_1_1_0.9888%5D%5Bmodelo_recomendacao%3Da_0%5D	.estadao.com.br	/	2025-10-01T20:03:34.000Z	84		✓	None			Medium
+_evga_b55d	{%22uuid%22:%227d939254fe5a2a3b%22%2C%22puid%22:%22gmbEZngu3s7CmM8dzOVIWHsQpwnltMTli8KbvMy32uwc4MQurPBixo-Iqe2OSwwNUbG3E4rAraza-6YBd24br2d89gPHanIuBjS1fgu5cPE6rZwoCBJIwOd2EVacksDClB1PcjZX1eXkC5x5rfImIryCJ_Es6-57hDtDJibwPy0%22%2C%22affinityId%22:%220Cc%22}	.estadao.com.br	/	2026-09-04T20:03:44.001Z	265						Medium
+_fbp	fb.2.1753448413249.918903091287603702	.estadao.com.br	/	2025-10-29T20:03:32.000Z	41			Lax			Medium
+_ga	GA1.1.202883367.860019000	.estadao.com.br	/	2026-08-29T14:56:40.137Z	28						Medium
+_ga_30STVHYL9V	GS2.1.s1753448440$o1$g1$t1753450089$j60$l0$h0	.estadao.com.br	/	2026-08-29T13:28:09.486Z	59		✓	None			Medium
+_ga_E7GXYBJWV2	GS2.1.s1753448439$o1$g1$t1753450089$j60$l0$h0	.estadao.com.br	/	2026-08-29T13:28:09.482Z	59		✓	None			Medium
+_ga_H1D7PSZ1DW	GS2.1.s1753992212$o6$g0$t1753992216$j56$l0$h1499832439	.estadao.com.br	/	2026-09-04T20:03:36.578Z	68						Medium
+_gac_UA-166963-24	1.1753448413.EAIaIQobChMIpfTqqojYjgMV3TlECB0sLRuDEAAYASAAEgJJKvD_BwE	.estadao.com.br	/	2025-10-23T13:00:12.000Z	85						Medium
+_gcl_au	1.1.1569307406.1751897982	.estadao.com.br	/	2025-10-05T14:19:41.000Z	32						Medium
+_gcl_aw	GCL.1753448413.EAIaIQobChMIpfTqqojYjgMV3TlECB0sLRuDEAAYASAAEgJJKvD_BwE	.estadao.com.br	/	2025-10-23T13:00:12.000Z	77						Medium
+_gcl_gs	2.1.k1$i1753448410$u162556258	.estadao.com.br	/	2025-10-23T13:00:12.000Z	36						Medium
+_hjSession_785763	eyJpZCI6ImZlYTkxNjkxLTIyZDQtNGZiNi05MGIxLTllZTI1NTY0NmMyNyIsImMiOjE3NTM5OTIyMTI4NzIsInMiOjAsInIiOjAsInNiIjowLCJzciI6MCwic2UiOjAsImZzIjowLCJzcCI6MX0=	.estadao.com.br	/	2025-07-31T20:33:32.000Z	165		✓	None			Medium
+_hjSessionUser_785763	eyJpZCI6IjIyZjVmOThkLWY1ODAtNWIxNi05MTI2LTFmM2Y5NWY0MzIxOCIsImNyZWF0ZWQiOjE3NTM0NDg0NDAxOTksImV4aXN0aW5nIjp0cnVlfQ==	.estadao.com.br	/	2026-07-31T20:03:32.000Z	137		✓	None			Medium
+_hjSessionUser_788653	eyJpZCI6IjFiYzc4YzE2LWYwMDItNTg4ZC05YjFiLTE0NTJkZmM5NDlhNyIsImNyZWF0ZWQiOjE3NTM0NDg0MTI2MTgsImV4aXN0aW5nIjpmYWxzZX0=	.estadao.com.br	/	2026-07-25T13:00:12.000Z	137		✓	None			Medium
+_ivc	5b3374e1-b8f3-40df-ab12-c192607845f1	.estadao.com.br	/	2026-08-11T14:19:41.620Z	40						Medium
+_scor_uid	f5f84a9fb0614fa4a8ada78fa4478350	.estadao.com.br	/	2026-08-25T20:03:32.000Z	41		✓	None			Medium
+_sfid_8f2e	{%22anonymousId%22:%227d939254fe5a2a3b%22%2C%22consents%22:[{%22consent%22:{%22purpose%22:%22Personalization%22%2C%22provider%22:%22Example%20Consent%20Manager%22%2C%22status%22:%22Opt%20In%22}%2C%22lastUpdateTime%22:%222025-07-07T14:19:41.707Z%22%2C%22lastSentTime%22:%222025-07-07T14:19:42.719Z%22}]}	.estadao.com.br	/	2026-09-04T20:03:44.003Z	312						Medium
+_sp_id	amp-VzeEis7wRV40gTRlupDpDA	.estadao.com.br	/	2026-07-21T21:05:16.000Z	32						Medium
+amp-access	amp-li-RyRJNft_sWXMrDwNyRg	.estadao.com.br	/	2026-07-21T21:05:15.000Z	36						Medium
+blaize_jwt	eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczpcL1wvd3d3LmVzdGFkYW8uY29tLmJyIiwic3ViIjoiOTEyODk2NSIsImF1ZCI6IkFQUCBFc3RhZFx1MDBlM28iLCJvcmlnZW0iOiJTQVAiLCJwcm9kdXRvcyI6WyJBQ1YiLCJEUCIsIkVQUk0iLCJJUEFEIiwiTU9CIiwiTm90XyIsIlBBU1MiXX0.0gtI62s2bb7X2Fioj3Kjc82dLVx060DlQvEemnwsfhc	.estadao.com.br	/	2025-08-01T13:01:42.638Z	294		✓	None			Medium
+compass_uid	d79327a9-85b4-4637-b396-16b29efc1d57	.estadao.com.br	/	2026-01-03T16:02:07.000Z	47		✓				Medium
+comScore	amp--2eOvg7x-UfmxzxjLQ9cig	.estadao.com.br	/	2026-07-21T21:05:16.000Z	34						Medium
+cto_bidid	Z2Fhxl9rbHdDdVNnT0RGSjR4eDhVJTJGaGFEZlN6ejc0eUlUeVNrZFVZUEFjQWc3Y3UydFN4YnR5cE9CZXYlMkJMOHJZVDViYzRHN1dmZzhnWVVUNDZwSG11alhLRVRvemJlMlV5RFV0WDRXdlhob0VCY1VKZnNjSGR5QlV1JTJGc2hKN0NTR1QwOQ	.estadao.com.br	/	2026-08-25T17:03:33.000Z	195						Medium
+cto_bundle	BC-EG19idnklMkZzWDk4RVZGSSUyQiUyRkVka1dNd3hCRiUyQlNJR2VReGpZQzlKZVk5dUNKYzFTWmFuc29wcWxNZXU0QzJ2RFpLbWV5TXBEOGFJUUJ1M2RaOTVGdlRkamVkV0dsNUlyRiUyQklWaiUyQmU4TFhnc0J5OVZGOG9ucFYzQ1ZDUXlNRjN4QlZ2VFcyRWZyMHAzUTZINWQ4bThEbUVBbmtCVHdROGZDanVuV0JxZ1lUS3FpTldvVHhvSFJ5TXVVQ2xEbDdPUTUlMkZQWjRPZXppVVBCemxabTl2WHBWVDNWN3clM0QlM0Q	.estadao.com.br	/	2026-08-25T20:03:35.000Z	329						Medium
+currentUrl	https://www.estadao.com.br/ultimas/	.estadao.com.br	/	Session	45						Medium
+ESTADAO_NETWORK	0	.estadao.com.br	/	2025-08-01T20:03:35.000Z	16		✓	None			Medium
+FCNEC	%5B%5B%22AKsRol94VL8DzNzaaanzORrMVTOFr8O0gcVruVO4gCR4_XLIWPJbnC6X4_EIl0mKAiC4i5s6RxDf1sviYxr6CYShdgHCxrZ1uym-IWeaZFAaKD_68IV9t00GLIltGKHHHhWeABldNUy93MnIU98JMwsDV5gTnOsIKA%3D%3D%22%5D%5D	.estadao.com.br	/	2026-07-31T20:03:35.000Z	191						Medium
+navegg_id	amp-BlqGLnk6PIozVgEnScpPKA	.estadao.com.br	/	2026-07-21T21:05:16.000Z	35						Medium
+nvg23902	163bd82ff1a55b4f60ad87b76510|0_213	.estadao.com.br	/	2026-07-31T20:03:33.000Z	42						Medium
+nvg92531	1668f72a947c2a48e85627e99a10|0_213	.estadao.com.br	/	2026-07-31T20:03:33.000Z	42						Medium
+OESP_GA_GID	12db5230913801751897981492	.estadao.com.br	/	2026-08-11T14:19:41.493Z	37		✓	None			Medium
+OESP_GUID	85947A84-B735-4F3E-B2F6-0A537910E84F	.estadao.com.br	/	2026-08-29T13:01:42.637Z	45		✓	None			Medium
+OESP_INADIMPLENTE	%7B%22success%22%3A%22true%22%2C%22cod_retorno%22%3A%221%22%2C%22txt_msg%22%3A%22%22%2C%22portal_auth%22%3A%22PqlNqIlPTlPNfYdQAAXPqINzmjtX77QAc%7CldXjlg7fJlfPryIuTTuwrqqqfWq50Rp1imSUkdnUeOFVunb%22%7D	.estadao.com.br	/	2025-07-31T20:08:33.000Z	216		✓	None			Medium
+OESP_INFO	%7B%22id%22%3A9128965%2C%22nome%22%3A%22J.%22%2C%22sobre_nome%22%3A%22M.%20TORRES%20JORNAIS%20E%20REVISTAS%20LTDA%22%2C%22produtos%22%3A%22ACV%2CDP%2CEPRM%2CIPAD%2CMOB%2CNot_%2CPASS%22%2C%22email%22%3A%22acesso1032%40jmtorresdf.com.br%22%2C%22foto_url%22%3Anull%2C%22dt_cadastro%22%3A%222022-08-29%2013%3A05%3A14.310%22%2C%22nascimento%22%3Anull%2C%22sexo%22%3A%22U%20%22%2C%22uf%22%3A%22DF%22%2C%22cidade%22%3A%22BRASILIA%22%2C%22cep%22%3A%2270750-504%22%2C%22cpf%22%3A%2201018845000177%22%2C%22telefone%22%3A%22%20%200%22%2C%22origem%22%3A%22SAP%22%2C%22primeiro_acesso%22%3A%22NAO%22%2C%22sobrenome%22%3A%22M.%20TORRES%20JORNAIS%20E%20REVISTAS%20LTDA%22%2C%22assinante%22%3Atrue%2C%22block%22%3Afalse%7D	.estadao.com.br	/	2025-08-07T20:03:35.000Z	715		✓	None			Medium
+OESP_LGPD_ACEITE	VERDADEIRO	.estadao.com.br	/	2025-08-01T13:00:22.000Z	26						Medium
+OESP_REMEMBER	1	.estadao.com.br	/	2026-08-29T13:01:42.637Z	14		✓	None			Medium
+OESP_RESUMO_NOTICIAS	{"campaignId":"T7vDp","experienceId":"Pr1gJ","profileId":"22632084cd6d91790700c5d7"}	.estadao.com.br	/	2025-08-01T20:03:44.000Z	104						Medium
+OESP_VIDEO_FIRST	{"campaignId":"N7wvV","experienceId":"jbV20","profileId":"22632084cd6d91790700c5d7"}	.estadao.com.br	/	2025-08-01T20:03:44.000Z	100						Medium
+permutive-id	b15627b3-5082-4b49-a0a1-6e8dd302ff37	.estadao.com.br	/	2026-01-31T20:03:33.000Z	48		✓	None			Medium
+PORTAL_AUTH	PqlNqIlPTlPNfYdQAAXPqINzmjtX77QAc%7CldXjlg7fJlfPryIuTTuwrqqqfWq50Rp1imSUkdnUeOFVunb	.estadao.com.br	/	2026-08-29T13:01:42.637Z	94		✓	None			Medium
+rco	1	.estadao.com.br	/	2025-08-01T13:01:42.000Z	4		✓	None			Medium
+sf_id	22632084cd6d91790700c5d7	.estadao.com.br	/	2026-08-29T13:28:01.999Z	29		✓	None			Medium
+uuid	0b43681f-e227-4600-b679-146889f17580	.mathtag.com	/	2026-06-07T23:32:55.704Z	40		✓	None			Medium
+ac3	1	.navdmp.com	/	2026-07-14T20:22:35.225Z	4		✓	None			Medium
+nid	163bd82ff11b4ca5738e64347610|2|238	.navdmp.com	/	2026-09-01T12:06:48.980Z	37		✓	None			Medium
+chkChromeAb67Sec	87	.pubmatic.com	/	2025-10-26T12:06:57.897Z	18		✓	None			Medium
+DPSync4	1754265600%3A245_228_197_164_265_226_219_252%7C1753747200%3A248%7C1755907200%3A102	.pubmatic.com	/	2025-10-26T12:06:54.453Z	89		✓	None			Medium
+KADUSERCOOKIE	039324F2-D768-4A65-8516-C0099E58B265	.pubmatic.com	/	2025-10-29T20:03:34.652Z	49		✓	None			Medium
+KRTBCOOKIE_107	23421-uid:ln050RiT1UdTGG5	.pubmatic.com	/	2025-10-05T14:02:01.162Z	39		✓	None			Medium
+KRTBCOOKIE_1101	23040-7502964152782813552&KRTB&23369-7502964152782813552&KRTB&23735-7502964152782813552	.pubmatic.com	/	2025-08-27T12:06:56.539Z	102		✓	None			Medium
+KRTBCOOKIE_1199	23168-0000019545FEECE9&KRTB&23175-0000019545FEECE9	.pubmatic.com	/	2025-10-26T12:06:56.529Z	65		✓	None			Medium

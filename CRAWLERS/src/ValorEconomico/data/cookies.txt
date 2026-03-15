@@ -1,0 +1,20 @@
+___nrbi	%7B%22firstVisit%22%3A1747660604%2C%22userId%22%3A%2273710860-2a1f-4f3e-a2c2-9b81591debd2%22%2C%22userVars%22%3A%5B%5D%2C%22futurePreviousVisit%22%3A1752000526%2C%22timesVisited%22%3A20%7D	.globo.com	/	2026-01-04T18:48:46.000Z	195		✓				Medium
+___nrbi_1464	%7B%22firstVisit%22%3A1747660604%2C%22userId%22%3A%2273710860-2a1f-4f3e-a2c2-9b81591debd2%22%2C%22userVars%22%3A%5B%5D%2C%22futurePreviousVisit%22%3A1752000538%2C%22timesVisited%22%3A10%2C%22userType%22%3A0%7D	.globo.com	/	2026-01-04T19:27:36.000Z	221		✓				Medium
+___nrbic	%7B%22landingPage%22%3A%22https%3A//assine.vendas.valor.globo.com/%3Fcampanha%3Dsim%26interno_origem%3Dgoogle%26interno_midia%3Dcpc%26interno_campanha%3Dve_exata_google%26gad_source%3D1%26gad_campaignid%3D20222402392%26gbraid%3D0AAAAAD-ovRgj6kzOqkz5cfP7RlJ2V4EU0%26gclid%3DEAIaIQobChMIvcLkgeitjgMVzGhIAB2grDiREAAYASAAEgJEH_D_BwE%22%2C%22referrer%22%3A%22https%3A//www.google.com/%22%2C%22lpti%22%3Anull%2C%22previousVisit%22%3A1751996626%2C%22lastBeat%22%3A1752000526%2C%22currentVisitStarted%22%3A1752000526%2C%22sessionId%22%3A%22cad48848-57d1-4466-9036-cc7b40da8dfc%22%2C%22sessionVars%22%3A%5B%5D%2C%22visitedInThisSession%22%3Atrue%2C%22pagesViewed%22%3A1%7D	.globo.com	/	2026-01-04T18:48:46.000Z	671		✓				Medium
+___nrbic_1464	%7B%22sessionId%22%3A%2250d52ab8-5df2-4e0f-a329-1d762faf8db6%22%2C%22currentVisitStarted%22%3A1751996648%2C%22sessionVars%22%3A%5B%5D%2C%22lastBeat%22%3A1752002855%2C%22previousVisit%22%3A1751996648%2C%22visitedInThisSession%22%3Atrue%2C%22pagesViewed%22%3A17%2C%22landingPage%22%3A%22https%3A//valor.globo.com/%22%2C%22referrer%22%3A%22https%3A//www.google.com/%22%2C%22lpti%22%3Anull%7D	.globo.com	/	2026-01-04T19:27:36.000Z	401		✓				Medium
+__adblocker	false	valor.globo.com	/	2025-07-08T19:32:36.000Z	16						Medium
+__cf_bm	kPpNfO2xcmzWYwM3N9LJo0z304zXrzPiu0DOERodj1I-1752001558-1.0.1.1-mYQmDE5A7_Iv08NLooxRGitcE4HFM45ynlW1e3x9nU2EIBd3xxYV6_NVNCo2twmzvbzgEjX7wXMtTVqrXsI1xurJUHjyRwGiMTLXnNREkwo	.onesignal.com	/	2025-07-08T19:35:58.101Z	177	✓	✓	None			Medium
+__eoi	ID=ed31ba7ca5a8838a:T=1747660607:RT=1752002610:S=AA-AfjbOXdDLiFs-w20z6fDYI2rk	.globo.com	/	2025-11-15T13:16:47.000Z	82		✓	None			Medium
+__gads	ID=871c5d09d32c3e14:T=1747660607:RT=1752002610:S=ALNI_MaPC2yVkgRYGwSEOxWkUxlXka64-Q	.globo.com	/	2026-06-13T13:16:47.000Z	89		✓	None			Medium
+__gpi	UID=000010cfe3116bac:T=1747660607:RT=1752002610:S=ALNI_MYyFR_XTgpflYV_OH1nFutHMxeE3Q	.globo.com	/	2026-06-13T13:16:47.000Z	89		✓	None			Medium
+__pat	-10800000	.globo.com	/	2025-08-07T19:27:37.000Z	14			Lax			Medium
+__pnahc	0	valor.globo.com	/	2025-10-06T19:27:36.000Z	8			Lax			Medium
+__pvi	eyJpZCI6InYtbWN1dnZ4bDVwODk0bmY4bSIsImRvbWFpbiI6Ii5nbG9iby5jb20iLCJ0aW1lIjoxNzUyMDAyODU2OTA5fQ%3D%3D	.globo.com	/	2025-07-09T19:27:36.000Z	105			Lax			Medium
+__Secure-ROLLOUT_TOKEN	CLihu-3moP6eDRCVrZeZhueNAxi0nrCf3q2OAw%3D%3D	.youtube.com	/	2026-01-04T16:59:58.480Z	66	✓	✓	None	https://globo.com	✓	Medium
+__tbc	%7Bkpex%7DbE7rWMRJLIdFdju56RlScsmW3qZ-Nq0E0fGpgxlm3qrOfe97V6sqLXT1dCNQV9W9	.globo.com	/	2026-08-12T19:27:37.359Z	79			Lax			Medium
+_ash	JTdCJTIyY29kaWdvJTIyOiUyMjAwMDIzNDkzNTIlMjIsJTIyc2l0dWFjYW9QYWdhbWVudG8lMjI6JTIyQSUyMGZhdHVyYXIlMjIlN0Q=	.globo.com	/	2025-07-09T19:19:28.000Z	108						Medium
+_cb	amp-5cpZnUC3Ck0eSvc19oL6NQ	.globo.com	/	2026-07-02T15:44:18.000Z	29		✓				Medium
+_cc_id	14b1e1c6601149b4f5f51d8fb9530643	.globo.com	/	2026-04-03T13:07:33.000Z	38			Lax			Medium
+_chartbeat2	.1705953549587.1748879058414.0000000000000001.JNnu9C7sT6I_wAQoslsUTBcHIds.1	.globo.com	/	2026-07-02T15:44:18.000Z	86		✓				Medium
+_clck	18zlr01%7C2%7Cfxe%7C0%7C1965	.globo.com	/	2026-07-07T13:07:34.000Z	33						Medium
+_clsk	hqcudf%7C1751930071334%7C4%7C0%7Cl.clarity.ms%2Fcollect	.globo.com	/	2025-07-08T23:14:31.000Z	60						Medium

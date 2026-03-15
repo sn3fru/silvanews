@@ -158,6 +158,7 @@ class ClusterEvento(Base):
         # NOVOS ÍNDICES PARA PERFORMANCE
         Index('idx_clusters_created_date', 'created_at'),  # Índice simples por data
         Index('idx_clusters_updated_date', 'updated_at'),  # Índice por data de atualização
+        Index('idx_clusters_status_created_updated', 'status', 'created_at', 'updated_at'),  # Cache key: max(updated_at) WHERE status=ativo AND date(created_at)=X
         Index('idx_clusters_tag_date', 'tag', 'created_at'),  # Índice composto para queries por tag e data
         Index('idx_clusters_prioridade_date', 'prioridade', 'created_at'),  # Índice composto para queries por prioridade e data
         Index('idx_clusters_notificado', 'ja_notificado', 'created_at'),  # Clusters pendentes de notificacao
@@ -555,6 +556,106 @@ class GraphEdge(Base):
 # Pesquisas Assincronas
 # ========================
 
+# ========================
+# Sistema de Usuários Multi-Tenant (v3.0)
+# ========================
+
+class Usuario(Base):
+    """Usuário da plataforma com role-based access."""
+    __tablename__ = "usuarios"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String(200), nullable=False)
+    email = Column(String(300), unique=True, nullable=False)
+    senha_hash = Column(String(500), nullable=False)
+    role = Column(String(50), default="user", nullable=False)  # admin | user
+    ativo = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    preferencias = relationship("PreferenciaUsuario", back_populates="usuario", uselist=False, cascade="all, delete-orphan")
+    resumos = relationship("ResumoUsuario", back_populates="usuario", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index('idx_usuarios_email', 'email', unique=True),
+        Index('idx_usuarios_role', 'role'),
+        Index('idx_usuarios_ativo', 'ativo'),
+    )
+
+
+class PreferenciaUsuario(Base):
+    """Preferências pessoais de cada usuário (filtros, tags, formato de resumo)."""
+    __tablename__ = "preferencias_usuario"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), unique=True, nullable=False)
+    tags_interesse = Column(JSON, default=list)
+    tags_ignoradas = Column(JSON, default=list)
+    fontes_ignoradas = Column(JSON, default=list)
+    prioridade_minima = Column(String(30), default="P3_MONITORAMENTO", nullable=False)
+    tipo_fonte_preferido = Column(String(50), nullable=True)
+    tamanho_resumo = Column(String(20), default="medio", nullable=False)  # curto | medio | longo
+    template_resumo_id = Column(Integer, ForeignKey("templates_resumo_usuario.id", ondelete="SET NULL"), nullable=True)
+    config_extra = Column(JSON, default=dict)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    usuario = relationship("Usuario", back_populates="preferencias")
+    template_resumo = relationship("TemplateResumoUsuario")
+
+    __table_args__ = (
+        Index('idx_prefs_user_id', 'user_id', unique=True),
+    )
+
+
+class TemplateResumoUsuario(Base):
+    """Templates reutilizáveis de resumo. Criados por usuários, compartilháveis via flag 'publico'."""
+    __tablename__ = "templates_resumo_usuario"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String(200), nullable=False)
+    descricao = Column(Text, nullable=True)
+    criado_por_user_id = Column(Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True)
+    publico = Column(Boolean, default=False, nullable=False)
+    system_prompt = Column(Text, nullable=False)
+    tools_habilitadas = Column(JSON, default=list)
+    restricoes = Column(JSON, default=dict)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    criador = relationship("Usuario", foreign_keys=[criado_por_user_id])
+
+    __table_args__ = (
+        Index('idx_templates_resumo_publico', 'publico'),
+        Index('idx_templates_resumo_criador', 'criado_por_user_id'),
+    )
+
+
+class ResumoUsuario(Base):
+    """Resumos diários gerados por usuário. Um por (user_id, data_referencia)."""
+    __tablename__ = "resumos_usuario"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False)
+    data_referencia = Column(DateTime, nullable=False)
+    template_id = Column(Integer, ForeignKey("templates_resumo_usuario.id", ondelete="SET NULL"), nullable=True)
+    clusters_avaliados_ids = Column(JSON, default=list)
+    clusters_escolhidos_ids = Column(JSON, default=list)
+    texto_gerado = Column(Text, nullable=True)
+    texto_whatsapp = Column(Text, nullable=True)
+    prompt_version = Column(String(100), nullable=True)
+    metadados = Column(JSON, default=dict)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    usuario = relationship("Usuario", back_populates="resumos")
+    template = relationship("TemplateResumoUsuario")
+
+    __table_args__ = (
+        Index('idx_resumos_user_data', 'user_id', 'data_referencia'),
+        Index('idx_resumos_created', 'created_at'),
+    )
+
+
 class DeepResearchJob(Base):
     """
     Job para pesquisas profundas (Google/Gemini). Executado em background e pode demorar.
@@ -645,6 +746,27 @@ def init_database():
         # Verifica se já existem configurações de coleta
         existing_configs = db.query(ConfiguracaoColeta).count()
         
+        # Seed de usuário admin se não existir
+        admin_exists = db.query(Usuario).filter(Usuario.email == "admin@enforce.com.br").first()
+        if not admin_exists:
+            print("📝 Criando usuário admin inicial...")
+            try:
+                from passlib.hash import bcrypt
+                senha = bcrypt.hash(os.getenv("ADMIN_PASSWORD", "admin"))
+            except ImportError:
+                import hashlib
+                senha = hashlib.sha256(os.getenv("ADMIN_PASSWORD", "admin").encode()).hexdigest()
+            admin_user = Usuario(
+                nome="Administrador",
+                email="admin@enforce.com.br",
+                senha_hash=senha,
+                role="admin",
+                ativo=True,
+            )
+            db.add(admin_user)
+            db.commit()
+            print("✅ Usuário admin criado (admin@enforce.com.br)")
+
         if existing_configs == 0:
             print("📝 Criando configurações iniciais de coleta...")
             

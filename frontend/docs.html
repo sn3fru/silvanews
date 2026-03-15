@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentação - S.I.L.V.A.</title>
+    <link rel="stylesheet" href="style.css?v=1.0.6">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        body { margin: 0; font-family: 'Inter', sans-serif; background: #f8fafc; }
+        .docs-container { display: flex; min-height: 100vh; }
+        .docs-sidebar {
+            width: 280px; min-width: 280px; background: #1e293b; color: #e2e8f0;
+            padding: 1.5rem 1rem; overflow-y: auto; position: sticky; top: 0; height: 100vh;
+        }
+        .docs-sidebar h1 { font-size: 1.1rem; margin: 0 0 .5rem; color: #fff; }
+        .docs-sidebar .back-link { color: #94a3b8; text-decoration: none; font-size: .85rem; display: block; margin-bottom: 1.5rem; }
+        .docs-sidebar .back-link:hover { color: #fff; }
+        .docs-list { list-style: none; padding: 0; margin: 0; }
+        .docs-list li { margin-bottom: 2px; }
+        .docs-list a {
+            display: block; padding: .55rem .75rem; border-radius: 6px; color: #cbd5e1;
+            text-decoration: none; font-size: .88rem; transition: .15s;
+        }
+        .docs-list a:hover { background: #334155; color: #fff; }
+        .docs-list a.active { background: #3b82f6; color: #fff; font-weight: 600; }
+        .docs-main { flex: 1; padding: 2rem 3rem; max-width: 900px; }
+        .docs-main h1 { font-size: 1.5rem; color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: .5rem; }
+        .docs-main h2 { font-size: 1.2rem; color: #334155; margin-top: 2rem; }
+        .docs-main h3 { font-size: 1rem; color: #475569; }
+        .docs-main pre { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 8px; overflow-x: auto; font-size: .85rem; }
+        .docs-main code { background: #f1f5f9; padding: 2px 5px; border-radius: 4px; font-size: .9em; }
+        .docs-main pre code { background: transparent; padding: 0; }
+        .docs-main table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+        .docs-main th, .docs-main td { border: 1px solid #e2e8f0; padding: .5rem .75rem; text-align: left; font-size: .88rem; }
+        .docs-main th { background: #f1f5f9; font-weight: 600; }
+        .docs-main blockquote { border-left: 4px solid #3b82f6; margin: 1rem 0; padding: .5rem 1rem; background: #eff6ff; color: #1e40af; }
+        .docs-loading { text-align: center; padding: 3rem; color: #94a3b8; }
+        .mermaid { background: #fff; border-radius: 8px; padding: 1rem; margin: 1rem 0; text-align: center; }
+        @media (max-width: 768px) {
+            .docs-container { flex-direction: column; }
+            .docs-sidebar { width: 100%; min-width: 100%; height: auto; position: static; }
+            .docs-main { padding: 1rem; }
+        }
+    </style>
+</head>
+<body>
+    <script>
+    (function(){
+        try {
+            const auth = JSON.parse(localStorage.getItem('silva_auth') || '{}');
+            const hasLegacy = auth.username === 'admin' && auth.token === 'admin';
+            const hasJwt = auth.token && auth.token.length > 20;
+            if (!hasLegacy && !hasJwt) { window.location.href = '/frontend/login.html'; }
+        } catch (e) { window.location.href = '/frontend/login.html'; }
+    })();
+    </script>
+
+    <div class="docs-container">
+        <aside class="docs-sidebar">
+            <h1>S.I.L.V.A. Docs</h1>
+            <a href="/frontend/index.html" class="back-link">&larr; Voltar ao Feed</a>
+            <ul id="docs-list" class="docs-list">
+                <li><span style="color:#64748b;font-size:.85rem;">Carregando...</span></li>
+            </ul>
+        </aside>
+        <main class="docs-main">
+            <div id="doc-content" class="docs-loading">
+                Selecione um documento na barra lateral.
+            </div>
+        </main>
+    </div>
+
+    <script>
+    const API = window.location.origin;
+
+    mermaid.initialize({ startOnLoad: false, theme: 'neutral', securityLevel: 'loose' });
+
+    async function loadDocList() {
+        try {
+            const resp = await fetch(`${API}/api/docs`);
+            const docs = await resp.json();
+            const list = document.getElementById('docs-list');
+            if (!docs.length) { list.innerHTML = '<li><span>Nenhum documento encontrado.</span></li>'; return; }
+            list.innerHTML = docs.map(d =>
+                `<li><a href="#" data-file="${d.filename}" onclick="loadDoc('${d.filename}', this); return false;">${d.name.replace(/_/g,' ')}</a></li>`
+            ).join('');
+            // Auto-load first doc
+            if (docs.length > 0) {
+                const first = list.querySelector('a');
+                if (first) loadDoc(docs[0].filename, first);
+            }
+        } catch { document.getElementById('docs-list').innerHTML = '<li><span>Erro ao carregar documentos.</span></li>'; }
+    }
+
+    async function loadDoc(filename, linkEl) {
+        const content = document.getElementById('doc-content');
+        content.innerHTML = '<div class="docs-loading">Carregando...</div>';
+
+        document.querySelectorAll('.docs-list a').forEach(a => a.classList.remove('active'));
+        if (linkEl) linkEl.classList.add('active');
+
+        try {
+            const resp = await fetch(`${API}/api/docs/${filename}`);
+            const data = await resp.json();
+            let html = marked.parse(data.content);
+
+            // Substituir blocos ```mermaid por divs renderizaveis
+            html = html.replace(/<pre><code class="language-mermaid">([\s\S]*?)<\/code><\/pre>/g,
+                (_, code) => `<div class="mermaid">${code.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&')}</div>`
+            );
+
+            content.innerHTML = html;
+
+            // Renderizar mermaid
+            try {
+                await mermaid.run({ querySelector: '.mermaid' });
+            } catch {}
+        } catch { content.innerHTML = '<p>Erro ao carregar documento.</p>'; }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadDocList);
+    </script>
+</body>
+</html>

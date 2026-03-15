@@ -1,7 +1,9 @@
-# BTG AlphaFeed - Referencia Completa do Sistema
+# BTG AlphaFeed - Referencia Completa do Sistema (v3.0 Multi-Tenant)
 
 > Objetivo deste documento: Permitir que um LLM trace o caminho exato de implementacao de qualquer feature,
 > sabendo quais arquivos, funcoes e tabelas precisara tocar, sem risco de ignorar checagens ou logicas ocultas.
+>
+> **Versao:** v3.0 Multi-Tenant Agentic | **Auth:** JWT (python-jose) | **Deploy:** Heroku + PostgreSQL
 
 ---
 
@@ -13,7 +15,7 @@
 btg_alphafeed/
   backend/
     main.py              # FastAPI app (60+ endpoints, 10 background tasks)
-    database.py          # ORM models (17 tabelas)
+    database.py          # ORM models (21+ tabelas)
     crud.py              # 79 funcoes CRUD
     processing.py        # Pipeline v1 (embeddings, clusterizacao, resumo)
     prompts.py           # Fonte da verdade: tags, prioridades, 10+ prompts LLM
@@ -30,10 +32,15 @@ btg_alphafeed/
     agent.py             # Agente de consulta (classificacao de intencao, sintese LLM)
     executor.py          # Executor ReAct (tool-calling, max 4 iteracoes)
     tools/definitions.py # Ferramentas: query_clusters, semantic_search
-    tools/executor.py    # Registro e execucao de ferramentas
+    tools/executor.py     # Registro e execucao de ferramentas
+  agents/resumo_diario/
+    agent.py             # Agente resumo: multi-persona (legado) + per-user (v3.0)
+    tools/definitions.py # Tools: obter_textos_brutos_cluster, buscar_na_web (Tivaly)
   frontend/
     index.html + script.js   # Feed S.I.L.V.A. (~120 funcoes JS)
     settings.html + settings.js  # Admin (~80 funcoes JS)
+    docs.html            # Documentacao renderer: Markdown + Mermaid
+    login.html           # Login page with JWT auth
     style.css
   semantic_search/
     embedder.py, store.py, search.py, backfill_embeddings.py
@@ -52,7 +59,7 @@ btg_alphafeed/
 
 ---
 
-## 2. Banco de Dados (17 tabelas em `database.py`)
+## 2. Banco de Dados (21+ tabelas em `database.py`)
 
 ### Tabelas Core
 
@@ -118,6 +125,15 @@ btg_alphafeed/
 | `semantic_embeddings` | Embeddings dedicados OpenAI (vector_bytes, dimension, provider, model) |
 | `deep_research_jobs` | Pesquisas profundas async (cluster_id, status, result_json) |
 | `social_research_jobs` | Pesquisas sociais async (cluster_id, status, result_json) |
+
+### Tabelas Multi-Tenant v3.0
+
+| Tabela | Descricao | FKs |
+|---|---|---|
+| **`usuarios`** (Usuario) | Usuarios da plataforma: `id`, `nome`, `email`, `senha_hash`, `role` (admin\|user), `ativo`, timestamps. Relationships: preferencias (1:1), resumos (1:N) | - |
+| **`preferencias_usuario`** (PreferenciaUsuario) | Preferencias por usuario: `id`, `user_id` (FK usuarios), `tags_interesse`, `tags_ignoradas`, `fontes_ignoradas` (JSON), `prioridade_minima`, `tipo_fonte_preferido`, `tamanho_resumo` (curto\|medio\|longo), `template_resumo_id` (FK templates), `config_extra` (JSON), timestamps | user_id -> usuarios, template_resumo_id -> templates_resumo_usuario |
+| **`templates_resumo_usuario`** (TemplateResumoUsuario) | Templates reutilizaveis: `id`, `nome`, `descricao`, `system_prompt`, `criado_por` (FK usuarios), `is_public`, timestamps | criado_por -> usuarios |
+| **`resumos_usuario`** (ResumoUsuario) | Resumos diarios por usuario: `id`, `user_id` (FK), `data_referencia`, `template_id` (FK), `clusters_avaliados` (JSON), `clusters_escolhidos` (JSON), `texto`, `texto_whatsapp`, `prompt_version`, `metadados` (JSON), timestamps | user_id -> usuarios, template_id -> templates_resumo_usuario |
 
 ---
 
@@ -421,6 +437,41 @@ Global M&A | Global Legal and Regulatory | Sovereign Debt and Credit | Global Di
 
 ---
 
+## 8a. Autenticacao e Multi-Tenant (v3.0)
+
+### JWT Auth Flow
+
+- **Librarias**: `python-jose` (JWT), `passlib[bcrypt]` (hash de senha)
+- **Header**: `Authorization: Bearer <token>` em todas as requisicoes autenticadas
+- **Storage**: Frontend guarda `silva_auth` em localStorage (username, email, role, user_id, token, ts)
+
+### Endpoints de Auth
+
+| Endpoint | Metodo | Descricao | Auth |
+|---|---|---|---|
+| `/api/auth/login` | POST | Login: `{ email, senha }` -> JWT + user | Nao |
+| `/api/auth/me` | GET | Retorna usuario atual (validacao de token) | Sim |
+| `/api/auth/register` | POST | Registro de novo usuario (admin) | Admin |
+| `/api/auth/users` | GET | Lista usuarios (admin) | Admin |
+| `/api/auth/users/{id}` | PUT/DELETE | Atualiza/remove usuario (admin) | Admin |
+
+### Dependency Injection (`main.py`)
+
+| Funcao | O que faz | Uso |
+|---|---|---|
+| `get_current_user(credentials, db)` | Extrai Bearer token, valida JWT, retorna user ou None | Opcional — endpoints que aceitam user anonimo |
+| `require_auth(credentials, db)` | Idem, mas exige token valido — 401 se ausente/invalido | Obligatorio — endpoints protegidos |
+| `require_admin(credentials, db)` | Chama `require_auth` e valida `role == admin` — 403 se nao admin | Endpoints administrativos |
+
+### Per-User Preferences e Resumos
+
+- `GET /api/preferencias` / `PUT /api/preferencias` — CRUD preferencias do usuario logado
+- `GET /api/templates-resumo` / POST/PUT/DELETE — Templates de resumo (criados por usuario, compartilhaveis)
+- `POST /api/resumo-diario/gerar` — Gera resumo personalizado (usa preferencias + template)
+- `GET /api/resumo-diario/meu` — Retorna resumo do dia do usuario
+
+---
+
 ## 9. Frontend (`script.js` ~120 funcoes, `settings.js` ~80 funcoes)
 
 ### Feed (script.js) - Fluxo Principal
@@ -455,6 +506,14 @@ DOMContentLoaded -> setupEventListeners() -> carregarContadoresSimples() -> carr
 - **Cluster cache**: `clusters_{date}` | TTL: 5min hoje, 7 dias historico
 - **Expansion cache**: `expand_{clusterId}` | Sem expiracao (sessao)
 - **Invalidacao**: Troca de aba, troca de data, manual
+
+### v3.0: Onboarding, Hero e Docs
+
+**Onboarding flow**: `verificarOnboarding()` em `script.js` detecta preferencias vazias via `GET /api/preferencias`. Se o usuario nao tem preferencias configuradas, exibe modal para selecionar tags de interesse. Usado para personalizar resumo diario.
+
+**Hero section**: Secao `#daily-summary-hero` no topo de `index.html` exibe o resumo do dia do usuario. Inicialmente oculta (`display:none`); exibida via `carregarResumoDiario()` quando ha resumo disponivel. Botoes: "Gerar / Atualizar Resumo", timestamp, alerta de novos eventos.
+
+**Docs page**: `frontend/docs.html` — renderizador de documentacao com **marked.js** (Markdown) e **mermaid.js** (diagramas). Sidebar com indice de documentos, conteudo principal em HTML gerado a partir de Markdown. Link de volta para feed.
 
 ### Settings (settings.js) - 5 Abas
 1. **Artigos**: Tabela paginada + filtros + sort client-side + CRUD
@@ -529,6 +588,46 @@ Loop: gera thought/action -> executa tool -> observa resultado -> repete (max 4 
 
 ---
 
+## 10a. Agente de Resumo Diario (v3.0) (`agents/resumo_diario/`)
+
+### Dois Modos de Operacao
+
+| Modo | Descricao | Chamadas LLM |
+|---|---|---|
+| **Multi-persona (legado)** | 3 personas fixas em paralelo: distressed, regulatorio, estrategista | 3 por execucao |
+| **Per-user (v3.0)** | Uma chamada por usuario, com preferencias personalizadas | 1 por usuario |
+
+### Contexto Compartilhado
+
+- `_build_context_block()`: Recolhe TODOS os clusters do dia UMA VEZ.
+- Cache: invalidado por `max(updated_at)` dos clusters do dia.
+- O contexto e **compartilhado** entre todos os usuarios — nunca duplicado. Economia de tokens.
+
+### Tools (`tools/definitions.py`)
+
+| Tool | Input | O que faz | Requer |
+|---|---|---|---|
+| `obter_textos_brutos_cluster` | cluster_id | Retorna amostra (ate 3000 chars) dos textos originais do cluster | - |
+| `buscar_na_web` | query | Busca na web via Tivaly API | `TIVALY_API_KEY` |
+
+**Contratos Pydantic**: `ClusterSelecionado`, `ResumoDiarioContract` — validacao do JSON de saida do LLM.
+
+### Fluxo Per-User
+
+1. Le preferencias do usuario (`get_preferencias_usuario`)
+2. Monta prompt personalizado com tags, tamanho, foco
+3. Usa contexto compartilhado (`_build_context_block`)
+4. Uma chamada LLM por usuario
+5. Persiste em `resumos_usuario`
+
+### Modelo de Custo
+
+- **Contexto**: lido UMA vez, reutilizado para todos os usuarios.
+- **100 usuarios** = 100 chamadas LLM (nao 300, como no modo multi-persona).
+- READ-ONLY: nao altera clusters, prioridades ou tags.
+
+---
+
 ## 11. Busca Semantica (`semantic_search/`)
 
 - `embedder.py`: OpenAI text-embedding-3-small (fallback hash deterministico)
@@ -565,7 +664,7 @@ run_complete_workflow.py
   |
   ETAPA 3: run_migrate_incremental()
   |         Subprocess: python -m migrate_incremental --source local --dest heroku --include-all
-  |         Sincroniza TODAS as 18+ tabelas para producao
+  |         Sincroniza TODAS as 21+ tabelas para producao
   |
   ETAPA 4: run_notify()
   |         scripts/notify_telegram.py --limit 50
@@ -622,6 +721,7 @@ run_complete_workflow.py
 | `V2_SHADOW_MODE` | Nao | `1` para modo sombra v2 (debug) |
 | `FEEDBACK_RULES_ENABLED` | Nao | `0` para desligar injecao de feedback rules |
 | `ESTAGIARIO_REACT` | Nao | `1` para modo ReAct do agente |
+| `TIVALY_API_KEY` | Nao | API Tivaly para tool buscar_na_web do agente de resumo diario |
 
 Checklist:
 1. Import nos dois blocos (try/except) no topo do arquivo
@@ -629,6 +729,38 @@ Checklist:
 3. Flag `--include-<entidade>` no argparse
 4. Chamada na funcao `main()` com condicional
 5. SQL de migracao em `scripts/` para criar tabela no Heroku
+
+---
+
+## 12a. Pipeline Micro-Batch (v3.0) (`run_complete_workflow.py`)
+
+### run_microbatch_cycle()
+
+- **Funcao**: `run_microbatch_cycle(pdfs_dir=None, batch_interval_minutes=3)`
+- **Objetivo**: Processa PDFs em micro-lotes; acumula por N minutos, processa o lote inteiro de uma vez. Evita overhead de subprocess por PDF.
+- **Uso**: `python run_complete_workflow.py --microbatch --batch-interval 3`
+
+### Lock File (`.microbatch.lock`)
+
+- **Caminho**: `{pdfs_dir}/.microbatch.lock`
+- **Conteudo**: `{pid}|{timestamp}` — identifica processo ativo
+- **Protecao**: Evita race conditions — se outro ciclo ainda esta rodando, o novo ciclo aborta e espera o proximo intervalo.
+- **Stale detection**: Se PID do lock nao existe (psutil), ou lock tem mais de 10 min, remove e prossegue.
+
+### PDFs para _processed/
+
+Apos processamento bem-sucedido (`run_load_news` + `run_process_articles`), cada PDF em `{pdfs_dir}/*.pdf` e **movido** para `{pdfs_dir}/_processed/`. Evita reprocessamento no proximo ciclo.
+
+### Ordem do Ciclo
+
+1. Adquire lock
+2. Lista `*.pdf` pendentes
+3. `run_load_news()` — carrega para artigos_brutos
+4. `run_process_articles()` — pipeline completo
+5. Move PDFs para `_processed/`
+6. `run_migrate_incremental()` — sync producao
+7. `run_notify()` — notificacoes Telegram
+8. Libera lock
 
 ---
 

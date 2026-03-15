@@ -1,0 +1,326 @@
+{
+  "ok": true,
+  "data": "2026-03-13",
+  "personas_resultados": {
+    "estrategista": {
+      "ok": true,
+      "contract_dict": {
+        "tldr_executivo": "BTG Pactual está em negociações avançadas para adquirir o Banco Digimais, visando expandir sua atuação no varejo digital.",
+        "clusters_selecionados": [
+          {
+            "cluster_id": 53225,
+            "titulo_whatsapp": "🏦 BTG Pactual negocia compra do Banco Digimais",
+            "bullet_impacto": "BTG Pactual busca expandir sua atuação no varejo digital com a aquisição do Banco Digimais.",
+            "fonte_principal": "Valor Econômico"
+          }
+        ]
+      },
+      "error": null
+    },
+    "distressed": {
+      "ok": true,
+      "contract_dict": {
+        "tldr_executivo": "O dia apresenta notícias sobre a reintegração de funcionários da Stone por decisão judicial e discussões sobre a CPI do Banco Master. Não há eventos de grande impacto no cenário de distressed assets.",
+        "clusters_selecionados": [
+          {
+            "cluster_id": 53258,
+            "titulo_whatsapp": "⚖️ Justiça determina reintegração de 370 funcionários da Stone",
+            "bullet_impacto": "Decisão judicial obriga Stone a reintegrar 370 funcionários demitidos em massa, com multa diária de R$ 500 por trabalhador em caso de descumprimento.",
+            "fonte_principal": "Migalhas"
+          }
+        ]
+      },
+      "error": null
+    },
+    "regulatorio": {
+      "ok": true,
+      "contract_dict": {
+        "tldr_executivo": "O STJ decidiu que planos de saúde não podem limitar sessões de terapias para autistas (Tema 1.295). O STF decidiu que empresas não precisam recolher contribuição ao Seguro de Acidente de Trabalho (SAT) sobre valores pagos a autônomos pré-98.",
+        "clusters_selecionados": [
+          {
+            "cluster_id": 53269,
+            "titulo_whatsapp": "⚖️ STJ proíbe limite em terapias TEA",
+            "bullet_impacto": "STJ (Tema 1.295) impede planos de saúde de limitarem sessões de terapias multidisciplinares para autistas, com efeito vinculante.",
+            "fonte_principal": "Conjur"
+          },
+          {
+            "cluster_id": 53276,
+            "titulo_whatsapp": "⚖️ STF afasta SAT sobre autônomos pré-98",
+            "bullet_impacto": "STF dispensa empresas de recolher SAT sobre pagamentos a autônomos anteriores a 1998, alterando a contribuição.",
+            "fonte_principal": "Conjur, Migalhas"
+          }
+        ]
+      },
+      "error": null
+    }
+  },
+  "clusters_avaliados_ids": [
+    53269,
+    53258,
+    53291,
+    53290,
+    53289,
+    53288,
+    53287,
+    53286,
+    53285,
+    53284,
+    53282,
+    53281,
+    53280,
+    53279,
+    53277,
+    53276,
+    53275,
+    53273,
+    53272,
+    53271,
+    53270,
+    53268,
+    53266,
+    53264,
+    53263,
+    53262,
+    53261,
+    53260,
+    53257,
+    53256,
+    53255,
+    53254,
+    53253,
+    53251,
+    53250,
+    53249,
+    53248,
+    53247,
+    53245,
+    53244,
+    53243,
+    53242,
+    53241,
+    53240,
+    53239,
+    53238,
+    53237,
+    53236,
+    53235,
+    53234,
+    53233,
+    53232,
+    53231,
+    53230,
+    53229,
+    53228,
+    53227,
+    53225,
+    53224,
+    53223
+  ],
+  "todos_clusters_escolhidos_ids": [
+    53225,
+    53258,
+    53269,
+    53276
+  ],
+  "fontes_map": {
+    "53269": [
+      "Conjur"
+    ],
+    "53258": [
+      "Migalhas"
+    ],
+    "53291": [
+      "The New York Times",
+      "THE NEW YORK TIMES BUSINESS"
+    ],
+    "53290": [
+      "Migalhas"
+    ],
+    "53289": [
+      "Conjur"
+    ],
+    "53288": [
+      "Conjur"
+    ],
+    "53287": [
+      "Migalhas"
+    ],
+    "53286": [
+      "Migalhas"
+    ],
+    "53285": [
+      "Migalhas"
+    ],
+    "53284": [
+      "Migalhas"
+    ],
+    "53282": [
+      "Migalhas"
+    ],
+    "53281": [
+      "JOTA"
+    ],
+    "53280": [
+      "JOTA"
+    ],
+    "53279": [
+      "Migalhas"
+    ],
+    "53277": [
+      "Conjur"
+    ],
+    "53276": [
+      "Conjur",
+      "Migalhas"
+    ],
+    "53275": [
+      "Brazil Journal"
+    ],
+    "53273": [
+      "Conjur"
+    ],
+    "53272": [
+      "Migalhas"
+    ],
+    "53271": [
+      "Valor Econômico"
+    ],
+    "53270": [
+      "JOTA"
+    ],
+    "53268": [
+      "JOTA"
+    ],
+    "53266": [
+      "Brazil Journal"
+    ],
+    "53264": [
+      "Valor Econômico"
+    ],
+    "53263": [
+      "Brazil Journal"
+    ],
+    "53262": [
+      "Conjur"
+    ],
+    "53261": [
+      "Migalhas"
+    ],
+    "53260": [
+      "Migalhas"
+    ],
+    "53257": [
+      "Migalhas"
+    ],
+    "53256": [
+      "Valor Econômico"
+    ],
+    "53255": [
+      "Valor Econômico"
+    ],
+    "53254": [
+      "Valor Econômico"
+    ],
+    "53253": [
+      "Conjur"
+    ],
+    "53251": [
+      "Migalhas"
+    ],
+    "53250": [
+      "Conjur"
+    ],
+    "53249": [
+      "Conjur",
+      "Migalhas"
+    ],
+    "53248": [
+      "Valor Econômico"
+    ],
+    "53247": [
+      "Conjur"
+    ],
+    "53245": [
+      "Conjur"
+    ],
+    "53244": [
+      "Conjur"
+    ],
+    "53243": [
+      "Conjur"
+    ],
+    "53242": [
+      "Conjur"
+    ],
+    "53241": [
+      "Valor Econômico"
+    ],
+    "53240": [
+      "Conjur"
+    ],
+    "53239": [
+      "Migalhas"
+    ],
+    "53238": [
+      "Migalhas"
+    ],
+    "53237": [
+      "Brazil Journal"
+    ],
+    "53236": [
+      "Migalhas"
+    ],
+    "53235": [
+      "Migalhas"
+    ],
+    "53234": [
+      "Conjur"
+    ],
+    "53233": [
+      "Folha de S.Paulo",
+      "Valor Econômico"
+    ],
+    "53232": [
+      "O GLOBO"
+    ],
+    "53231": [
+      "Folha de S.Paulo",
+      "Conjur",
+      "Valor Econômico",
+      "Migalhas"
+    ],
+    "53230": [
+      "O GLOBO",
+      "O ESTADO DE S. PAULO"
+    ],
+    "53229": [
+      "O GLOBO",
+      "O ESTADO DE S. PAULO",
+      "Folha de S.Paulo"
+    ],
+    "53228": [
+      "Valor A3",
+      "O ESTADO DE S. PAULO"
+    ],
+    "53227": [
+      "O GLOBO",
+      "O ESTADO DE S. PAULO",
+      "Valor Econômico",
+      "Brazil Journal",
+      "Folha de S.Paulo"
+    ],
+    "53225": [
+      "Valor C",
+      "Ines249"
+    ],
+    "53224": [
+      "Folha de S.Paulo",
+      "O ESTADO DE S. PAULO"
+    ],
+    "53223": [
+      "Folha de S.Paulo",
+      "Valor Econômico"
+    ]
+  },
+  "prompt_version": "MULTI-PERSONA_V1"
+}

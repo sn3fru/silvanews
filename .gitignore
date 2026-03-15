@@ -2,6 +2,12 @@
 .env
 backend/.env
 
+# CRAWLERS — credenciais e cookies de sessao (NUNCA commitar)
+CRAWLERS/src/*/credentials.json
+CRAWLERS/src/*/data/cookies.txt
+CRAWLERS/dump/
+CRAWLERS/output/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -33,3 +39,7 @@ Thumbs.db
 
 # Telegram session files
 *.session
+
+# Arquivos temporarios de upload/processamento
+temp_uploads/
+*.lock

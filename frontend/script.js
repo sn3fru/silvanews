@@ -1,7 +1,38 @@
 // =======================================
 // CONFIGURAÇÃO DA API
 // =======================================
-const API_BASE = window.location.origin; // Usa o mesmo domínio da aplicação
+const API_BASE = window.location.origin;
+
+// =======================================
+// AUTH HELPERS (JWT)
+// =======================================
+function getAuthToken() {
+    try {
+        const auth = JSON.parse(localStorage.getItem('silva_auth') || '{}');
+        return auth.token || null;
+    } catch { return null; }
+}
+
+function getAuthHeaders() {
+    const token = getAuthToken();
+    const headers = { 'Content-Type': 'application/json' };
+    if (token && token !== 'admin') {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
+}
+
+function fetchAuth(url, opts = {}) {
+    const headers = { ...getAuthHeaders(), ...(opts.headers || {}) };
+    return fetch(url, { ...opts, headers });
+}
+
+function getCurrentUser() {
+    try {
+        const auth = JSON.parse(localStorage.getItem('silva_auth') || '{}');
+        return auth.user_id ? auth : null;
+    } catch { return null; }
+}
 
 // =======================================
 // CONFIGURAÇÃO DE CONFIABILIDADE
@@ -4252,3 +4283,206 @@ function renderGraph(container, tooltip, data) {
         node.attr('transform', d => `translate(${d.x},${d.y})`);
     });
 }
+
+
+// =======================================
+// RESUMO DO DIA (Hero Section)
+// =======================================
+
+function renderResumoHtml(text) {
+    if (!text) return '';
+    let html = text
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/^### (.+)$/gm, '<h4 style="margin:.6rem 0 .3rem;color:#1e3a5f;font-size:.95rem;">$1</h4>')
+        .replace(/^## (.+)$/gm, '<h3 style="margin:.8rem 0 .3rem;color:#1e3a5f;font-size:1.05rem;">$1</h3>')
+        .replace(/^- (.+)$/gm, '<li style="margin:.15rem 0;font-size:.9rem;">$1</li>')
+        .replace(/(<li[^>]*>.*<\/li>\n?)+/g, (m) => `<ul style="padding-left:1.2rem;margin:.3rem 0;">${m}</ul>`);
+    html = html.replace(/\n{2,}/g, '</p><p style="margin:.4rem 0;font-size:.9rem;line-height:1.5;">');
+    html = html.replace(/\n/g, '<br>');
+    return `<div style="font-size:.9rem;line-height:1.5;color:#1f2937;"><p style="margin:.4rem 0;">${html}</p></div>`;
+}
+
+async function carregarResumoDoDia() {
+    const hero = document.getElementById('daily-summary-hero');
+    const content = document.getElementById('summary-content');
+    if (!hero) return;
+
+    try {
+        const resp = await fetchAuth(`${API_BASE}/api/resumo/hoje`);
+        if (!resp.ok) {
+            content.innerHTML = '<p style="color:#6b7280;font-size:.9rem;margin:0;">Clique em "Gerar Resumo" para criar seu resumo personalizado do dia.</p>';
+            return;
+        }
+        const data = await resp.json();
+        if (data.texto_gerado) {
+            content.innerHTML = renderResumoHtml(data.texto_gerado);
+            const tsEl = document.getElementById('summary-timestamp');
+            if (tsEl && data.created_at) {
+                const d = new Date(data.created_at);
+                tsEl.textContent = `Gerado ${d.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}`;
+            }
+            if (data.created_at) {
+                try {
+                    const upResp = await fetchAuth(`${API_BASE}/api/feed/updates-since?since=${data.created_at}`);
+                    if (upResp.ok) {
+                        const upData = await upResp.json();
+                        if (upData.new_clusters > 0) {
+                            const alertEl = document.getElementById('summary-new-alert');
+                            const countEl = document.getElementById('summary-new-count');
+                            if (alertEl) alertEl.style.display = 'inline';
+                            if (countEl) countEl.textContent = upData.new_clusters;
+                        }
+                    }
+                } catch {}
+            }
+        } else {
+            content.innerHTML = '<p style="color:#6b7280;font-size:.9rem;margin:0;">' +
+                (data.message || 'Clique em "Gerar Resumo" para criar seu resumo personalizado do dia.') + '</p>';
+        }
+    } catch {
+        content.innerHTML = '<p style="color:#ef4444;font-size:.9rem;margin:0;">Erro ao carregar resumo.</p>';
+    }
+}
+
+async function gerarResumoDoDia() {
+    const loading = document.getElementById('summary-loading');
+    const btn = document.getElementById('btn-refresh-summary');
+    if (loading) loading.style.display = 'flex';
+    if (btn) btn.disabled = true;
+
+    try {
+        const resp = await fetchAuth(`${API_BASE}/api/resumo/gerar`, { method: 'POST' });
+        if (resp.ok) {
+            // Poll ate o resumo estar pronto (max 120s)
+            let tries = 0;
+            const poll = async () => {
+                if (tries++ > 24) { if (loading) loading.style.display = 'none'; if (btn) btn.disabled = false; return; }
+                await new Promise(r => setTimeout(r, 5000));
+                const check = await fetchAuth(`${API_BASE}/api/resumo/hoje`);
+                if (check.ok) {
+                    const d = await check.json();
+                    if (d.texto_gerado) { if (loading) loading.style.display = 'none'; if (btn) btn.disabled = false; carregarResumoDoDia(); return; }
+                }
+                poll();
+            };
+            poll();
+        }
+    } catch {
+        if (loading) loading.style.display = 'none';
+        if (btn) btn.disabled = false;
+    }
+}
+
+// =======================================
+// ONBOARDING: Estado Zero (usuario novo sem preferencias)
+// =======================================
+
+async function verificarOnboarding() {
+    const token = getAuthToken();
+    if (!token || token === 'admin') return;
+
+    try {
+        const resp = await fetchAuth(`${API_BASE}/api/user/preferencias`);
+        if (!resp.ok) return;
+        const prefs = await resp.json();
+
+        const hasTags = prefs.tags_interesse && prefs.tags_interesse.length > 0;
+        if (hasTags) return;
+
+        mostrarOnboardingModal();
+    } catch {}
+}
+
+function mostrarOnboardingModal() {
+    if (document.getElementById('onboarding-overlay')) return;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'onboarding-overlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+
+    const TAGS_DISPONIVEIS = [
+        'M&A', 'Recuperação Judicial', 'Regulatório', 'Distressed Assets',
+        'Crédito', 'NPL', 'Fundos', 'Energia', 'Infraestrutura', 'Telecom',
+        'Varejo', 'Saúde', 'Agro', 'Real Estate', 'Tech', 'Finanças',
+        'Jurídico', 'Internacional'
+    ];
+
+    const tagsHtml = TAGS_DISPONIVEIS.map(t =>
+        `<label style="display:inline-flex;align-items:center;gap:.3rem;padding:.3rem .6rem;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:.85rem;user-select:none;transition:all .2s;">
+            <input type="checkbox" value="${t}" style="accent-color:#3b82f6;"> ${t}
+        </label>`
+    ).join('');
+
+    overlay.innerHTML = `
+    <div style="background:#fff;border-radius:12px;padding:2rem;max-width:520px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+        <h2 style="margin:0 0 .5rem;color:#1e3a5f;font-size:1.3rem;">Bem-vindo ao AlphaFeed!</h2>
+        <p style="color:#6b7280;font-size:.9rem;margin-bottom:1rem;">Selecione seus temas de interesse para personalizar seu resumo diario.</p>
+        <div id="onboarding-tags" style="display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1.2rem;">
+            ${tagsHtml}
+        </div>
+        <div style="margin-bottom:1rem;">
+            <label style="font-size:.85rem;color:#374151;font-weight:500;">Tamanho do resumo:</label>
+            <select id="onboarding-tamanho" style="margin-left:.5rem;padding:.3rem .6rem;border:1px solid #d1d5db;border-radius:6px;">
+                <option value="curto">Curto (3-5 itens)</option>
+                <option value="medio" selected>Medio (5-8 itens)</option>
+                <option value="longo">Longo (8-12 itens)</option>
+            </select>
+        </div>
+        <div style="display:flex;gap:.5rem;justify-content:flex-end;">
+            <button id="onboarding-skip" style="padding:.5rem 1rem;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;color:#6b7280;">Pular por agora</button>
+            <button id="onboarding-save" style="padding:.5rem 1rem;border:none;border-radius:6px;background:#3b82f6;color:#fff;cursor:pointer;font-weight:500;">Salvar preferencias</button>
+        </div>
+    </div>`;
+
+    document.body.appendChild(overlay);
+
+    overlay.querySelectorAll('#onboarding-tags label').forEach(label => {
+        label.addEventListener('click', () => {
+            const cb = label.querySelector('input');
+            setTimeout(() => {
+                label.style.background = cb.checked ? '#eff6ff' : '#fff';
+                label.style.borderColor = cb.checked ? '#3b82f6' : '#d1d5db';
+            }, 10);
+        });
+    });
+
+    document.getElementById('onboarding-skip').addEventListener('click', () => {
+        overlay.remove();
+    });
+
+    document.getElementById('onboarding-save').addEventListener('click', async () => {
+        const tags = [];
+        overlay.querySelectorAll('#onboarding-tags input:checked').forEach(cb => tags.push(cb.value));
+        const tamanho = document.getElementById('onboarding-tamanho').value;
+
+        if (tags.length === 0) {
+            alert('Selecione ao menos um tema de interesse.');
+            return;
+        }
+
+        try {
+            const resp = await fetchAuth(`${API_BASE}/api/user/preferencias`, {
+                method: 'PUT',
+                body: JSON.stringify({ tags_interesse: tags, tamanho_resumo: tamanho }),
+            });
+            if (resp.ok) {
+                overlay.remove();
+                carregarResumoDoDia();
+            } else {
+                alert('Erro ao salvar preferencias. Tente novamente.');
+            }
+        } catch {
+            alert('Erro de rede. Tente novamente.');
+        }
+    });
+}
+
+// Bind botao de gerar resumo + onboarding
+document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('btn-refresh-summary');
+    if (btn) btn.addEventListener('click', gerarResumoDoDia);
+    carregarResumoDoDia();
+    verificarOnboarding();
+});

@@ -1,0 +1,29 @@
+1464_lv	1752007038	.newsroom.bi	/	2025-08-09T18:47:13.979Z	17		✓	None			Medium
+1464_u	407fa0f2-aee2-40df-9064-146cb83bd7b8	.newsroom.bi	/	2026-01-06T18:47:13.979Z	42		✓	None			Medium
+1464_ut	0	.newsroom.bi	/	2025-08-09T18:47:13.979Z	8		✓	None			Medium
+3921_lv	1753464027	.newsroom.bi	/	2025-08-24T18:53:35.890Z	17		✓	None			Medium
+3921_u	3987b3da-4eb0-42c9-8aea-9dc496ebca9e	.newsroom.bi	/	2026-01-21T18:53:35.890Z	42		✓	None			Medium
+3921_ut	0	.newsroom.bi	/	2025-08-24T18:53:35.890Z	8		✓	None			Medium
+___nrbi	%7B%22firstVisit%22%3A1753464027%2C%22userId%22%3A%223987b3da-4eb0-42c9-8aea-9dc496ebca9e%22%2C%22userVars%22%3A%5B%5D%2C%22futurePreviousVisit%22%3A1753902117%2C%22timesVisited%22%3A3%7D	.jota.info	/	2026-01-26T19:01:58.000Z	194		✓				Medium
+___nrbic	%7B%22previousVisit%22%3A1753468070%2C%22lastBeat%22%3A1753902117%2C%22currentVisitStarted%22%3A1753902117%2C%22sessionId%22%3A%227e6e34e0-1466-4035-8ae5-d60def8bc3bc%22%2C%22sessionVars%22%3A%5B%5D%2C%22visitedInThisSession%22%3Atrue%2C%22pagesViewed%22%3A1%2C%22landingPage%22%3A%22https%3A//www.jota.info/tributos%22%2C%22referrer%22%3A%22%22%2C%22lpti%22%3Anull%7D	.jota.info	/	2026-01-26T19:01:58.000Z	376		✓				Medium
+__trf.src	encoded_eyJmaXJzdF9zZXNzaW9uIjp7InZhbHVlIjoiaHR0cHM6Ly93d3cuYmluZy5jb20vIiwiZXh0cmFfcGFyYW1zIjp7fX0sImN1cnJlbnRfc2Vzc2lvbiI6eyJ2YWx1ZSI6Iihub25lKSIsImV4dHJhX3BhcmFtcyI6e319LCJjcmVhdGVkX2F0IjoxNzUzOTAyMTIwODI1fQ==	.jota.info	/	2026-07-30T19:02:00.000Z	221			Lax			Medium
+_fbp	fb.1.1753902118727.727500381427552156	.jota.info	/	2025-10-28T19:01:58.000Z	41						Medium
+_ga	GA1.1.416650109.1753464031	.jota.info	/	2026-09-03T19:01:57.390Z	29						Medium
+_ga_86QPH2LPR4	GS2.1.s1753902117$o4$g0$t1753902117$j60$l0$h875668365	.jota.info	/	2026-09-03T19:01:57.387Z	67						Medium
+_ga_L4XEVW3ZK0	GS2.1.s1753982320$o8$g0$t1753982320$j60$l0$h2036685485	.jota.info	/	2026-09-04T17:18:40.560Z	68						Medium
+_gcl_au	1.1.427315071.1753464026	.jota.info	/	2025-10-23T17:20:26.000Z	31						Medium
+_hjSessionUser_3488470	eyJpZCI6IjRkNzAyZTZmLWE3ODYtNWIyNC1iY2UyLTYyMmM1NDA3MWMzMyIsImNyZWF0ZWQiOjE3NTM0NjQwMzMyMjUsImV4aXN0aW5nIjp0cnVlfQ==	.jota.info	/	2026-07-30T19:01:58.000Z	138		✓	None			Medium
+_uetsid	ab1988306d7711f09ff4513a54f2a5e7	.jota.info	/	2025-07-31T19:01:58.000Z	39						Medium
+_uetvid	ac0ad520697b11f085fae9ab6081c90a	.jota.info	/	2026-08-24T19:01:58.000Z	39						Medium
+compass_uid	3987b3da-4eb0-42c9-8aea-9dc496ebca9e	.jota.info	/	2026-01-26T19:01:58.000Z	47		✓				Medium
+rdtrk	%7B%22id%22%3A%22828bde77-f2bf-41a9-a3fe-5bf419e5342e%22%7D	.jota.info	/	2026-07-30T19:02:03.000Z	64			Lax			Medium
+_RwBf	r=0&ilt=31&ihpd=0&ispd=2&rc=94&rb=0&rg=200&pc=91&mtu=0&rbb=0&clo=0&v=2&l=2025-07-25T07:00:00.0000000Z&lft=0001-01-01T00:00:00.0000000&aof=0&ard=0001-01-01T00:00:00.0000000&rwdbt=0&rwflt=0&rwaul2=0&g=&o=2&p=&c=&t=0&s=0001-01-01T00:00:00.0000000+00:00&ts=2025-07-25T17:20:07.4767125+00:00&rwred=0&wls=&wlb=&wle=&ccp=&cpt=&lka=0&lkt=0&aad=0&TH=&cid=0&gb=	.bing.com	/	2026-07-25T17:20:07.785Z	356		✓	None			Medium
+BCP	AD=1&AL=1&SM=1	.bing.com	/	2026-05-19T18:24:51.000Z	17		✓	None			Medium
+MSPTC	DuJvi_A6vYW1T6v_LkOnDv2pme8aDV9CS-019NJaAlo	.bing.com	/	2026-08-19T17:20:38.160Z	48		✓	None	https://jota.info	✓	Medium
+MUID	1891999286F76B0A17D18C78870C6A1B	.bing.com	/	2026-08-19T18:22:21.790Z	36		✓	None			High
+SRCHD	AF=ANAB01	.bing.com	/	2026-06-09T19:37:21.484Z	14		✓	None			Medium
+SRCHHPGUSR	SRCHLANG=en&PV=15.0.0&DM=0&BRW=M&BRH=S&CW=1272&CH=594&SCW=1257&SCH=2678&DPR=1.5&UTC=-180&HV=1753464008&HVE=CfDJ8Inh5QCoSQBNls38F2rbEpTe8BRqiAHEVjtwC9RWgIoVLcOwuGgQfeBWgg8lVuo0QQ9B7YEvbdAn5IBD-8JXKNoj4x8sPRjRFfhzIcBworoowgvBdoKRaw1r88Dqs0hNF2H5zLotcvEEO0LvOObmypZCHUp8gAVwrFow_fsTZT3XfPuRv71PjAwWpBKMyRSlZQ&WTS=63886397000&PRVCW=1272&PRVCH=594&EXLTT=26&IG=DA7C6FC1B271446688E4C63E3EA10CF4&PREFCOL=0&B=0	.bing.com	/	2026-08-29T17:20:07.677Z	411		✓	None			Medium
+SRCHUID	V=2&GUID=92BC9256A12A4F4EA1ED585B7FB023D0&dmnchg=1	.bing.com	/	2026-06-09T19:37:21.484Z	57		✓	None			Medium
+SRCHUSR	DOB=20250515&DS=1&POEX=W	.bing.com	/	2026-08-29T17:20:08.240Z	31		✓	None			Medium
+USRLOC	HS=1&ELOC=LAT=-33.92710876464844|LON=18.420061111450195|N=Cape%20Town%2C%20Western%20Cape|ELT=1|&BID=MjUwNzMxMTI0NTM0XzYwZmRjMjRhNjc4ODhiY2VjMmFiMTFjZTA3OWU4N2JjZTQ0M2Q1ZmMxYjgwM2YzMzgzOGZkMThlMzVhOTY1NjA=	.bing.com	/	2026-08-29T13:37:13.240Z	211	✓	✓	None			Medium
+MR	0	.bat.bing.com	/	2025-08-01T18:22:21.790Z	3		✓	None			Medium

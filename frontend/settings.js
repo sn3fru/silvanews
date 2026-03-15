@@ -4,6 +4,17 @@ let currentTab = 'artigos';
 let currentPage = 1;
 let currentItem = null;
 
+// Auth helpers (same as script.js)
+function getAuthToken() {
+    try { return (JSON.parse(localStorage.getItem('silva_auth') || '{}')).token || null; } catch { return null; }
+}
+function getAuthHeaders() {
+    const t = getAuthToken();
+    const h = { 'Content-Type': 'application/json' };
+    if (t && t !== 'admin') h['Authorization'] = `Bearer ${t}`;
+    return h;
+}
+
 // Inicialização
 document.addEventListener('DOMContentLoaded', function() {
     loadArtigos();

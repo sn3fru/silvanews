@@ -794,11 +794,12 @@
 </head>
 <body>
     <script>
-    // Proteção simples por login (localStorage)
     (function(){
         try {
             const auth = JSON.parse(localStorage.getItem('silva_auth') || '{}');
-            if (!auth || auth.username !== 'admin' || auth.token !== 'admin') {
+            const hasLegacy = auth.username === 'admin' && auth.token === 'admin';
+            const hasJwt = auth.token && auth.token.length > 20;
+            if (!hasLegacy && !hasJwt) {
                 window.location.href = '/frontend/login.html';
             }
         } catch (e) {

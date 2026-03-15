@@ -17,11 +17,30 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 from fastapi.responses import HTMLResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 import google.generativeai as genai
 import json
 import os
 from pydantic import BaseModel
+
+# JWT + password hashing
+try:
+    from jose import jwt, JWTError
+except ImportError:
+    jwt = None  # type: ignore
+    JWTError = Exception  # type: ignore
+
+try:
+    from passlib.hash import bcrypt as passlib_bcrypt
+except ImportError:
+    passlib_bcrypt = None  # type: ignore
+
+JWT_SECRET = os.getenv("JWT_SECRET", "silva-alphafeed-secret-change-in-production")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRE_HOURS = 24
+
+security_scheme = HTTPBearer(auto_error=False)
 
 # Carrega variáveis de ambiente do arquivo .env
 env_file = Path(__file__).parent / ".env"
@@ -33,7 +52,11 @@ else:
 
 try:
     from .database import get_db, init_database, ArtigoBruto, ClusterEvento, SinteseExecutiva, SessionLocal
-    from .models import ProcessarArtigoRequest, StatusResponse, ArtigoBrutoCreate, ChatRequest, ChatResponse, ClusterUpdateRequest, ResearchJobCreate, ResearchJobStatus
+    from .models import (ProcessarArtigoRequest, StatusResponse, ArtigoBrutoCreate, ChatRequest, ChatResponse,
+                         ClusterUpdateRequest, ResearchJobCreate, ResearchJobStatus,
+                         LoginRequest, TokenResponse, UsuarioCreate, UsuarioUpdate, UsuarioResponse,
+                         PreferenciasUpdate, PreferenciasResponse, TemplateResumoCreate, TemplateResumoUpdate,
+                         TemplateResumoResponse, ResumoUsuarioResponse)
     from .crud import (
         get_artigos_pendentes, get_metricas_today, get_sintese_today,
         get_clusters_for_feed, get_cluster_by_id, get_artigos_by_cluster,
@@ -54,14 +77,22 @@ try:
         list_prompt_prioridade_itens_grouped, create_prompt_prioridade_item, update_prompt_prioridade_item, delete_prompt_prioridade_item,
         list_prompt_templates, upsert_prompt_template, delete_prompt_template, get_prompts_compilados,
         get_cluster_counts_by_date_and_tipo_fonte,
-        list_sourcers_by_date_and_tipo, list_raw_articles_by_source_date_tipo
+        list_sourcers_by_date_and_tipo, list_raw_articles_by_source_date_tipo,
+        create_usuario, get_usuario_by_email, get_usuario_by_id, list_usuarios, update_usuario, deactivate_usuario,
+        get_preferencias_usuario, upsert_preferencias_usuario,
+        create_template_resumo, list_templates_resumo, get_template_resumo, update_template_resumo, delete_template_resumo,
+        create_resumo_usuario, get_resumo_usuario, list_resumos_usuario, count_clusters_since,
     )
     from .processing import processar_artigo_pipeline, gerar_resumo_cluster, inicializar_processamento
     from .utils import gerar_hash_unico, formatar_timestamp_relativo, get_date_brasil, parse_date_brasil, extrair_json_da_resposta, get_gemini_model
 except ImportError:
     # Fallback para import absoluto quando executado fora do pacote
     from backend.database import get_db, init_database, ArtigoBruto, ClusterEvento, SinteseExecutiva, SessionLocal
-    from backend.models import ProcessarArtigoRequest, StatusResponse, ArtigoBrutoCreate, ChatRequest, ChatResponse, ClusterUpdateRequest, ResearchJobCreate, ResearchJobStatus
+    from backend.models import (ProcessarArtigoRequest, StatusResponse, ArtigoBrutoCreate, ChatRequest, ChatResponse,
+                                ClusterUpdateRequest, ResearchJobCreate, ResearchJobStatus,
+                                LoginRequest, TokenResponse, UsuarioCreate, UsuarioUpdate, UsuarioResponse,
+                                PreferenciasUpdate, PreferenciasResponse, TemplateResumoCreate, TemplateResumoUpdate,
+                                TemplateResumoResponse, ResumoUsuarioResponse)
     from backend.crud import (
         get_artigos_pendentes, get_metricas_today, get_sintese_today,
         get_clusters_for_feed, get_cluster_by_id, get_artigos_by_cluster,
@@ -79,11 +110,14 @@ except ImportError:
         list_prompt_prioridade_itens_grouped, create_prompt_prioridade_item, update_prompt_prioridade_item, delete_prompt_prioridade_item,
         list_prompt_templates, upsert_prompt_template, delete_prompt_template, get_prompts_compilados, get_textos_brutos_por_cluster_id,
         get_cluster_counts_by_date_and_tipo_fonte,
-        list_sourcers_by_date_and_tipo, list_raw_articles_by_source_date_tipo
+        list_sourcers_by_date_and_tipo, list_raw_articles_by_source_date_tipo,
+        create_usuario, get_usuario_by_email, get_usuario_by_id, list_usuarios, update_usuario, deactivate_usuario,
+        get_preferencias_usuario, upsert_preferencias_usuario,
+        create_template_resumo, list_templates_resumo, get_template_resumo, update_template_resumo, delete_template_resumo,
+        create_resumo_usuario, get_resumo_usuario, list_resumos_usuario, count_clusters_since,
     )
     from backend.processing import processar_artigo_pipeline, gerar_resumo_cluster, inicializar_processamento
     from backend.utils import gerar_hash_unico, formatar_timestamp_relativo, get_date_brasil, parse_date_brasil, extrair_json_da_resposta, get_gemini_model
-    from backend.utils import gerar_hash_unico, formatar_timestamp_relativo, get_date_brasil, parse_date_brasil
 
 
 # ==============================================================================
@@ -179,6 +213,370 @@ async def health_check():
 # Removido catch-all para não interferir nas rotas /api
 
 
+# ==============================================================================
+# AUTENTICACAO JWT + HELPERS
+# ==============================================================================
+
+def _hash_password(password: str) -> str:
+    """Hash de senha com bcrypt (fallback para sha256 se passlib indisponível)."""
+    if passlib_bcrypt:
+        return passlib_bcrypt.hash(password)
+    import hashlib
+    return hashlib.sha256(password.encode()).hexdigest()
+
+
+def _verify_password(plain: str, hashed: str) -> bool:
+    """Verifica senha contra o hash armazenado."""
+    if passlib_bcrypt:
+        try:
+            return passlib_bcrypt.verify(plain, hashed)
+        except Exception:
+            pass
+    import hashlib
+    return hashlib.sha256(plain.encode()).hexdigest() == hashed
+
+
+def _create_token(user_id: int, email: str, role: str) -> str:
+    """Cria JWT token."""
+    if jwt is None:
+        import hashlib, base64
+        payload = json.dumps({"sub": str(user_id), "email": email, "role": role, "exp": time.time() + JWT_EXPIRE_HOURS * 3600})
+        return base64.b64encode(payload.encode()).decode()
+    from datetime import timedelta
+    expire = datetime.utcnow() + timedelta(hours=JWT_EXPIRE_HOURS)
+    payload = {"sub": str(user_id), "email": email, "role": role, "exp": expire}
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def _decode_token(token: str) -> Optional[Dict[str, Any]]:
+    """Decodifica JWT token. Retorna None se invalido."""
+    if jwt is None:
+        import base64
+        try:
+            payload = json.loads(base64.b64decode(token).decode())
+            if payload.get("exp", 0) < time.time():
+                return None
+            return payload
+        except Exception:
+            return None
+    try:
+        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except JWTError:
+        return None
+
+
+async def get_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
+    db: Session = Depends(get_db),
+) -> Optional[Dict[str, Any]]:
+    """Extrai usuario do token JWT. Retorna None se nao autenticado (permite acesso anonimo)."""
+    if not credentials:
+        return None
+    payload = _decode_token(credentials.credentials)
+    if not payload:
+        return None
+    user_id = int(payload.get("sub", 0))
+    if not user_id:
+        return None
+    user = get_usuario_by_id(db, user_id)
+    if not user or not user.ativo:
+        return None
+    return {"id": user.id, "email": user.email, "role": user.role, "nome": user.nome}
+
+
+async def require_auth(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """Exige autenticacao. Retorna 401 se nao autenticado."""
+    user = await get_current_user(credentials, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Autenticação necessária")
+    return user
+
+
+async def require_admin(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """Exige role admin."""
+    user = await require_auth(credentials, db)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Acesso restrito a administradores")
+    return user
+
+
+# ==============================================================================
+# ENDPOINTS: AUTH
+# ==============================================================================
+
+@app.post("/api/auth/login")
+async def api_login(req: LoginRequest, db: Session = Depends(get_db)):
+    """Login com email+senha. Retorna JWT token."""
+    email = req.email.strip().lower()
+    if email == "admin" or "@" not in email:
+        email_lookup = "admin@enforce.com.br" if email == "admin" else email
+    else:
+        email_lookup = email
+    user = get_usuario_by_email(db, email_lookup)
+    if not user or not user.ativo:
+        raise HTTPException(status_code=401, detail="Credenciais inválidas")
+    if not _verify_password(req.senha, user.senha_hash):
+        raise HTTPException(status_code=401, detail="Credenciais inválidas")
+    token = _create_token(user.id, user.email, user.role)
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {"id": user.id, "nome": user.nome, "email": user.email, "role": user.role}
+    }
+
+
+@app.get("/api/auth/me")
+async def api_get_me(current_user: Dict = Depends(require_auth)):
+    """Retorna dados do usuario logado."""
+    return current_user
+
+
+@app.post("/api/auth/register")
+async def api_register_user(req: UsuarioCreate, db: Session = Depends(get_db),
+                             admin: Dict = Depends(require_admin)):
+    """Cria novo usuario (admin only)."""
+    existing = get_usuario_by_email(db, req.email.strip().lower())
+    if existing:
+        raise HTTPException(status_code=409, detail="Email já cadastrado")
+    senha_hash = _hash_password(req.senha)
+    user = create_usuario(db, req.nome, req.email.strip().lower(), senha_hash, req.role)
+    return {"id": user.id, "nome": user.nome, "email": user.email, "role": user.role}
+
+
+@app.get("/api/auth/users")
+async def api_list_users(db: Session = Depends(get_db), admin: Dict = Depends(require_admin)):
+    """Lista todos os usuarios (admin only)."""
+    users = list_usuarios(db)
+    return [{"id": u.id, "nome": u.nome, "email": u.email, "role": u.role, "ativo": u.ativo,
+             "created_at": u.created_at.isoformat() if u.created_at else None} for u in users]
+
+
+@app.put("/api/auth/users/{user_id}")
+async def api_update_user(user_id: int, req: UsuarioUpdate, db: Session = Depends(get_db),
+                           admin: Dict = Depends(require_admin)):
+    """Atualiza usuario (admin only)."""
+    kwargs = {}
+    if req.nome is not None:
+        kwargs["nome"] = req.nome
+    if req.email is not None:
+        kwargs["email"] = req.email.strip().lower()
+    if req.senha is not None:
+        kwargs["senha_hash"] = _hash_password(req.senha)
+    user = update_usuario(db, user_id, **kwargs)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    return {"id": user.id, "nome": user.nome, "email": user.email, "role": user.role}
+
+
+@app.delete("/api/auth/users/{user_id}")
+async def api_deactivate_user(user_id: int, db: Session = Depends(get_db),
+                               admin: Dict = Depends(require_admin)):
+    """Desativa usuario (admin only)."""
+    ok = deactivate_usuario(db, user_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    return {"status": "ok", "message": "Usuário desativado"}
+
+
+# ==============================================================================
+# ENDPOINTS: PREFERENCIAS DO USUARIO
+# ==============================================================================
+
+@app.get("/api/user/preferencias")
+async def api_get_preferencias(db: Session = Depends(get_db), current_user: Dict = Depends(require_auth)):
+    """Retorna preferencias do usuario logado."""
+    prefs = get_preferencias_usuario(db, current_user["id"])
+    if not prefs:
+        return {"user_id": current_user["id"], "tags_interesse": [], "tags_ignoradas": [],
+                "fontes_ignoradas": [], "prioridade_minima": "P3_MONITORAMENTO",
+                "tipo_fonte_preferido": None, "tamanho_resumo": "medio",
+                "template_resumo_id": None, "config_extra": {}}
+    return {
+        "id": prefs.id, "user_id": prefs.user_id,
+        "tags_interesse": prefs.tags_interesse or [],
+        "tags_ignoradas": prefs.tags_ignoradas or [],
+        "fontes_ignoradas": prefs.fontes_ignoradas or [],
+        "prioridade_minima": prefs.prioridade_minima,
+        "tipo_fonte_preferido": prefs.tipo_fonte_preferido,
+        "tamanho_resumo": prefs.tamanho_resumo,
+        "template_resumo_id": prefs.template_resumo_id,
+        "config_extra": prefs.config_extra or {},
+    }
+
+
+@app.put("/api/user/preferencias")
+async def api_update_preferencias(req: PreferenciasUpdate, db: Session = Depends(get_db),
+                                   current_user: Dict = Depends(require_auth)):
+    """Atualiza preferencias do usuario logado."""
+    kwargs = {k: v for k, v in req.model_dump().items() if v is not None}
+    prefs = upsert_preferencias_usuario(db, current_user["id"], **kwargs)
+    return {"status": "ok", "id": prefs.id}
+
+
+# ==============================================================================
+# ENDPOINTS: TEMPLATES DE RESUMO
+# ==============================================================================
+
+@app.get("/api/templates-resumo")
+async def api_list_templates(db: Session = Depends(get_db), current_user: Dict = Depends(require_auth)):
+    """Lista templates do usuario + publicos."""
+    templates = list_templates_resumo(db, user_id=current_user["id"], incluir_publicos=True)
+    return [{"id": t.id, "nome": t.nome, "descricao": t.descricao,
+             "criado_por_user_id": t.criado_por_user_id, "publico": t.publico,
+             "system_prompt": t.system_prompt, "tools_habilitadas": t.tools_habilitadas or [],
+             "restricoes": t.restricoes or {},
+             "created_at": t.created_at.isoformat() if t.created_at else None} for t in templates]
+
+
+@app.post("/api/templates-resumo")
+async def api_create_template(req: TemplateResumoCreate, db: Session = Depends(get_db),
+                               current_user: Dict = Depends(require_auth)):
+    """Cria novo template de resumo."""
+    tpl = create_template_resumo(
+        db, req.nome, req.system_prompt, criado_por=current_user["id"],
+        publico=req.publico, descricao=req.descricao,
+        tools_habilitadas=req.tools_habilitadas, restricoes=req.restricoes
+    )
+    return {"id": tpl.id, "nome": tpl.nome}
+
+
+@app.put("/api/templates-resumo/{template_id}")
+async def api_update_template(template_id: int, req: TemplateResumoUpdate, db: Session = Depends(get_db),
+                               current_user: Dict = Depends(require_auth)):
+    """Atualiza template de resumo (apenas o criador ou admin)."""
+    existing = get_template_resumo(db, template_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Template não encontrado")
+    if existing.criado_por_user_id != current_user["id"] and current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Sem permissão para editar este template")
+    kwargs = {k: v for k, v in req.model_dump().items() if v is not None}
+    tpl = update_template_resumo(db, template_id, **kwargs)
+    return {"id": tpl.id, "nome": tpl.nome}
+
+
+@app.delete("/api/templates-resumo/{template_id}")
+async def api_delete_template(template_id: int, db: Session = Depends(get_db),
+                               current_user: Dict = Depends(require_auth)):
+    """Deleta template de resumo (apenas o criador ou admin)."""
+    existing = get_template_resumo(db, template_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Template não encontrado")
+    if existing.criado_por_user_id != current_user["id"] and current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Sem permissão para deletar este template")
+    delete_template_resumo(db, template_id)
+    return {"status": "ok"}
+
+
+@app.post("/api/templates-resumo/{template_id}/copiar")
+async def api_copy_template(template_id: int, db: Session = Depends(get_db),
+                             current_user: Dict = Depends(require_auth)):
+    """Copia um template publico para o usuario."""
+    original = get_template_resumo(db, template_id)
+    if not original:
+        raise HTTPException(status_code=404, detail="Template não encontrado")
+    if not original.publico and original.criado_por_user_id != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Template não é público")
+    copia = create_template_resumo(
+        db, f"{original.nome} (cópia)", original.system_prompt,
+        criado_por=current_user["id"], publico=False,
+        descricao=original.descricao, tools_habilitadas=original.tools_habilitadas,
+        restricoes=original.restricoes,
+    )
+    return {"id": copia.id, "nome": copia.nome}
+
+
+# ==============================================================================
+# ENDPOINTS: RESUMO DO USUARIO
+# ==============================================================================
+
+@app.get("/api/resumo/hoje")
+async def api_get_resumo_hoje(db: Session = Depends(get_db),
+                               current_user: Optional[Dict] = Depends(get_current_user)):
+    """Retorna o resumo do dia do usuario logado (ou o resumo global se anonimo)."""
+    today = get_date_brasil()
+    if current_user:
+        resumo = get_resumo_usuario(db, current_user["id"], today)
+        if resumo:
+            return {
+                "id": resumo.id, "data": resumo.data_referencia.isoformat() if resumo.data_referencia else today.isoformat(),
+                "texto_gerado": resumo.texto_gerado, "texto_whatsapp": resumo.texto_whatsapp,
+                "clusters_escolhidos_ids": resumo.clusters_escolhidos_ids or [],
+                "prompt_version": resumo.prompt_version, "metadados": resumo.metadados or {},
+                "created_at": resumo.created_at.isoformat() if resumo.created_at else None,
+            }
+    return {"data": today.isoformat(), "texto_gerado": None, "message": "Nenhum resumo gerado ainda hoje."}
+
+
+@app.post("/api/resumo/gerar")
+async def api_gerar_resumo(background_tasks: BackgroundTasks, db: Session = Depends(get_db),
+                            current_user: Dict = Depends(require_auth)):
+    """Dispara geracao do resumo diario para o usuario logado (background task)."""
+    today = get_date_brasil()
+    background_tasks.add_task(_generate_user_summary, current_user["id"], today)
+    return {"status": "processing", "message": "Resumo sendo gerado. Consulte GET /api/resumo/hoje."}
+
+
+def _generate_user_summary(user_id: int, target_date):
+    """Background task: gera resumo PERSONALIZADO para o usuario.
+
+    v3.0: Usa gerar_resumo_para_usuario() que reaproveita contexto compartilhado
+    (cache por updated_at) e faz UMA chamada LLM por usuario com suas preferencias
+    de tags, tamanho e template injetadas no prompt.
+    """
+    try:
+        from agents.resumo_diario.agent import gerar_resumo_para_usuario, formatar_whatsapp
+
+        resultado = gerar_resumo_para_usuario(user_id=user_id, target_date=target_date)
+
+        db = SessionLocal()
+        try:
+            if resultado.get("ok"):
+                texto_wpp = formatar_whatsapp(resultado)
+                texto_full = "\n\n---\n\n".join(texto_wpp) if texto_wpp else None
+                create_resumo_usuario(
+                    db, user_id, target_date, template_id=None,
+                    clusters_avaliados=resultado.get("clusters_avaliados_ids", []),
+                    clusters_escolhidos=resultado.get("todos_clusters_escolhidos_ids", []),
+                    texto=texto_full, texto_whatsapp=texto_full,
+                    prompt_version=resultado.get("prompt_version"),
+                    metadados=resultado.get("personas_resultados", {}),
+                )
+                print(f"[ResumoUsuario] Resumo personalizado salvo para user_id={user_id}, data={target_date}")
+            else:
+                print(f"[ResumoUsuario] Falha para user_id={user_id}: {resultado.get('error', 'desconhecido')}")
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"[ResumoUsuario] Erro ao gerar resumo: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+@app.get("/api/resumo/historico")
+async def api_list_resumos(db: Session = Depends(get_db), current_user: Dict = Depends(require_auth),
+                            limit: int = 30):
+    """Lista ultimos resumos do usuario."""
+    resumos = list_resumos_usuario(db, current_user["id"], limit=limit)
+    return [{"id": r.id, "data": r.data_referencia.isoformat() if r.data_referencia else None,
+             "prompt_version": r.prompt_version, "created_at": r.created_at.isoformat() if r.created_at else None}
+            for r in resumos]
+
+
+@app.get("/api/feed/updates-since")
+async def api_feed_updates_since(since: str, db: Session = Depends(get_db)):
+    """Conta clusters novos/atualizados desde um timestamp (para indicador de refresh)."""
+    try:
+        since_dt = datetime.fromisoformat(since.replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        since_dt = datetime.utcnow()
+    count = count_clusters_since(db, since_dt)
+    return {"new_clusters": count, "since": since}
 
 
 
@@ -1265,13 +1663,15 @@ processing_state = {}
 @app.post("/api/admin/upload-file")
 async def upload_file_endpoint(
     file: UploadFile = File(...),
+    background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db)
 ) -> StatusResponse:
     """
     Endpoint para upload de arquivos PDF ou JSON.
+    Fluxo: upload -> ingestao (dedup hash+semantica) -> process_articles (background).
     """
+    file_id = None
     try:
-        # Verifica tipo de arquivo
         if not file.filename:
             raise HTTPException(status_code=400, detail="Nome do arquivo não fornecido")
         
@@ -1279,7 +1679,6 @@ async def upload_file_endpoint(
         if file_ext not in ['pdf', 'json']:
             raise HTTPException(status_code=400, detail="Apenas arquivos PDF e JSON são suportados")
         
-        # Inicializa progresso para este arquivo
         file_id = f"{file.filename}_{int(time.time())}"
         upload_progress[file_id] = {
             "filename": file.filename,
@@ -1290,34 +1689,31 @@ async def upload_file_endpoint(
             "start_time": time.time()
         }
         
-        # Cria diretório temporário se não existir
         temp_dir = PROJECT_ROOT / "temp_uploads"
         temp_dir.mkdir(exist_ok=True)
         
-        # Salva arquivo temporariamente
         file_path = temp_dir / file.filename
         with open(file_path, "wb") as buffer:
             content = await file.read()
             buffer.write(content)
         
-        # Atualiza status para processamento
         upload_progress[file_id]["status"] = "processing"
         upload_progress[file_id]["message"] = "Processando arquivo..."
         
-        # Processa arquivo com tracking de progresso
         artigos_processados = await processar_arquivo_upload_com_progresso(file_path, file_ext, db, file_id)
         
-        # Remove arquivo temporário
-        file_path.unlink()
+        file_path.unlink(missing_ok=True)
         
-        # Finaliza progresso
         upload_progress[file_id]["status"] = "completed"
-        upload_progress[file_id]["message"] = "Processamento concluído"
+        upload_progress[file_id]["message"] = "Ingestão concluída. Processamento de artigos iniciado em background."
         upload_progress[file_id]["current_article"] = artigos_processados
         upload_progress[file_id]["total_articles"] = artigos_processados
         
+        if artigos_processados > 0 and background_tasks:
+            background_tasks.add_task(processar_artigos_via_script)
+        
         create_log(db, "INFO", "api", 
-                  f"Arquivo {file.filename} processado com sucesso. {artigos_processados} artigos criados.")
+                  f"Arquivo {file.filename}: {artigos_processados} artigos ingeridos. Pipeline disparado.")
         
         return StatusResponse(
             status="sucesso",
@@ -1328,7 +1724,7 @@ async def upload_file_endpoint(
     except HTTPException:
         raise
     except Exception as e:
-        if file_id in upload_progress:
+        if file_id and file_id in upload_progress:
             upload_progress[file_id]["status"] = "error"
             upload_progress[file_id]["message"] = f"Erro: {str(e)}"
         create_log(db, "ERROR", "api", f"Erro no endpoint /admin/upload-file: {e}")
@@ -3634,6 +4030,75 @@ async def update_prompts_settings(
     except Exception as e:
         print(f"❌ Erro ao atualizar configurações de prompts: {e}")
         raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
+
+
+# ==============================================================================
+# ENDPOINTS: ADMIN PROMPTS (CMS)
+# ==============================================================================
+
+@app.get("/api/admin/prompts")
+async def api_list_admin_prompts(db: Session = Depends(get_db)):
+    """Lista todos os prompts editáveis (constantes de prompts.py + banco)."""
+    try:
+        from backend.prompts import PROMPT_REQUIRED_VARS
+    except ImportError:
+        PROMPT_REQUIRED_VARS = {}
+
+    templates = list_prompt_templates(db)
+    result = []
+    for t in templates:
+        result.append({
+            "chave": t.chave if hasattr(t, 'chave') else t.get("chave", ""),
+            "descricao": t.descricao if hasattr(t, 'descricao') else t.get("descricao", ""),
+            "conteudo": t.conteudo if hasattr(t, 'conteudo') else t.get("conteudo", ""),
+            "variaveis_obrigatorias": PROMPT_REQUIRED_VARS.get(
+                t.chave if hasattr(t, 'chave') else t.get("chave", ""), []),
+            "updated_at": (t.updated_at.isoformat() if hasattr(t, 'updated_at') and t.updated_at else None),
+        })
+    return result
+
+
+class PromptValidateRequest(BaseModel):
+    conteudo: str
+
+
+@app.post("/api/admin/prompts/{chave}/validate")
+async def api_validate_prompt(chave: str, req: PromptValidateRequest):
+    """Valida um prompt testando format() com dados mock (sandbox)."""
+    try:
+        from backend.prompts import validar_prompt_update
+    except ImportError:
+        return {"ok": True, "message": "Validação indisponível"}
+    ok, msg = validar_prompt_update(chave, req.conteudo)
+    if not ok:
+        raise HTTPException(status_code=422, detail=msg)
+    return {"ok": True, "message": msg}
+
+
+# ==============================================================================
+# ENDPOINTS: DOCUMENTAÇÃO (Markdown + Mermaid)
+# ==============================================================================
+
+@app.get("/api/docs")
+async def api_list_docs():
+    """Lista documentos .md disponíveis no diretório docs/."""
+    docs_dir = PROJECT_ROOT / "docs"
+    if not docs_dir.exists():
+        return []
+    files = sorted(docs_dir.glob("*.md"))
+    return [{"name": f.stem, "filename": f.name,
+             "size": f.stat().st_size} for f in files]
+
+
+@app.get("/api/docs/{filename}")
+async def api_get_doc(filename: str):
+    """Retorna conteúdo de um documento .md."""
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Nome de arquivo inválido")
+    doc_path = PROJECT_ROOT / "docs" / filename
+    if not doc_path.exists() or doc_path.suffix != ".md":
+        raise HTTPException(status_code=404, detail="Documento não encontrado")
+    return {"filename": filename, "content": doc_path.read_text(encoding="utf-8")}
 
 
 class EstagiarioStartRequest(BaseModel):
