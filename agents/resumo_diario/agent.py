@@ -207,11 +207,12 @@ def _build_context_block(db, target_date: datetime.date) -> Tuple[str, List[int]
         f"TEMPERATURA DO DIA: {temperatura}\n"
         f"Estatísticas: {p1_count} P1, {p2_count} P2, {p3_count} P3 (Total: {total} clusters)\n"
         f"Diversidade de tags: {n_tags} tags distintas ({', '.join(sorted(tags_distintas))})\n"
-        f"\nREGRAS DE CURADORIA ADAPTATIVA:\n"
-        f"- DIA QUENTE: Seja RIGOROSO. Selecione 7-12 itens mais impactantes.\n"
-        f"- DIA MORNO: Selecione P1+P2 e complemente com os melhores P3. 5-8 itens.\n"
-        f"- DIA FRIO: Baixe a régua. Selecione os P3 mais relevantes (3-5 itens).\n"
-        f"- NUNCA retorne 0 itens. Sempre há algo a reportar.\n"
+        f"\nVOLUME MÍNIMO OBRIGATÓRIO:\n"
+        f"- QUENTE: 10-15 itens distribuidos pelas secoes.\n"
+        f"- MORNO: 7-12 itens. MINIMO ABSOLUTO: 5 itens.\n"
+        f"- FRIO: 5-8 itens (baixe a regua, selecione os mais relevantes que existirem).\n"
+        f"- NUNCA retorne menos de 5 itens quando ha 10+ clusters disponiveis.\n"
+        f"- Inclua noticias de TODAS AS FONTES (fisico, online, internacional).\n"
         f"--- FIM CONTEXTO ---\n\n"
     )
 
@@ -740,6 +741,11 @@ def gerar_resumo_para_usuario(
             tpl = get_template_resumo(db_prefs, template_id)
             if tpl:
                 instrucao = tpl.system_prompt or ""
+
+        config_extra = (prefs.config_extra or {}) if prefs else {}
+        instrucoes_user = config_extra.get("instrucoes_resumo", "")
+        if instrucoes_user:
+            instrucao = instrucoes_user
     finally:
         db_prefs.close()
 

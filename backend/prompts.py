@@ -1760,15 +1760,17 @@ PROCESSO OBRIGATÓRIO
 
 PASSO 1 — TRIAGEM: Leia TODOS os clusters. Para cada um, avalie: pertence a qual seção? Passe pelo teste de qualidade da seção?
 
-PASSO 2 — APROFUNDAMENTO: Para os clusters pré-selecionados onde faltam dados críticos (valores, nomes, tribunais), CHAME `obter_textos_brutos_cluster(cluster_id)`. Isso é OBRIGATÓRIO quando a REGRA DE PROFUNDIDADE de qualquer seção se aplica. Não seja preguiçoso — use as ferramentas disponíveis.
+PASSO 2 — APROFUNDAMENTO: Para os clusters pré-selecionados onde faltam dados críticos (valores, nomes, tribunais), CHAME `obter_textos_brutos_cluster(cluster_id)`. Isso é OBRIGATÓRIO quando a REGRA DE PROFUNDIDADE de qualquer seção se aplica. Use pelo menos 2-3 chamadas de ferramenta nos clusters mais importantes. Não seja preguiçoso — os resumos curtos do contexto NUNCA contêm dados factuais suficientes para um bullet de qualidade executiva.
 
 PASSO 3 — REDAÇÃO FINAL: Escreva bullets CONCRETOS com dados factuais (R$ valores, nomes de empresas, varas judiciais, percentuais). Nunca escreva bullets vagos como "Aumento de RJs". Sempre inclua o QUEM, O QUÊ e QUANTO.
 
-<<< REGRA DE ADAPTAÇÃO À TEMPERATURA >>>
+<<< REGRA DE VOLUME MÍNIMO (OBRIGATÓRIA) >>>
 - QUENTE (volume + diversidade): 10-15 itens totais distribuídos pelas seções.
-- MORNO: 7-12 itens.
-- FRIO: 4-8 itens (baixe a régua, selecione os mais relevantes que existirem).
-- NUNCA retorne 0 itens. Cada seção deve ter pelo menos 1 item se houver conteúdo.
+- MORNO: 7-12 itens. Se houver 40+ clusters, selecione pelo menos 8.
+- FRIO: 5-8 itens (baixe a régua, selecione os mais relevantes que existirem).
+- NUNCA retorne menos de 5 itens. Cada seção DEVE ter pelo menos 2 itens (se houver clusters relevantes).
+- Se uma seção não tiver conteúdo, redistributa os itens para as outras seções.
+- ERRO CRÍTICO: Retornar 3 ou menos itens quando há 10+ clusters disponíveis é INACEITÁVEL.
 
 <<< FERRAMENTAS DISPONÍVEIS >>>
 - `obter_textos_brutos_cluster(cluster_id)`: Textos originais dos artigos. USE quando a REGRA DE PROFUNDIDADE exigir. Máximo 5 chamadas — priorize os clusters mais importantes.
@@ -1777,7 +1779,7 @@ PASSO 3 — REDAÇÃO FINAL: Escreva bullets CONCRETOS com dados factuais (R$ va
 <<< FORMATO DE SAÍDA (JSON ESTRITO) >>>
 Responda APENAS com JSON:
 {{
-  "tldr_executivo": "Até 2 frases, máximo 280 caracteres. Panorama geral do dia.",
+  "tldr_executivo": "Até 3 frases, máximo 500 caracteres. Panorama geral do dia com dados concretos.",
   "clusters_selecionados": [
     {{
       "cluster_id": 123,

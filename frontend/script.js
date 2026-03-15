@@ -4395,12 +4395,22 @@ async function verificarOnboarding() {
     } catch {}
 }
 
-function mostrarOnboardingModal() {
+async function mostrarOnboardingModal() {
     if (document.getElementById('onboarding-overlay')) return;
+
+    let existingPrefs = {};
+    try {
+        const prefsResp = await fetchAuth(`${API_BASE}/api/user/preferencias`);
+        if (prefsResp.ok) existingPrefs = await prefsResp.json();
+    } catch {}
+
+    const existingTags = existingPrefs.tags_interesse || [];
+    const existingTamanho = existingPrefs.tamanho_resumo || 'medio';
+    const existingInstrucoes = existingPrefs.instrucoes_resumo || (existingPrefs.config_extra || {}).instrucoes_resumo || '';
 
     const overlay = document.createElement('div');
     overlay.id = 'onboarding-overlay';
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;overflow-y:auto;';
 
     const TAGS_DISPONIVEIS = [
         'M&A', 'Recuperação Judicial', 'Regulatório', 'Distressed Assets',
@@ -4409,30 +4419,44 @@ function mostrarOnboardingModal() {
         'Jurídico', 'Internacional'
     ];
 
-    const tagsHtml = TAGS_DISPONIVEIS.map(t =>
-        `<label style="display:inline-flex;align-items:center;gap:.3rem;padding:.3rem .6rem;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:.85rem;user-select:none;transition:all .2s;">
-            <input type="checkbox" value="${t}" style="accent-color:#3b82f6;"> ${t}
-        </label>`
-    ).join('');
+    const tagsHtml = TAGS_DISPONIVEIS.map(t => {
+        const checked = existingTags.includes(t) ? 'checked' : '';
+        const bg = checked ? 'background:#eff6ff;border-color:#3b82f6;' : '';
+        return `<label style="display:inline-flex;align-items:center;gap:.3rem;padding:.3rem .6rem;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:.85rem;user-select:none;transition:all .2s;${bg}">
+            <input type="checkbox" value="${t}" ${checked} style="accent-color:#3b82f6;"> ${t}
+        </label>`;
+    }).join('');
 
     overlay.innerHTML = `
-    <div style="background:#fff;border-radius:12px;padding:2rem;max-width:520px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.3);">
-        <h2 style="margin:0 0 .5rem;color:#1e3a5f;font-size:1.3rem;">Bem-vindo ao AlphaFeed!</h2>
-        <p style="color:#6b7280;font-size:.9rem;margin-bottom:1rem;">Selecione seus temas de interesse para personalizar seu resumo diario.</p>
-        <div id="onboarding-tags" style="display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1.2rem;">
-            ${tagsHtml}
+    <div style="background:#fff;border-radius:12px;padding:2rem;max-width:600px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,.3);margin:1rem auto;">
+        <h2 style="margin:0 0 .3rem;color:#1e3a5f;font-size:1.2rem;">Preferencias do Resumo</h2>
+        <p style="color:#6b7280;font-size:.8rem;margin-bottom:.8rem;">Configure como o agente de IA gera seu resumo diario.</p>
+
+        <div style="margin-bottom:.8rem;">
+            <label style="font-size:.8rem;color:#374151;font-weight:600;display:block;margin-bottom:.3rem;">Temas de interesse (filtro de prioridade)</label>
+            <div id="onboarding-tags" style="display:flex;flex-wrap:wrap;gap:.4rem;">
+                ${tagsHtml}
+            </div>
         </div>
-        <div style="margin-bottom:1rem;">
-            <label style="font-size:.85rem;color:#374151;font-weight:500;">Tamanho do resumo:</label>
-            <select id="onboarding-tamanho" style="margin-left:.5rem;padding:.3rem .6rem;border:1px solid #d1d5db;border-radius:6px;">
-                <option value="curto">Curto (3-5 itens)</option>
-                <option value="medio" selected>Medio (5-8 itens)</option>
-                <option value="longo">Longo (8-12 itens)</option>
+
+        <div style="margin-bottom:.8rem;">
+            <label style="font-size:.8rem;color:#374151;font-weight:600;">Tamanho do resumo:</label>
+            <select id="onboarding-tamanho" style="margin-left:.5rem;padding:.3rem .6rem;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem;">
+                <option value="curto" ${existingTamanho === 'curto' ? 'selected' : ''}>Curto (3-5 itens)</option>
+                <option value="medio" ${existingTamanho === 'medio' ? 'selected' : ''}>Medio (5-8 itens)</option>
+                <option value="longo" ${existingTamanho === 'longo' ? 'selected' : ''}>Longo (8-12 itens)</option>
             </select>
         </div>
+
+        <div style="margin-bottom:1rem;">
+            <label style="font-size:.8rem;color:#374151;font-weight:600;display:block;margin-bottom:.3rem;">Instrucoes para o agente (prompt personalizado)</label>
+            <p style="font-size:.75rem;color:#9ca3af;margin:0 0 .3rem;">Escreva como o agente deve montar seu resumo. Ex: "Nao separe por topicos, escreva um texto corrido com analise juridica propria" ou "Foque apenas em energia e infraestrutura com impacto regulatorio".</p>
+            <textarea id="onboarding-instrucoes" rows="4" style="width:100%;padding:.5rem;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem;font-family:inherit;resize:vertical;box-sizing:border-box;" placeholder="Deixe em branco para usar o padrao de Special Situations...">${existingInstrucoes}</textarea>
+        </div>
+
         <div style="display:flex;gap:.5rem;justify-content:flex-end;">
-            <button id="onboarding-skip" style="padding:.5rem 1rem;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;color:#6b7280;">Pular por agora</button>
-            <button id="onboarding-save" style="padding:.5rem 1rem;border:none;border-radius:6px;background:#3b82f6;color:#fff;cursor:pointer;font-weight:500;">Salvar preferencias</button>
+            <button id="onboarding-skip" style="padding:.5rem 1rem;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;color:#6b7280;font-size:.85rem;">Fechar</button>
+            <button id="onboarding-save" style="padding:.5rem 1rem;border:none;border-radius:6px;background:#3b82f6;color:#fff;cursor:pointer;font-weight:500;font-size:.85rem;">Salvar preferencias</button>
         </div>
     </div>`;
 
@@ -4456,23 +4480,26 @@ function mostrarOnboardingModal() {
         const tags = [];
         overlay.querySelectorAll('#onboarding-tags input:checked').forEach(cb => tags.push(cb.value));
         const tamanho = document.getElementById('onboarding-tamanho').value;
-
-        if (tags.length === 0) {
-            alert('Selecione ao menos um tema de interesse.');
-            return;
-        }
+        const instrucoes = document.getElementById('onboarding-instrucoes').value.trim();
 
         try {
+            const body = { tags_interesse: tags, tamanho_resumo: tamanho };
+            if (instrucoes) {
+                body.config_extra = { instrucoes_resumo: instrucoes };
+            } else {
+                body.config_extra = { instrucoes_resumo: '' };
+            }
             const resp = await fetchAuth(`${API_BASE}/api/user/preferencias`, {
                 method: 'PUT',
-                body: JSON.stringify({ tags_interesse: tags, tamanho_resumo: tamanho }),
+                body: JSON.stringify(body),
             });
             if (resp.ok) {
                 overlay.remove();
                 carregarResumoDoDia();
                 carregarPrefsBanner();
             } else {
-                alert('Erro ao salvar preferencias. Tente novamente.');
+                const errData = await resp.json().catch(() => ({}));
+                alert(errData.detail || 'Erro ao salvar. Faca login primeiro.');
             }
         } catch {
             alert('Erro de rede. Tente novamente.');
@@ -4491,9 +4518,13 @@ async function carregarPrefsBanner() {
         const prefs = await resp.json();
         const tags = prefs.tags_interesse || [];
         const tam = prefs.tamanho_resumo || 'medio';
-        if (tags.length > 0) {
+        const instrucoes = prefs.instrucoes_resumo || '';
+        if (tags.length > 0 || instrucoes) {
             banner.style.display = 'block';
-            banner.innerHTML = `Seus interesses: <strong>${tags.join(', ')}</strong> · Tamanho: <strong>${tam}</strong>`;
+            let html = '';
+            if (tags.length > 0) html += `Interesses: <strong>${tags.join(', ')}</strong> · Tamanho: <strong>${tam}</strong>`;
+            if (instrucoes) html += `${html ? ' · ' : ''}<em style="color:#6b7280;">Instrucoes: "${instrucoes.substring(0, 80)}${instrucoes.length > 80 ? '...' : ''}"</em>`;
+            banner.innerHTML = html;
         }
     } catch {}
 }

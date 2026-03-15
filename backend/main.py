@@ -389,14 +389,20 @@ async def api_deactivate_user(user_id: int, db: Session = Depends(get_db),
 # ==============================================================================
 
 @app.get("/api/user/preferencias")
-async def api_get_preferencias(db: Session = Depends(get_db), current_user: Dict = Depends(require_auth)):
-    """Retorna preferencias do usuario logado."""
-    prefs = get_preferencias_usuario(db, current_user["id"])
-    if not prefs:
-        return {"user_id": current_user["id"], "tags_interesse": [], "tags_ignoradas": [],
+async def api_get_preferencias(db: Session = Depends(get_db),
+                                current_user: Optional[Dict] = Depends(get_current_user)):
+    """Retorna preferencias do usuario logado (ou defaults se anonimo)."""
+    defaults = {"user_id": None, "tags_interesse": [], "tags_ignoradas": [],
                 "fontes_ignoradas": [], "prioridade_minima": "P3_MONITORAMENTO",
                 "tipo_fonte_preferido": None, "tamanho_resumo": "medio",
-                "template_resumo_id": None, "config_extra": {}}
+                "template_resumo_id": None, "config_extra": {}, "instrucoes_resumo": ""}
+    if not current_user:
+        return defaults
+    prefs = get_preferencias_usuario(db, current_user["id"])
+    if not prefs:
+        defaults["user_id"] = current_user["id"]
+        return defaults
+    ce = prefs.config_extra or {}
     return {
         "id": prefs.id, "user_id": prefs.user_id,
         "tags_interesse": prefs.tags_interesse or [],
@@ -406,14 +412,17 @@ async def api_get_preferencias(db: Session = Depends(get_db), current_user: Dict
         "tipo_fonte_preferido": prefs.tipo_fonte_preferido,
         "tamanho_resumo": prefs.tamanho_resumo,
         "template_resumo_id": prefs.template_resumo_id,
-        "config_extra": prefs.config_extra or {},
+        "config_extra": ce,
+        "instrucoes_resumo": ce.get("instrucoes_resumo", ""),
     }
 
 
 @app.put("/api/user/preferencias")
 async def api_update_preferencias(req: PreferenciasUpdate, db: Session = Depends(get_db),
-                                   current_user: Dict = Depends(require_auth)):
+                                   current_user: Optional[Dict] = Depends(get_current_user)):
     """Atualiza preferencias do usuario logado."""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Faca login para salvar preferencias.")
     kwargs = {k: v for k, v in req.model_dump().items() if v is not None}
     prefs = upsert_preferencias_usuario(db, current_user["id"], **kwargs)
     return {"status": "ok", "id": prefs.id}
