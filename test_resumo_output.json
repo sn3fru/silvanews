@@ -2,27 +2,62 @@
   "ok": true,
   "data": "2026-03-15",
   "contract_dict": {
-    "tldr_executivo": "Destaque para alta esperada nas recuperações judiciais e decisão do TJ-SP sobre suspensão de alvarás. Investigação sobre Banco Master ganha relevância.",
+    "tldr_executivo": "O dia apresenta alta nas recuperações extrajudiciais e judiciais devido ao endividamento e juros altos. TJ-SP mantém suspensão de alvarás impactando a construção civil. PF investiga Banco Master por pagamentos ilícitos e influência.",
     "clusters_selecionados": [
       {
         "cluster_id": 53331,
         "secao": "distressed",
-        "titulo_whatsapp": "💀 Alta esperada em RJs",
-        "bullet_impacto": "Espera-se um aumento nas recuperações judiciais nos próximos dois anos devido ao alto endividamento das empresas e à taxa Selic elevada.",
+        "titulo_whatsapp": "💀 Alta nas Recuperações Judiciais",
+        "bullet_impacto": "Espera-se alta nas recuperações judiciais nos próximos dois anos devido ao alto endividamento das empresas e à taxa Selic elevada, mesmo com a possível queda.",
+        "fonte_principal": "O Estado de S.Paulo"
+      },
+      {
+        "cluster_id": 53319,
+        "secao": "distressed",
+        "titulo_whatsapp": "💀 Recuperação Extrajudicial em Alta",
+        "bullet_impacto": "Em 2025, a recuperação extrajudicial está em alta, enquanto a judicialização recua, refletindo um cenário de stress financeiro para empresas devido a juros elevados.",
+        "fonte_principal": "O Estado de S.Paulo"
+      },
+      {
+        "cluster_id": 53306,
+        "secao": "distressed",
+        "titulo_whatsapp": "💀 Crises Financeiras em Grandes Empresas",
+        "bullet_impacto": "Juros elevados, problemas de gestão e governança estão levando mais empresas à recuperação, como Raízen, Grupo Pão de Açúcar, entre outras.",
+        "fonte_principal": "O Estado de S.Paulo"
+      },
+      {
+        "cluster_id": 53303,
+        "secao": "distressed",
+        "titulo_whatsapp": "💀 Empresas Enfrentam Teste de Governança",
+        "bullet_impacto": "O aumento de recuperações judiciais expõe fragilidades na gestão de riscos financeiros e controle do endividamento das empresas.",
+        "fonte_principal": "O Estado de S.Paulo"
+      },
+      {
+        "cluster_id": 53346,
+        "secao": "regulatorio",
+        "titulo_whatsapp": "⚖️ Execução Fiscal e Falência",
+        "bullet_impacto": "Para o TJ-SP, execução fiscal e falência podem coexistir, desde que não haja pedido de constrição no juízo executivo, conforme entendimento do STJ no Tema 1.902.",
+        "fonte_principal": "Fonte não identificada"
+      },
+      {
+        "cluster_id": 53304,
+        "secao": "regulatorio",
+        "titulo_whatsapp": "⚖️ Combate ao Mercado Ilegal de Combustíveis",
+        "bullet_impacto": "A Lei Complementar 225/2026 estabelece critérios para diferenciar o inadimplente eventual do contumaz no mercado de combustíveis.",
         "fonte_principal": "O Estado de S.Paulo"
       },
       {
         "cluster_id": 53307,
         "secao": "regulatorio",
-        "titulo_whatsapp": "⚖️ TJ-SP mantém suspensão de alvarás",
-        "bullet_impacto": "O Tribunal de Justiça de São Paulo (TJ-SP) manteve a suspensão de novas autorizações para construções e demolições na capital paulista, impactando o setor da construção civil e investimentos de até R$ 90 bilhões.",
+        "titulo_whatsapp": "⚖️ TJ-SP Mantém Suspensão de Alvarás",
+        "bullet_impacto": "O Tribunal de Justiça de São Paulo (TJ-SP) manteve a suspensão de novas autorizações para construções e demolições na capital paulista, negando recurso da Prefeitura. Impacto no setor da construção civil.",
         "fonte_principal": "O Estado de S.Paulo"
       },
       {
         "cluster_id": 53310,
         "secao": "estrategico",
-        "titulo_whatsapp": "🏛️ Investigação sobre Banco Master",
-        "bullet_impacto": "A Polícia Federal investiga o pagamento de R$ 24 milhões por Daniel Vorcaro, do Banco Master, a Luiz Phillipi Machado Moraes Mourão por serviços ilícitos, incluindo invasão de sistemas e ameaças.",
+        "titulo_whatsapp": "🏛️ Banco Master: Pagamento a 'Sicário'",
+        "bullet_impacto": "A Polícia Federal investiga o pagamento de R$ 24 milhões por Daniel Vorcaro, do Banco Master, a Luiz Phillipi Machado Moraes Mourão, conhecido como “Sicário”, por serviços ilícitos.",
         "fonte_principal": "O Estado de S.Paulo"
       }
     ]
@@ -73,9 +108,14 @@
     53293
   ],
   "todos_clusters_escolhidos_ids": [
+    53303,
+    53304,
+    53306,
     53307,
     53310,
-    53331
+    53319,
+    53331,
+    53346
   ],
   "fontes_map": {
     "53310": [

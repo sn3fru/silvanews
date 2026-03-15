@@ -15,12 +15,13 @@
     (function(){
         try {
             const auth = JSON.parse(localStorage.getItem('silva_auth') || '{}');
-            const hasLegacy = auth.username === 'admin' && auth.token === 'admin';
             const hasJwt = auth.token && auth.token.length > 20;
-            if (!hasLegacy && !hasJwt) {
+            if (!hasJwt) {
+                localStorage.removeItem('silva_auth');
                 window.location.href = '/frontend/login.html';
             }
         } catch (e) {
+            localStorage.removeItem('silva_auth');
             window.location.href = '/frontend/login.html';
         }
     })();
@@ -73,8 +74,13 @@
         <main class="conteudo-principal">
             <!-- Seletor de Data e Métricas -->
             <div class="seletor-data">
-                <div class="header-actions">
+                <div class="header-actions" style="display:flex;align-items:center;gap:.5rem;">
                     <button id="btn-toggle-sidebar" class="btn btn-terciario" title="Mostrar/ocultar filtros">☰ Filtros</button>
+                    <label id="btn-upload-pdf" class="btn btn-terciario" style="cursor:pointer;font-size:.8rem;padding:.4rem .7rem;" title="Enviar PDF de noticias">
+                        + PDF
+                        <input type="file" id="input-upload-pdf" accept=".pdf,.json" style="display:none;" multiple>
+                    </label>
+                    <button id="btn-logout" class="btn btn-terciario" style="font-size:.75rem;padding:.3rem .6rem;color:#ef4444;border-color:#fca5a5;" title="Sair">Sair</button>
                 </div>
                 <div class="data-info">
                     <div class="data-navegacao">

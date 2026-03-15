@@ -55,29 +55,13 @@
             const next = new URLSearchParams(location.search).get('next') || 'index.html';
             window.location.href = next;
           } else {
-            // Fallback: login legado hardcoded (retrocompatibilidade durante transicao)
-            if (email === 'admin' && senha === 'admin') {
-              const payload = { username: 'admin', token: 'admin', role: 'admin', ts: Date.now() };
-              localStorage.setItem('silva_auth', JSON.stringify(payload));
-              const next = new URLSearchParams(location.search).get('next') || 'index.html';
-              window.location.href = next;
-            } else {
-              const errData = await resp.json().catch(() => ({}));
-              errorBox.style.display = 'block';
-              errorBox.textContent = errData.detail || 'Credenciais inválidas';
-            }
+            const errData = await resp.json().catch(() => ({}));
+            errorBox.style.display = 'block';
+            errorBox.textContent = errData.detail || 'Credenciais invalidas';
           }
         } catch (err) {
-          // API indisponivel: fallback legado
-          if (email === 'admin' && senha === 'admin') {
-            const payload = { username: 'admin', token: 'admin', role: 'admin', ts: Date.now() };
-            localStorage.setItem('silva_auth', JSON.stringify(payload));
-            const next = new URLSearchParams(location.search).get('next') || 'index.html';
-            window.location.href = next;
-          } else {
-            errorBox.style.display = 'block';
-            errorBox.textContent = 'Erro de conexão com o servidor';
-          }
+          errorBox.style.display = 'block';
+          errorBox.textContent = 'Erro de conexao com o servidor';
         } finally {
           btn.disabled = false;
           btn.textContent = 'Entrar';

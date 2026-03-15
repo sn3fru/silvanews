@@ -16,7 +16,7 @@ function getAuthToken() {
 function getAuthHeaders() {
     const token = getAuthToken();
     const headers = { 'Content-Type': 'application/json' };
-    if (token && token !== 'admin') {
+    if (token && token.length > 10) {
         headers['Authorization'] = `Bearer ${token}`;
     }
     return headers;
@@ -4381,7 +4381,7 @@ async function gerarResumoDoDia() {
 
 async function verificarOnboarding() {
     const token = getAuthToken();
-    if (!token || token === 'admin') return;
+    if (!token || token.length < 10) return;
 
     try {
         const resp = await fetchAuth(`${API_BASE}/api/user/preferencias`);
@@ -4451,7 +4451,7 @@ async function mostrarOnboardingModal() {
         <div style="margin-bottom:1rem;">
             <label style="font-size:.8rem;color:#374151;font-weight:600;display:block;margin-bottom:.3rem;">Instrucoes para o agente (prompt personalizado)</label>
             <p style="font-size:.75rem;color:#9ca3af;margin:0 0 .3rem;">Escreva como o agente deve montar seu resumo. Ex: "Nao separe por topicos, escreva um texto corrido com analise juridica propria" ou "Foque apenas em energia e infraestrutura com impacto regulatorio".</p>
-            <textarea id="onboarding-instrucoes" rows="4" style="width:100%;padding:.5rem;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem;font-family:inherit;resize:vertical;box-sizing:border-box;" placeholder="Deixe em branco para usar o padrao de Special Situations...">${existingInstrucoes}</textarea>
+            <textarea id="onboarding-instrucoes" rows="5" style="width:100%;padding:.5rem;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem;font-family:inherit;resize:vertical;box-sizing:border-box;" placeholder="Padrao: Analista-Chefe de Special Situations. Briefing em 3 secoes (Distressed, Regulatorio, M&A) com dados factuais concretos.&#10;&#10;Exemplos de customizacao:&#10;- Nao separe por topicos. Escreva um texto corrido com analise juridica e economica propria.&#10;- Foque em energia e infraestrutura. Ignore varejo e tech.&#10;- Formato conciso: apenas bullets com valores e nomes. Sem narrativa.">${existingInstrucoes}</textarea>
         </div>
 
         <div style="display:flex;gap:.5rem;justify-content:flex-end;">
@@ -4511,7 +4511,7 @@ async function carregarPrefsBanner() {
     const banner = document.getElementById('user-prefs-banner');
     if (!banner) return;
     const token = getAuthToken();
-    if (!token || token === 'admin') { banner.style.display = 'none'; return; }
+    if (!token || token.length < 10) { banner.style.display = 'none'; return; }
     try {
         const resp = await fetchAuth(`${API_BASE}/api/user/preferencias`);
         if (!resp.ok) return;
@@ -4534,6 +4534,41 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btn) btn.addEventListener('click', gerarResumoDoDia);
     const btnPrefs = document.getElementById('btn-edit-preferences');
     if (btnPrefs) btnPrefs.addEventListener('click', mostrarOnboardingModal);
+
+    const btnLogout = document.getElementById('btn-logout');
+    if (btnLogout) btnLogout.addEventListener('click', () => {
+        localStorage.removeItem('silva_auth');
+        window.location.href = '/frontend/login.html';
+    });
+
+    const inputUpload = document.getElementById('input-upload-pdf');
+    if (inputUpload) inputUpload.addEventListener('change', async (e) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+        const btnLabel = document.getElementById('btn-upload-pdf');
+        const origText = btnLabel.textContent;
+        btnLabel.textContent = 'Enviando...';
+        let ok = 0, fail = 0;
+        for (const file of files) {
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                const token = getAuthToken();
+                const headers = {};
+                if (token && token.length > 10) headers['Authorization'] = `Bearer ${token}`;
+                const resp = await fetch(`${API_BASE}/api/admin/upload-file`, { method: 'POST', headers, body: formData });
+                if (resp.ok) { ok++; } else { fail++; }
+            } catch { fail++; }
+        }
+        inputUpload.value = '';
+        btnLabel.innerHTML = '+ PDF <input type="file" id="input-upload-pdf" accept=".pdf,.json" style="display:none;" multiple>';
+        document.getElementById('input-upload-pdf').addEventListener('change', arguments.callee);
+        const msg = ok > 0 ? `${ok} arquivo(s) enviado(s)` : '';
+        const msgFail = fail > 0 ? ` ${fail} falha(s)` : '';
+        if (msg || msgFail) alert((msg + msgFail).trim());
+        if (ok > 0) location.reload();
+    });
+
     carregarResumoDoDia();
     carregarPrefsBanner();
     verificarOnboarding();

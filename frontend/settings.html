@@ -797,9 +797,9 @@
     (function(){
         try {
             const auth = JSON.parse(localStorage.getItem('silva_auth') || '{}');
-            const hasLegacy = auth.username === 'admin' && auth.token === 'admin';
             const hasJwt = auth.token && auth.token.length > 20;
-            if (!hasLegacy && !hasJwt) {
+            if (!hasJwt) {
+                localStorage.removeItem('silva_auth');
                 window.location.href = '/frontend/login.html';
             }
         } catch (e) {
