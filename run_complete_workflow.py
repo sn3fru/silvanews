@@ -521,29 +521,22 @@ def run_cleanup(days: int = 90):
 
 
 def run_notify():
-    """Envia notificacoes Telegram de clusters pendentes (notificacoes individuais)."""
+    """Envia notificacoes Telegram de clusters pendentes (individuais)."""
     try:
-        print("\nETAPA 4: Enviando notificacoes Telegram...")
-        
-        # Verifica se tem config de Telegram
         env = _subprocess_env()
         if not env.get("TELEGRAM_BOT_TOKEN") or not env.get("TELEGRAM_CHAT_ID"):
-            print("[INFO] TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID nao configurados. Pulando notificacoes.")
-            return True  # Nao falha, apenas pula
-        
-        print("[INFO] Executando: python scripts/notify_telegram.py")
+            return True
+
+        print("\n  Enviando notificacoes individuais Telegram...")
         result = subprocess.run([
             sys.executable, "scripts/notify_telegram.py", "--limit", "50"
         ], cwd=Path(__file__).parent, capture_output=True, text=True, encoding='utf-8', errors='replace', env=env)
-        
+
         if result.returncode == 0:
-            print("[OK] Notificacoes enviadas!")
-            print(result.stdout)
-            return True
+            print("  [OK] Notificacoes enviadas.")
         else:
-            print("[AVISO] Erro nas notificacoes (nao critico):")
-            print(result.stderr)
-            return True  # Nao bloqueia pipeline
+            print("  [AVISO] Falha nas notificacoes (nao critico).")
+        return True
             
     except Exception as e:
         print(f"[AVISO] Erro ao enviar notificacoes: {e}")
@@ -552,89 +545,86 @@ def run_notify():
 
 def run_telegram_briefing():
     """
-    ETAPA 5: Gera e envia Daily Briefing sintetizado via Telegram.
-    Usa o TelegramBroadcaster (backend/broadcaster.py) que:
-      1. Busca clusters P1/P2 do dia
-      2. Gera briefing via Gemini Flash
-      3. Envia para canal Telegram
-    Idempotente: nao reenvia se ja enviou hoje.
-    Nao bloqueia o pipeline em caso de falha.
+    ETAPA 6: Envia Daily Briefing via Telegram (se configurado).
+    O conteudo do briefing ja foi gerado e printado pelo run_resumo_diario().
+    Esta etapa so faz o envio via bot do Telegram.
     """
     try:
-        print("\nETAPA 5: Gerando Daily Briefing (Telegram)...")
-        
-        # Verifica configuracao
         env = _subprocess_env()
         if not env.get("TELEGRAM_BOT_TOKEN") or not env.get("TELEGRAM_CHAT_ID"):
-            print("[INFO] TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID nao configurados. Pulando briefing.")
             return True
-        
-        print("[INFO] Executando: python send_telegram.py")
+
+        print("\n  Enviando briefing via Telegram...")
         result = subprocess.run([
             sys.executable, "send_telegram.py"
         ], cwd=Path(__file__).parent, capture_output=True, text=True, encoding='utf-8', errors='replace', env=env)
-        
+
         if result.returncode == 0:
-            print("[OK] Daily Briefing enviado!")
-            if result.stdout:
-                print(result.stdout)
-            return True
+            print("  [OK] Briefing enviado ao Telegram.")
         else:
-            print("[AVISO] Erro no briefing (nao critico):")
-            if result.stderr:
-                print(result.stderr)
-            if result.stdout:
-                print(result.stdout)
-            return True  # Nao bloqueia pipeline
-            
+            print("  [AVISO] Falha ao enviar briefing (nao critico).")
+        return True
+
     except Exception as e:
-        print(f"[AVISO] Erro ao gerar briefing: {e}")
-        return True  # Nao bloqueia pipeline
+        print(f"  [AVISO] Telegram: {e}")
+        return True
+
+
+def _ensure_env_loaded():
+    """Garante que as variaveis do backend/.env estao no os.environ (para chamadas in-process)."""
+    if os.environ.get("GEMINI_API_KEY"):
+        return
+    try:
+        from dotenv import load_dotenv
+        env_path = Path(__file__).parent / "backend" / ".env"
+        if env_path.exists():
+            load_dotenv(str(env_path), override=False)
+    except ImportError:
+        env = _subprocess_env()
+        for key in ("GEMINI_API_KEY", "DATABASE_URL", "JWT_SECRET", "TIVALY_API_KEY"):
+            if env.get(key) and not os.environ.get(key):
+                os.environ[key] = env[key]
 
 
 def run_resumo_diario():
     """
-    Gera o resumo do dia (multi-persona) e imprime no terminal formatado para WhatsApp.
-    Usa o banco LOCAL (dados ja processados, antes da migracao).
+    Gera o resumo do dia (1 chamada unificada) e imprime no terminal.
+    Roda in-process para capturar o resultado formatado.
     Nao bloqueia o pipeline em caso de falha.
     """
     try:
-        print("\n" + "=" * 60)
-        print("  RESUMO DO DIA — Multi-Persona (WhatsApp)")
-        print("=" * 60)
+        _ensure_env_loaded()
+
+        print(f"\n{'=' * 60}")
+        print("  ETAPA 3: RESUMO DO DIA")
+        print(f"{'=' * 60}")
 
         from agents.resumo_diario.agent import gerar_resumo_diario, formatar_whatsapp
-        from backend.prompts import PERSONAS_RESUMO_DIARIO
         from backend.utils import get_date_brasil
 
         target_date = get_date_brasil()
         print(f"  Data: {target_date.isoformat()}")
-        print(f"  Personas: {list(PERSONAS_RESUMO_DIARIO.keys())}")
-        print()
 
         resultado = gerar_resumo_diario(target_date=target_date)
 
         if not resultado.get("ok"):
-            print(f"[AVISO] Resumo falhou: {resultado.get('error', 'desconhecido')}")
+            err = resultado.get("error", "desconhecido")
+            print(f"  [AVISO] Resumo falhou: {err}")
             return True
 
-        # Formata e imprime no terminal
         mensagens = formatar_whatsapp(resultado)
-        print("\n" + "-" * 60)
-        print("  MENSAGEM WHATSAPP (pronta para enviar):")
-        print("-" * 60)
+        print()
         for msg in mensagens:
             print(msg)
             print()
 
-        # Resumo estatistico
         total = len(resultado.get("todos_clusters_escolhidos_ids", []))
         avaliados = len(resultado.get("clusters_avaliados_ids", []))
-        print(f"[OK] Resumo gerado: {total} clusters selecionados de {avaliados} avaliados.")
+        print(f"  [OK] Resumo: {total} clusters selecionados de {avaliados} avaliados.")
         return True
 
     except Exception as e:
-        print(f"[AVISO] Erro ao gerar resumo do dia: {e}")
+        print(f"  [AVISO] Erro ao gerar resumo: {e}")
         import traceback
         traceback.print_exc()
         return True

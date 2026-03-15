@@ -1,17 +1,16 @@
 """
-Agente de Resumo Diário — Curadoria Multi-Persona / Per-User para WhatsApp
+Agente de Resumo Diário — Chamada Unificada + Per-User
 
-Arquitetura v3.0 (Multi-Tenant):
-  1. PRÉ-QUERY (Map-Reduce): _build_context_block() recolhe TODOS os clusters do dia UMA VEZ.
-     Esse contexto é COMPARTILHADO entre todos os usuarios — nunca duplicado.
-  2. MODO MULTI-PERSONA (legado): Roda 3 personas fixas em paralelo (distressed, regulatorio, estrategista).
-  3. MODO PER-USER (v3): Recebe preferencias do usuario e gera UMA chamada LLM personalizada.
-     O prompt longo inclui as preferencias visuais (tags, tamanho, foco) mas o CONTEXTO é o mesmo.
-     Custo: 1 chamada LLM por usuario (vs. 3 do modo multi-persona).
+Arquitetura v3.0:
+  1. CONTEXTO: _build_context_block() recolhe TODOS os clusters do dia UMA VEZ.
+  2. MODO PADRÃO: 1 chamada LLM unificada (cobre distressed+regulatorio+estrategico).
+     O LLM recebe todos os titulos+resumos e decide onde aprofundar via tools.
+     Custo: 1 chamada LLM + ate 5 tool calls (vs. 3 chamadas do modelo antigo).
+  3. MODO PER-USER: 1 chamada LLM por usuario com preferencias personalizadas.
   4. VALIDAÇÃO: JSON → Pydantic → fallback.
-  5. FORMATAÇÃO: WhatsApp ou texto puro.
+  5. FORMATAÇÃO: WhatsApp / terminal, agrupada por seção temática.
 
-READ-ONLY — não altera banco, não faz split/merge. Prioridade P1/P2/P3 é GLOBAL, nunca mutada.
+READ-ONLY — não altera banco. Prioridade P1/P2/P3 é GLOBAL, nunca mutada.
 """
 
 from __future__ import annotations
@@ -20,7 +19,6 @@ import json
 import os
 import re
 import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Tuple
 
 try:
@@ -33,7 +31,6 @@ try:
     from backend.utils import get_date_brasil
     from backend.prompts import (
         PROMPT_CORRECAO_PYDANTIC_V1,
-        PERSONAS_RESUMO_DIARIO,
     )
 except Exception:
     SessionLocal = None  # type: ignore
@@ -43,7 +40,6 @@ except Exception:
     get_template_resumo = None  # type: ignore
     get_date_brasil = None  # type: ignore
     PROMPT_CORRECAO_PYDANTIC_V1 = ""  # type: ignore
-    PERSONAS_RESUMO_DIARIO = {}  # type: ignore
 
 from agents.resumo_diario.tools.definitions import (
     ResumoDiarioContract,
@@ -53,10 +49,9 @@ from agents.resumo_diario.tools.definitions import (
     execute_buscar_na_web,
 )
 
-# Controle de iterações (por persona / por usuario)
-_MAX_TOOL_CALLS = 3       # multi-persona legacy (3 personas x 3 = 9 total)
+_MAX_TOOL_CALLS = 5       # chamada unificada: permite aprofundamento seletivo
 _MAX_TOOL_CALLS_USER = 8  # per-user: triagem + deep-dive em P1/P2 selecionados
-_MAX_ITERATIONS = 10      # aumentado para acomodar Fase 2 (deep-dive)
+_MAX_ITERATIONS = 10      # acomoda tool-calling loop
 
 # Cache de contexto com invalidacao por updated_at de clusters_eventos
 _CONTEXT_CACHE: Dict[str, Any] = {}
@@ -147,19 +142,24 @@ def _build_context_block(db, target_date: datetime.date) -> Tuple[str, List[int]
         tag = c.get("tag", "")
         total_artigos = c.get("total_artigos", 0)
 
-        # Extrair nomes de fontes reais (jornais) do campo "fontes"
-        # CRUD retorna fontes como lista de dicts: {nome, tipo, url, autor, pagina}
+        try:
+            from backend.utils import normalizar_fonte_display
+        except ImportError:
+            normalizar_fonte_display = lambda x: x  # type: ignore
+
         raw_fontes = c.get("fontes", [])
         nomes_fontes = []
         if isinstance(raw_fontes, list):
             for f in raw_fontes:
+                raw_name = ""
                 if isinstance(f, dict):
-                    nome = (f.get("nome") or "").strip()
-                    if nome and nome.lower() != "fonte desconhecida":
-                        nomes_fontes.append(nome)
-                elif isinstance(f, str) and f.strip():
-                    nomes_fontes.append(f.strip())
-        # Dedup preservando ordem
+                    raw_name = (f.get("nome") or "").strip()
+                elif isinstance(f, str):
+                    raw_name = f.strip()
+                clean = normalizar_fonte_display(raw_name)
+                if clean:
+                    nomes_fontes.append(clean)
+
         seen_fontes = set()
         nomes_fontes_unique = []
         for fn in nomes_fontes:
@@ -260,53 +260,57 @@ def _run_llm_with_tools(
 
     genai.configure(api_key=api_key)
 
-    tool_declaration = genai.protos.Tool(
-        function_declarations=[
-            genai.protos.FunctionDeclaration(
-                name=TOOL_OBTER_TEXTOS_BRUTOS_SCHEMA["name"],
-                description=TOOL_OBTER_TEXTOS_BRUTOS_SCHEMA["description"],
-                parameters=genai.protos.Schema(
-                    type=genai.protos.Type.OBJECT,
-                    properties={
-                        "cluster_id": genai.protos.Schema(
-                            type=genai.protos.Type.INTEGER,
-                            description=TOOL_OBTER_TEXTOS_BRUTOS_SCHEMA["parameters"]["properties"]["cluster_id"]["description"],
-                        )
-                    },
-                    required=["cluster_id"],
-                ),
-            ),
-            genai.protos.FunctionDeclaration(
-                name=TOOL_BUSCAR_NA_WEB_SCHEMA["name"],
-                description=TOOL_BUSCAR_NA_WEB_SCHEMA["description"],
-                parameters=genai.protos.Schema(
-                    type=genai.protos.Type.OBJECT,
-                    properties={
-                        "query": genai.protos.Schema(
-                            type=genai.protos.Type.STRING,
-                            description=TOOL_BUSCAR_NA_WEB_SCHEMA["parameters"]["properties"]["query"]["description"],
-                        )
-                    },
-                    required=["query"],
-                ),
-            ),
-        ]
-    )
-
-    model = genai.GenerativeModel(
-        "gemini-2.0-flash",
-        tools=[tool_declaration],
-    )
-
     tag = f"[{persona_name}]" if persona_name else "[ResumoDiario]"
-    print(f"{tag} Iniciando chamada ao LLM...")
+
+    # Se budget=0, nao registra tools (chamada direta — mais barata e rapida)
+    if tool_call_budget > 0:
+        tool_declaration = genai.protos.Tool(
+            function_declarations=[
+                genai.protos.FunctionDeclaration(
+                    name=TOOL_OBTER_TEXTOS_BRUTOS_SCHEMA["name"],
+                    description=TOOL_OBTER_TEXTOS_BRUTOS_SCHEMA["description"],
+                    parameters=genai.protos.Schema(
+                        type=genai.protos.Type.OBJECT,
+                        properties={
+                            "cluster_id": genai.protos.Schema(
+                                type=genai.protos.Type.INTEGER,
+                                description=TOOL_OBTER_TEXTOS_BRUTOS_SCHEMA["parameters"]["properties"]["cluster_id"]["description"],
+                            )
+                        },
+                        required=["cluster_id"],
+                    ),
+                ),
+                genai.protos.FunctionDeclaration(
+                    name=TOOL_BUSCAR_NA_WEB_SCHEMA["name"],
+                    description=TOOL_BUSCAR_NA_WEB_SCHEMA["description"],
+                    parameters=genai.protos.Schema(
+                        type=genai.protos.Type.OBJECT,
+                        properties={
+                            "query": genai.protos.Schema(
+                                type=genai.protos.Type.STRING,
+                                description=TOOL_BUSCAR_NA_WEB_SCHEMA["parameters"]["properties"]["query"]["description"],
+                            )
+                        },
+                        required=["query"],
+                    ),
+                ),
+            ]
+        )
+        model = genai.GenerativeModel("gemini-2.0-flash", tools=[tool_declaration])
+    else:
+        model = genai.GenerativeModel("gemini-2.0-flash")
+
+    print(f"{tag} Enviando contexto ao LLM ({len(prompt_text)} chars, tools={'sim' if tool_call_budget > 0 else 'nao'}, budget={tool_call_budget})...")
+
     response = model.generate_content(
         prompt_text,
-        generation_config={"temperature": 0.2, "max_output_tokens": 4096},
+        generation_config={"temperature": 0.2, "max_output_tokens": 8192},
     )
 
     tool_calls_used = 0
     iterations = 0
+    import time as _t
+    t0 = _t.time()
 
     while iterations < _MAX_ITERATIONS:
         iterations += 1
@@ -321,7 +325,8 @@ def _run_llm_with_tools(
         if not has_function_call:
             text_parts = [p.text for p in parts if hasattr(p, "text") and p.text]
             final_text = "\n".join(text_parts).strip()
-            print(f"{tag} LLM respondeu ({len(final_text)} chars, {tool_calls_used} tool calls)")
+            elapsed = _t.time() - t0
+            print(f"{tag} Resposta final recebida ({len(final_text)} chars, {tool_calls_used} tool calls, {elapsed:.1f}s)")
             return final_text
 
         function_responses = []
@@ -338,11 +343,14 @@ def _run_llm_with_tools(
                 tool_calls_used += 1
 
                 if tool_calls_used > tool_call_budget:
-                    print(f"{tag} Budget de tool calls esgotado ({tool_call_budget}).")
+                    print(f"{tag}   [BUDGET] Limite atingido ({tool_call_budget}). Pedindo JSON final.")
                     result_data = {"error": "Limite de chamadas a ferramentas atingido. Produza o JSON final agora."}
                 else:
-                    print(f"{tag} Tool call #{tool_calls_used}: obter_textos_brutos_cluster(cluster_id={cluster_id})")
+                    print(f"{tag}   [TOOL {tool_calls_used}/{tool_call_budget}] Aprofundando cluster {cluster_id}...")
                     result_data = execute_obter_textos_brutos(db, cluster_id)
+                    n_artigos = len(result_data) if isinstance(result_data, list) else 0
+                    chars = sum(len(str(r.get("texto_bruto", ""))) for r in result_data) if isinstance(result_data, list) else 0
+                    print(f"{tag}   [TOOL {tool_calls_used}/{tool_call_budget}] Cluster {cluster_id}: {n_artigos} artigos, {chars} chars de texto bruto")
 
                 function_responses.append(
                     genai.protos.Part(
@@ -359,8 +367,10 @@ def _run_llm_with_tools(
                 if tool_calls_used > tool_call_budget:
                     result_data = {"error": "Limite de chamadas a ferramentas atingido. Produza o JSON final agora."}
                 else:
-                    print(f"{tag} Tool call #{tool_calls_used}: buscar_na_web(query='{query[:60]}')")
+                    print(f"{tag}   [WEB {tool_calls_used}/{tool_call_budget}] Buscando: '{query[:60]}'...")
                     result_data = execute_buscar_na_web(query)
+                    n_results = len(result_data.get("results", [])) if isinstance(result_data, dict) else 0
+                    print(f"{tag}   [WEB {tool_calls_used}/{tool_call_budget}] {n_results} resultados")
 
                 function_responses.append(
                     genai.protos.Part(
@@ -380,16 +390,17 @@ def _run_llm_with_tools(
                     )
                 )
 
+        print(f"{tag}   Reenviando ao LLM com {len(function_responses)} respostas de tool...")
         response = model.generate_content(
             [
                 genai.protos.Content(role="user", parts=[genai.protos.Part(text=prompt_text)]),
                 candidate.content,
                 genai.protos.Content(role="function", parts=function_responses),
             ],
-            generation_config={"temperature": 0.2, "max_output_tokens": 4096},
+            generation_config={"temperature": 0.2, "max_output_tokens": 8192},
         )
 
-    print(f"{tag} Limite de iterações atingido ({_MAX_ITERATIONS}).")
+    print(f"{tag} Limite de iteracoes atingido ({_MAX_ITERATIONS}).")
     return None
 
 
@@ -442,97 +453,45 @@ def _validate_and_fix(raw_json_str: str, persona_name: str = "") -> ResumoDiario
 
 
 # --------------------------------------------------------------------------- #
-# ETAPA 4: EXECUÇÃO DE UMA PERSONA (unidade atômica)
-# --------------------------------------------------------------------------- #
-
-def _run_persona(
-    persona_key: str,
-    persona_config: Dict[str, Any],
-    contexto: str,
-    db_factory,
-) -> Dict[str, Any]:
-    """
-    Executa uma persona completa: prompt → LLM → validação Pydantic.
-    Cada thread recebe sua própria sessão de banco (thread-safe).
-
-    Returns:
-        Dict com: persona_key, ok, contract (ResumoDiarioContract ou None), error
-    """
-    tag = f"[{persona_key}]"
-    print(f"{tag} Iniciando persona: {persona_config.get('descricao', '')}")
-
-    db = db_factory()
-    try:
-        prompt_template = persona_config["prompt"]
-        prompt_final = prompt_template.format(CONTEXTO_CLUSTERS_DIA=contexto)
-
-        raw_response = _run_llm_with_tools(db, prompt_final, persona_name=persona_key)
-        if not raw_response:
-            return {"persona_key": persona_key, "ok": False, "contract": None, "error": "LLM não retornou resposta."}
-
-        contract = _validate_and_fix(raw_response, persona_name=persona_key)
-
-        escolhidos = [cs.cluster_id for cs in contract.clusters_selecionados]
-        print(f"{tag} Concluído: {len(contract.clusters_selecionados)} itens selecionados (IDs: {escolhidos})")
-
-        return {"persona_key": persona_key, "ok": True, "contract": contract, "error": None}
-
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return {"persona_key": persona_key, "ok": False, "contract": None, "error": str(e)}
-    finally:
-        try:
-            db.close()
-        except Exception:
-            pass
-
-
-# --------------------------------------------------------------------------- #
-# FUNÇÃO PRINCIPAL — Orquestração Multi-Persona Paralela
+# FUNÇÃO PRINCIPAL — 1 chamada LLM unificada (substitui multi-persona)
 # --------------------------------------------------------------------------- #
 
 def gerar_resumo_diario(
     target_date: Optional[datetime.date] = None,
-    personas: Optional[Dict[str, Any]] = None,
+    prompt_template: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Ponto de entrada do agente de resumo diário (Multi-Persona).
+    Ponto de entrada do agente de resumo diário (v3 — chamada unificada).
 
     Fluxo:
-      1. Constrói contexto UMA VEZ (_build_context_block)
-      2. Dispara N personas em PARALELO (ThreadPoolExecutor)
-      3. Agrega resultados de todas as personas
+      1. Constrói contexto UMA VEZ (_build_context_block) — todos os clusters do dia
+      2. Faz 1 chamada LLM com prompt unificado que cobre distressed+regulatorio+estrategico
+      3. LLM pode usar tools para aprofundar clusters específicos (budget: 5 calls)
+      4. Valida JSON → Pydantic → fallback
 
     Args:
         target_date: Data para gerar o resumo (padrão: hoje).
-        personas: Dict de personas a usar (padrão: PERSONAS_RESUMO_DIARIO).
+        prompt_template: Template de prompt (padrão: PROMPT_RESUMO_UNIFICADO_V1).
 
     Returns:
-        Dict com:
-            - "ok": bool (True se pelo menos 1 persona retornou)
-            - "data": str (ISO date)
-            - "personas_resultados": dict[str, {ok, contract_dict, error}]
-            - "clusters_avaliados_ids": list[int]
-            - "todos_clusters_escolhidos_ids": list[int] (união de todas as personas)
-            - "prompt_version": str
+        Dict com ok, data, contract_dict, clusters_avaliados_ids, fontes_map, etc.
     """
     if target_date is None:
         target_date = get_date_brasil()
 
-    if personas is None:
-        personas = PERSONAS_RESUMO_DIARIO
+    if prompt_template is None:
+        try:
+            from backend.prompts import PROMPT_RESUMO_UNIFICADO_V1
+            prompt_template = PROMPT_RESUMO_UNIFICADO_V1
+        except ImportError:
+            return {"ok": False, "data": target_date.isoformat(), "error": "PROMPT_RESUMO_UNIFICADO_V1 não encontrado."}
 
-    print(f"\n{'='*60}")
-    print(f"[ResumoDiario] MULTI-PERSONA — {target_date.isoformat()}")
-    print(f"[ResumoDiario] Personas ativas: {list(personas.keys())}")
-    print(f"{'='*60}")
+    print(f"[ResumoDiario] {target_date.isoformat()} — Construindo contexto...")
 
-    # 1. Map-Reduce: montar contexto (com cache por updated_at)
+    # 1. Montar contexto (com cache por updated_at)
     db_ctx = _open_db()
     fontes_map: Dict[int, List[str]] = {}
     try:
-        # Chave de cache: data + max(updated_at) de clusters do dia
         from sqlalchemy import func as sqla_func
         max_updated = db_ctx.query(sqla_func.max(ClusterEvento.updated_at)).filter(
             sqla_func.date(ClusterEvento.created_at) == target_date,
@@ -542,11 +501,10 @@ def gerar_resumo_diario(
 
         cached = _CONTEXT_CACHE.get(cache_key)
         if cached:
-            print(f"[ResumoDiario] Cache HIT para contexto ({cache_key})")
             contexto, avaliados_ids, fontes_map = cached
         else:
             contexto, avaliados_ids, fontes_map = _build_context_block(db_ctx, target_date)
-            _CONTEXT_CACHE.clear()  # limpa cache antigo
+            _CONTEXT_CACHE.clear()
             _CONTEXT_CACHE[cache_key] = (contexto, avaliados_ids, fontes_map)
     finally:
         try:
@@ -561,65 +519,70 @@ def gerar_resumo_diario(
             "error": "Nenhum cluster encontrado para esta data.",
         }
 
-    # 2. Disparar personas em paralelo
-    personas_resultados: Dict[str, Any] = {}
-    todos_escolhidos: List[int] = []
+    print(f"[ResumoDiario] {len(avaliados_ids)} clusters, {len(contexto)} chars de contexto")
 
-    def db_factory():
-        return _open_db()
+    # 2. Montar prompt e chamar LLM (1 chamada unificada, tools habilitadas)
+    prompt_final = prompt_template.format(CONTEXTO_CLUSTERS_DIA=contexto)
 
-    with ThreadPoolExecutor(max_workers=len(personas)) as executor:
-        futures = {}
-        for p_key, p_config in personas.items():
-            future = executor.submit(_run_persona, p_key, p_config, contexto, db_factory)
-            futures[future] = p_key
+    db_llm = _open_db()
+    try:
+        raw_response = _run_llm_with_tools(
+            db_llm, prompt_final, persona_name="resumo", tool_call_budget=_MAX_TOOL_CALLS
+        )
+    finally:
+        try:
+            db_llm.close()
+        except Exception:
+            pass
 
-        for future in as_completed(futures):
-            p_key = futures[future]
-            try:
-                result = future.result()
-                personas_resultados[p_key] = {
-                    "ok": result["ok"],
-                    "contract_dict": result["contract"].model_dump() if result["contract"] else None,
-                    "error": result["error"],
-                }
-                if result["ok"] and result["contract"]:
-                    ids = [cs.cluster_id for cs in result["contract"].clusters_selecionados]
-                    todos_escolhidos.extend(ids)
-            except Exception as e:
-                personas_resultados[p_key] = {
-                    "ok": False,
-                    "contract_dict": None,
-                    "error": str(e),
-                }
+    if not raw_response:
+        return {
+            "ok": False,
+            "data": target_date.isoformat(),
+            "error": "LLM não retornou resposta.",
+        }
 
-    # 3. Resultado agregado
-    algum_sucesso = any(r["ok"] for r in personas_resultados.values())
+    # 3. Validar JSON → Pydantic
+    try:
+        contract = _validate_and_fix(raw_response, persona_name="resumo")
+    except Exception as e:
+        return {
+            "ok": False,
+            "data": target_date.isoformat(),
+            "error": f"Validação Pydantic falhou: {e}",
+        }
 
-    resultado = {
-        "ok": algum_sucesso,
-        "data": target_date.isoformat(),
-        "personas_resultados": personas_resultados,
-        "clusters_avaliados_ids": avaliados_ids,
-        "todos_clusters_escolhidos_ids": sorted(set(todos_escolhidos)),
-        "fontes_map": fontes_map,  # cluster_id -> ["Folha", "Valor", ...]
-        "prompt_version": "MULTI-PERSONA_V1",
-    }
+    escolhidos = [cs.cluster_id for cs in contract.clusters_selecionados]
+    secoes: Dict[str, List] = {}
+    for cs in contract.clusters_selecionados:
+        secoes.setdefault(cs.secao, []).append(cs)
 
+    SECAO_EMOJIS = {"distressed": "💀", "regulatorio": "⚖️", "estrategico": "🏛️", "geral": "📋"}
     print(f"\n{'='*60}")
-    print(f"[ResumoDiario] RESULTADO CONSOLIDADO")
-    print(f"[ResumoDiario]   Clusters avaliados: {len(avaliados_ids)}")
-    print(f"[ResumoDiario]   Total escolhidos (todas personas): {len(set(todos_escolhidos))}")
-    for p_key, p_res in personas_resultados.items():
-        emoji = personas.get(p_key, {}).get("emoji", "")
-        if p_res["ok"]:
-            n = len(p_res["contract_dict"]["clusters_selecionados"]) if p_res["contract_dict"] else 0
-            print(f"[ResumoDiario]   {emoji} {p_key}: {n} itens ✅")
-        else:
-            print(f"[ResumoDiario]   {emoji} {p_key}: FALHOU — {p_res['error']}")
+    print(f"[ResumoDiario] RESULTADO — {len(escolhidos)} itens de {len(avaliados_ids)} clusters")
+    print(f"{'='*60}")
+    if contract.tldr_executivo:
+        print(f"  TL;DR: {contract.tldr_executivo}")
+    for secao_key in ["distressed", "regulatorio", "estrategico", "geral"]:
+        items = secoes.get(secao_key, [])
+        if not items:
+            continue
+        emoji = SECAO_EMOJIS.get(secao_key, "📋")
+        print(f"\n  {emoji} {secao_key.upper()} ({len(items)} itens):")
+        for cs in items:
+            print(f"    - [{cs.cluster_id}] {cs.titulo_whatsapp}")
+            print(f"      {cs.bullet_impacto[:120]}")
     print(f"{'='*60}")
 
-    return resultado
+    return {
+        "ok": True,
+        "data": target_date.isoformat(),
+        "contract_dict": contract.model_dump(),
+        "clusters_avaliados_ids": avaliados_ids,
+        "todos_clusters_escolhidos_ids": sorted(set(escolhidos)),
+        "fontes_map": fontes_map,
+        "prompt_version": "UNIFICADO_V3",
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -811,13 +774,7 @@ def gerar_resumo_para_usuario(
     return {
         "ok": True,
         "data": target_date.isoformat(),
-        "personas_resultados": {
-            f"user_{user_id}": {
-                "ok": True,
-                "contract_dict": contract.model_dump(),
-                "error": None,
-            }
-        },
+        "contract_dict": contract.model_dump(),
         "clusters_avaliados_ids": avaliados_ids,
         "todos_clusters_escolhidos_ids": escolhidos,
         "fontes_map": fontes_map,
@@ -847,96 +804,95 @@ def _format_fontes_label(fontes_list: List[str], max_fontes: int = 3) -> str:
 
 def formatar_whatsapp(
     resultado: Dict[str, Any],
-    personas_config: Optional[Dict[str, Any]] = None,
     max_chars_por_msg: int = 4096,
 ) -> List[str]:
     """
-    Formata o resultado multi-persona em string(s) para WhatsApp.
-    Cada persona vira uma seção: 💀 DISTRESS, ⚖️ REGULATÓRIO, 🏛️ M&A.
-
-    REGRAS DE FORMATAÇÃO WHATSAPP:
-    - *negrito* para títulos de seção
-    - _itálico_ para fontes e rodapé
-    - Sem cluster_ids visíveis (são jargão de DB)
-    - Apenas nomes reais dos jornais (ex.: Fontes: Valor, Folha, Estadão) — sem links
+    Formata o resultado unificado em string(s) para WhatsApp/terminal.
+    Clusters são agrupados por `secao` (distressed, regulatorio, estrategico, geral).
 
     Returns:
-        Lista de strings prontas para copiar-colar no WhatsApp.
+        Lista de strings prontas para copiar-colar.
     """
-    if personas_config is None:
-        personas_config = PERSONAS_RESUMO_DIARIO
+    try:
+        from backend.prompts import SECOES_RESUMO
+    except ImportError:
+        SECOES_RESUMO = {
+            "distressed": {"emoji": "💀", "titulo": "DISTRESSED & NPLs"},
+            "regulatorio": {"emoji": "⚖️", "titulo": "REGULATÓRIO & JURÍDICO"},
+            "estrategico": {"emoji": "🏛️", "titulo": "M&A & MOVIMENTOS CORPORATIVOS"},
+            "geral": {"emoji": "📋", "titulo": "DESTAQUES GERAIS"},
+        }
 
     data_str = resultado.get("data", "")
-    personas_resultados = resultado.get("personas_resultados", {})
-    fontes_map = resultado.get("fontes_map", {})  # cluster_id -> ["Folha", "Valor", ...]
+    fontes_map = resultado.get("fontes_map", {})
+    contract_dict = resultado.get("contract_dict", {})
+
+    if not contract_dict:
+        return [f"🚨 *RESUMO DO DIA* 🚨\n📅 {data_str}\n\n(Nenhum evento relevante identificado hoje.)\n\n_Gerado pelo AlphaFeed_"]
+
+    tldr = contract_dict.get("tldr_executivo", "")
+    clusters = contract_dict.get("clusters_selecionados", [])
+
+    # Agrupar por secao
+    por_secao: Dict[str, List[Dict]] = {}
+    for cs in clusters:
+        secao = cs.get("secao", "geral")
+        por_secao.setdefault(secao, []).append(cs)
 
     header = f"🚨 *RESUMO DO DIA — SPECIAL SITUATIONS* 🚨\n"
     if data_str:
         header += f"📅 {data_str}\n"
+    if tldr:
+        header += f"\n_{tldr}_\n"
     header += "\n"
 
     sections: List[str] = []
     vistos: set = set()
 
-    for p_key in ["distressed", "regulatorio", "estrategista"]:
-        p_res = personas_resultados.get(p_key)
-        if not p_res or not p_res.get("ok") or not p_res.get("contract_dict"):
+    for secao_key in ["distressed", "regulatorio", "estrategico", "geral"]:
+        items = por_secao.get(secao_key, [])
+        if not items:
             continue
 
-        config = personas_config.get(p_key, {})
-        emoji = config.get("emoji", "📋")
-        titulo = config.get("titulo_secao", p_key.upper())
-        contract_dict = p_res["contract_dict"]
-        clusters = contract_dict.get("clusters_selecionados", [])
+        config = SECOES_RESUMO.get(secao_key, {"emoji": "📋", "titulo": secao_key.upper()})
+        section = f"{config['emoji']} *{config['titulo']}*\n\n"
 
-        if not clusters:
-            continue
-
-        section = f"{emoji} *{titulo}*\n\n"
-
-        for cs in clusters:
+        for cs in items:
             cid = cs.get("cluster_id")
             if cid is not None and cid in vistos:
                 continue
             if cid is not None:
                 vistos.add(cid)
 
-            # Título (sem cluster_id — é jargão técnico)
-            section += f"*{cs['titulo_whatsapp']}*\n"
+            section += f"*{cs.get('titulo_whatsapp', '')}*\n"
+            section += f"• {cs.get('bullet_impacto', '')}\n"
 
-            # Bullet de impacto
-            section += f"• {cs['bullet_impacto']}\n"
-
-            # Fontes reais do DB (fallback: o que o LLM escreveu)
             real_fontes = fontes_map.get(cid, []) if cid else []
             fontes_str = _format_fontes_label(real_fontes)
             if not fontes_str:
                 fontes_str = cs.get('fonte_principal', '')
             if fontes_str:
                 section += f"_Fontes: {fontes_str}_\n"
-
             section += "\n"
 
         if "•" in section:
             sections.append(section.strip())
 
     if not sections:
-        return [header + "(Nenhum evento relevante identificado hoje.)\n\n_🕐 Gerado pelo AlphaFeed_"]
+        return [header + "(Nenhum evento relevante identificado hoje.)\n\n_Gerado pelo AlphaFeed_"]
 
-    footer = "_🕐 Gerado pelo AlphaFeed_"
+    footer = "_Gerado pelo AlphaFeed_"
     full_msg = header + "\n\n".join(sections) + "\n\n" + footer
 
-    # Split se necessário
     if len(full_msg) <= max_chars_por_msg:
         return [full_msg]
 
-    # Split por seção
     msgs: List[str] = []
     current = header
     for section in sections:
         if len(current) + len(section) + 10 > max_chars_por_msg:
             msgs.append(current.strip())
-            current = "🚨 *RESUMO DO DIA (cont.)* 🚨\n\n"
+            current = "🚨 *RESUMO (cont.)* 🚨\n\n"
         current += section + "\n\n"
     current += footer
     msgs.append(current.strip())

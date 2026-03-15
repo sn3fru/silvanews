@@ -545,7 +545,7 @@ def _generate_user_summary(user_id: int, target_date):
                     clusters_escolhidos=resultado.get("todos_clusters_escolhidos_ids", []),
                     texto=texto_full, texto_whatsapp=texto_full,
                     prompt_version=resultado.get("prompt_version"),
-                    metadados=resultado.get("personas_resultados", {}),
+                    metadados=resultado.get("contract_dict", {}),
                 )
                 print(f"[ResumoUsuario] Resumo personalizado salvo para user_id={user_id}, data={target_date}")
             else:

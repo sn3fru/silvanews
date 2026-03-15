@@ -38,19 +38,20 @@
 
 | Modo | Função | Descrição |
 |------|--------|-----------|
-| **Multi-Persona (legado)** | `gerar_resumo_diario(date, personas)` | Roda **3 personas** (distressed, regulatorio, estrategista) **em paralelo**. Cada persona recebe o **mesmo contexto compartilhado**. Cada uma chama o LLM independentemente, com até 3 tool calls por persona. Resultados agregados e deduplicados. |
-| **Per-User (v3.0)** | `gerar_resumo_para_usuario(user_id, date)` | Lê preferências do usuário no banco (`preferencias_usuario`, `templates_resumo_usuario`), monta **um único prompt personalizado** com o contexto compartilhado, e faz **uma única chamada LLM**. Custo: 1 chamada por usuário (vs. 3 no multi-persona). Eficiente para 100+ usuários. |
+| **Unificado (padrão)** | `gerar_resumo_diario(date)` | **1 chamada LLM** que cobre todos os ângulos (distressed, regulatório, estratégico, geral). O LLM recebe todos os títulos+resumos do dia e decide onde aprofundar com tools. Custo: 1 chamada + até 5 tool calls. |
+| **Per-User (v3.0)** | `gerar_resumo_para_usuario(user_id, date)` | Lê preferências do usuário no banco, monta prompt personalizado com o contexto compartilhado, faz **1 chamada LLM**. Custo: 1 chamada por usuário + até 8 tool calls. |
 
-**Multi-Persona (legado):**
+**Modo Unificado (padrão — terminal/WhatsApp):**
 - Contexto montado **UMA VEZ** via `_build_context_block()`.
-- `ThreadPoolExecutor`: 3 threads, uma por persona.
-- Cada thread usa sessão de banco própria.
-- Resultados agregados e deduplicados.
+- **1 chamada LLM** com `PROMPT_RESUMO_UNIFICADO_V1` (cobre distressed + regulatório + estratégico + geral).
+- O LLM marca cada cluster com `secao` ("distressed", "regulatorio", "estrategico", "geral").
+- Tools disponíveis com budget de 5 chamadas — o LLM decide onde aprofundar.
+- Formatador agrupa por seção automaticamente.
 
 **Per-User (v3.0):**
 - Contexto compartilhado com **cache** (chave: `date + max(updated_at)`).
-- Uma chamada LLM por usuário.
-- Custo: 1x tokens/usuário (vs. 3x no multi-persona).
+- Uma chamada LLM por usuário com preferências personalizadas.
+- Custo: 1x tokens/usuário.
 - Ideal para escala (100+ usuários).
 
 ### 1.3 Princípios
@@ -300,7 +301,7 @@ backend/prompts.py                ← PERSONAS_RESUMO_DIARIO, PROMPT_CORRECAO_PY
 
 ---
 
-## 13. Contrato Pydantic (v3.0)
+## 13. Contrato Pydantic (v3.1)
 
 O LLM devolve um JSON validado por Pydantic. Esquema atual:
 
@@ -308,8 +309,8 @@ O LLM devolve um JSON validado por Pydantic. Esquema atual:
 
 ```python
 class ResumoDiarioContract(BaseModel):
-    tldr_executivo: Optional[str] = Field(None, max_length=300)  # Opcional
-    clusters_selecionados: List[ClusterSelecionado] = Field(..., max_length=12)
+    tldr_executivo: Optional[str] = Field(None, max_length=300)
+    clusters_selecionados: conlist(ClusterSelecionado, min_length=1, max_length=12)
 ```
 
 ### ClusterSelecionado
@@ -317,6 +318,7 @@ class ResumoDiarioContract(BaseModel):
 ```python
 class ClusterSelecionado(BaseModel):
     cluster_id: int
+    secao: str = Field("geral", max_length=30)  # "distressed", "regulatorio", "estrategico", "geral"
     titulo_whatsapp: str = Field(..., max_length=100)
     bullet_impacto: str = Field(..., max_length=280)
     fonte_principal: str = Field(..., max_length=80)
@@ -325,7 +327,8 @@ class ClusterSelecionado(BaseModel):
 | Campo | Restrição |
 |-------|-----------|
 | `tldr_executivo` | Opcional; max 300 caracteres |
-| `clusters_selecionados` | Max 12 itens |
+| `clusters_selecionados` | 1 a 12 itens |
+| `secao` | "distressed", "regulatorio", "estrategico" ou "geral" |
 | `titulo_whatsapp` | Max 100 caracteres |
 | `bullet_impacto` | Max 280 caracteres |
 | `fonte_principal` | Max 80 caracteres |
@@ -338,7 +341,8 @@ class ClusterSelecionado(BaseModel):
 |---------|--------------|
 | **Pasta do agente** | `agents/resumo_diario/` — responsabilidade única. |
 | **Split/Merge** | **Não.** Agente é READ-ONLY. |
-| **Modo padrão (API)** | v3.0 Per-User via `POST /api/resumo/gerar`. Multi-Persona disponível via `gerar_resumo_diario()`. |
+| **Modo padrão (terminal)** | v3.1 Unificado via `gerar_resumo_diario()` — 1 chamada LLM, 5 tools. |
+| **Modo padrão (API)** | v3.0 Per-User via `POST /api/resumo/gerar` — 1 chamada LLM personalizada, 8 tools. |
 | **Cache** | Compartilhado por data+updated_at; invalidado quando clusters mudam. |
 | **Idempotência** | Um resumo por `(user_id, data)`. Re-gerar sobrescreve. |
 
@@ -351,20 +355,22 @@ class ClusterSelecionado(BaseModel):
 | Função | Responsabilidade |
 |--------|------------------|
 | `_build_context_block(db, date)` | Map-Reduce: recolhe todos os clusters do dia UMA VEZ. Retorna `(contexto_str, avaliados_ids, fontes_map)`. |
-| `_run_llm_with_tools(db, prompt, persona_name)` | Gemini Function Calling com `obter_textos_brutos_cluster` e `buscar_na_web`. |
+| `_run_llm_with_tools(db, prompt, persona_name, budget)` | Gemini Function Calling com `obter_textos_brutos_cluster` e `buscar_na_web`. Se budget=0, chama sem tools. |
 | `_validate_and_fix(raw_json_str, persona_name)` | Pydantic + fallback com `PROMPT_CORRECAO_PYDANTIC_V1`. |
-| `_run_persona(key, config, contexto, db_factory)` | Unidade atômica por thread (multi-persona). |
-| `gerar_resumo_diario(date, personas)` | Orquestrador paralelo: ThreadPoolExecutor, agrega resultados. |
-| `gerar_resumo_para_usuario(user_id, date)` | Modo v3.0: contexto em cache + prompt personalizado + 1 chamada LLM. |
-| `formatar_whatsapp(resultado)` | Mensagem seccionada por persona (💀 DISTRESS → ⚖️ REGULATÓRIO → 🏛️ M&A), split se > 4096 chars. |
+| `gerar_resumo_diario(date, prompt_template)` | **1 chamada LLM unificada** com `PROMPT_RESUMO_UNIFICADO_V1`. Budget: 5 tool calls. |
+| `gerar_resumo_para_usuario(user_id, date)` | Modo Per-User: contexto em cache + prompt personalizado + 1 chamada LLM. Budget: 8 tool calls. |
+| `formatar_whatsapp(resultado)` | Mensagem agrupada por seção temática (💀 → ⚖️ → 🏛️ → 📋), split se > 4096 chars. |
 
-### 15.2 Personas (modo multi-persona)
+### 15.2 Seções temáticas (modo unificado)
 
-| Persona | Emoji | Escopo |
-|---------|-------|--------|
+| Seção | Emoji | Escopo |
+|-------|-------|--------|
 | **distressed** | 💀 | RJ, NPLs, falências, covenants, inadimplência CVM |
 | **regulatorio** | ⚖️ | STF/STJ, CARF, CADE, regulações, decisões tributárias |
-| **estrategista** | 🏛️ | M&A, OPAs, turnarounds, mudanças de controle, privatizações |
+| **estrategico** | 🏛️ | M&A, OPAs, turnarounds, mudanças de controle, privatizações |
+| **geral** | 📋 | Eventos relevantes fora das categorias acima |
+
+O LLM marca cada cluster com `secao` no JSON. O formatador agrupa automaticamente.
 
 ### 15.3 Histórico de versões
 
@@ -372,14 +378,22 @@ class ClusterSelecionado(BaseModel):
 |--------|------|----------|
 | v1 | 2026-03-06 | Prompt monolítico. Selecionou Corinthians (esportes) incorretamente. |
 | v2 (MULTI-PERSONA) | 2026-03-06 | 3 personas em paralelo; REGRA DE PROFUNDIDADE forçando tools; mensagem seccionada. |
-| v3.0 (MULTI-TENANT) | 2026-03-15 | Per-User: `gerar_resumo_para_usuario()`, cache de contexto, preferências do banco, tool `buscar_na_web` (Tivaly). API `POST /api/resumo/gerar` usa modo Per-User. |
+| v3.0 (MULTI-TENANT) | 2026-03-15 | Per-User: `gerar_resumo_para_usuario()`, cache de contexto, preferências do banco, tool `buscar_na_web` (Tivaly). |
+| v3.1 (UNIFICADO) | 2026-03-15 | Substituiu 3 personas por 1 chamada unificada (`PROMPT_RESUMO_UNIFICADO_V1`). Campo `secao` no `ClusterSelecionado`. Budget: 5 tools. Custo ~60% menor. |
 
-### 15.4 Pendências conhecidas
+### 15.4 Normalização de Fontes
+
+Os nomes de fontes (jornais/portais) passam por `normalizar_fonte_display()` em `backend/utils.py` antes de serem exibidos:
+- Mapeia aliases para nomes bonitos (ex: "SP O Estado de S Paulo - 150326" → "O Estado de S.Paulo").
+- Filtra lixo (usernames, valores tipo "ines249", "json_dump").
+- Whitelist de ~30 fontes conhecidas.
+
+### 15.5 Pendências conhecidas
 
 - [ ] Módulo de envio WhatsApp (provedor a definir).
-- [ ] Tabela `resumos_enviados_whatsapp` para idempotência global (evitar envio duplicado no mesmo dia).
+- [ ] Tabela `resumos_enviados_whatsapp` para idempotência global.
 - [ ] Extrair modelo Gemini para config/env.
-- [ ] Adicionar `tipo_fonte` ao dict de `get_clusters_for_feed_by_date` (se necessário).
+- [ ] Telegram Listener: `telegram_listener.py` (Telethon, user account, sem bot).
 
 ---
 

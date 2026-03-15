@@ -115,6 +115,37 @@
                 <div id="loading-text" class="loading-text">Carregando...</div>
             </div>
             
+            <!-- Hero: Resumo do Dia (ANTES das abas — o resumo cobre todas as fontes) -->
+            <section id="daily-summary-hero" class="daily-summary-hero" style="margin-bottom:1rem;">
+                <div class="summary-header" style="display:flex;justify-content:space-between;align-items:center;padding:.8rem 1rem;background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);border-radius:8px 8px 0 0;">
+                    <div>
+                        <h2 style="margin:0;font-size:1.1rem;color:#fff;font-weight:600;">Resumo do Dia</h2>
+                        <span id="summary-timestamp" style="font-size:.75rem;color:rgba(255,255,255,.7);"></span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:.5rem;">
+                        <span id="summary-new-alert" class="summary-new-alert" style="display:none;color:#fff;font-size:.8rem;">
+                            <span class="pulse-dot" style="display:inline-block;width:8px;height:8px;background:#fbbf24;border-radius:50%;margin-right:4px;animation:pulse 1.5s infinite;"></span>
+                            <span id="summary-new-count">0</span> novos
+                        </span>
+                        <button id="btn-edit-preferences" class="btn" style="font-size:.75rem;padding:.3rem .6rem;background:rgba(255,255,255,.1);color:rgba(255,255,255,.8);border:1px solid rgba(255,255,255,.2);border-radius:6px;cursor:pointer;transition:all .2s;" title="Editar preferencias do resumo">
+                            Preferencias
+                        </button>
+                        <button id="btn-refresh-summary" class="btn" style="font-size:.8rem;padding:.35rem .7rem;background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;cursor:pointer;transition:all .2s;">
+                            Gerar Resumo
+                        </button>
+                    </div>
+                </div>
+                <div id="user-prefs-banner" style="display:none;padding:.4rem 1rem;background:#eff6ff;border:1px solid #e2e8f0;border-top:none;font-size:.75rem;color:#4b5563;">
+                </div>
+                <div id="summary-content" style="padding:1rem;background:#f8fafc;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;min-height:60px;">
+                    <p style="color:#6b7280;font-size:.9rem;margin:0;">Clique em "Gerar Resumo" para criar seu resumo personalizado do dia.</p>
+                </div>
+                <div id="summary-loading" style="display:none;padding:.8rem 1rem;background:#f8fafc;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;align-items:center;">
+                    <div style="width:16px;height:16px;border:2px solid #e5e7eb;border-top-color:#3b82f6;border-radius:50%;animation:spin .6s linear infinite;display:inline-block;"></div>
+                    <span style="margin-left:.5rem;color:#6b7280;font-size:.85rem;">Gerando seu resumo personalizado...</span>
+                </div>
+            </section>
+
             <!-- Abas Brasil Físico / Brasil Online / Internacional -->
             <div class="news-tabs-container">
                 <nav class="news-tabs">
@@ -132,32 +163,6 @@
                     </button>
                 </nav>
             </div>
-            
-            <!-- Hero: Resumo do Dia -->
-            <section id="daily-summary-hero" class="daily-summary-hero">
-                <div class="summary-header" style="display:flex;justify-content:space-between;align-items:center;padding:.8rem 1rem;background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);border-radius:8px 8px 0 0;">
-                    <div>
-                        <h2 style="margin:0;font-size:1.1rem;color:#fff;font-weight:600;">Resumo do Dia</h2>
-                        <span id="summary-timestamp" style="font-size:.75rem;color:rgba(255,255,255,.7);"></span>
-                    </div>
-                    <div style="display:flex;align-items:center;gap:.5rem;">
-                        <span id="summary-new-alert" class="summary-new-alert" style="display:none;color:#fff;font-size:.8rem;">
-                            <span class="pulse-dot" style="display:inline-block;width:8px;height:8px;background:#fbbf24;border-radius:50%;margin-right:4px;animation:pulse 1.5s infinite;"></span>
-                            <span id="summary-new-count">0</span> novos
-                        </span>
-                        <button id="btn-refresh-summary" class="btn" style="font-size:.8rem;padding:.35rem .7rem;background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;cursor:pointer;transition:all .2s;">
-                            Gerar Resumo
-                        </button>
-                    </div>
-                </div>
-                <div id="summary-content" style="padding:1rem;background:#f8fafc;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;min-height:60px;">
-                    <p style="color:#6b7280;font-size:.9rem;margin:0;">Clique em "Gerar Resumo" para criar seu resumo personalizado do dia.</p>
-                </div>
-                <div id="summary-loading" style="display:none;padding:.8rem 1rem;background:#f8fafc;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;align-items:center;">
-                    <div style="width:16px;height:16px;border:2px solid #e5e7eb;border-top-color:#3b82f6;border-radius:50%;animation:spin .6s linear infinite;display:inline-block;"></div>
-                    <span style="margin-left:.5rem;color:#6b7280;font-size:.85rem;">Gerando seu resumo personalizado...</span>
-                </div>
-            </section>
 
             <div class="feed-noticias" id="feed-container">
                 <!-- Cards de clusters serão inseridos aqui dinamicamente -->

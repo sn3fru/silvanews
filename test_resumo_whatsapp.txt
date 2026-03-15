@@ -1,26 +1,34 @@
 🚨 *RESUMO DO DIA — SPECIAL SITUATIONS* 🚨
-📅 2026-03-13
+📅 2026-03-15
 
-💀 *ALERTA DE DISTRESS E NPL*
+_Destaque para alta esperada nas recuperações judiciais devido ao endividamento e Selic elevada. No regulatório, TJ-SP mantém suspensão de alvarás em SP, impactando a construção civil._
 
-*⚖️ Justiça determina reintegração de 370 funcionários da Stone*
-• Decisão judicial obriga Stone a reintegrar 370 funcionários demitidos em massa, com multa diária de R$ 500 por trabalhador em caso de descumprimento.
-_Fontes: Migalhas_
+💀 *DISTRESSED & NPLs*
 
-⚖️ *RADAR JURÍDICO E ARBITRAGEM TRIBUTÁRIA*
+*💀 Alta esperada em RJs*
+• Espera-se alta nas recuperações judiciais nos próximos dois anos devido ao alto endividamento das empresas e à taxa Selic elevada, mesmo com a possível queda.
+_Fontes: O Estado de S. Paulo_
 
-*⚖️ STJ proíbe limite em terapias TEA*
-• STJ (Tema 1.295) impede planos de saúde de limitarem sessões de terapias multidisciplinares para autistas, com efeito vinculante.
-_Fontes: Conjur_
+*💀 Crises financeiras em grandes empresas*
+• Juros elevados, problemas de gestão e governança estão levando mais empresas à recuperação, como Raízen, Grupo Pão de Açúcar e outras.
+_Fontes: O Estado de S. Paulo_
 
-*⚖️ STF afasta SAT sobre autônomos pré-98*
-• STF dispensa empresas de recolher SAT sobre pagamentos a autônomos anteriores a 1998, alterando a contribuição.
-_Fontes: Conjur, Migalhas_
+*💀 Recuperação extrajudicial em alta*
+• Em 2025, a recuperação extrajudicial está em alta, enquanto a judicialização recua, refletindo um cenário de stress financeiro para empresas devido a juros elevados.
+_Fontes: O Estado de S. Paulo_
 
-🏛️ *M&A E GRANDES MOVIMENTOS CORPORATIVOS*
+*💀 Empresas enfrentam teste de governança*
+• O aumento de recuperações judiciais expõe fragilidades na gestão de riscos financeiros e controle do endividamento das empresas.
+_Fontes: O Estado de S. Paulo_
 
-*🏦 BTG Pactual negocia compra do Banco Digimais*
-• BTG Pactual busca expandir sua atuação no varejo digital com a aquisição do Banco Digimais.
-_Fontes: Valor C, Ines249_
+⚖️ *REGULATÓRIO & JURÍDICO*
 
-_🕐 Gerado pelo AlphaFeed_
+*⚖️ TJ-SP mantém suspensão de alvarás*
+• TJ-SP mantém suspensão de novas autorizações para construções e demolições em SP, impactando a construção civil. Câmara Municipal alega perda de R$ 4,2 milhões por dia e investimentos comprometidos de até R$ 90 bilhões.
+_Fontes: O Estado de S. Paulo_
+
+*⚖️ Combate ao mercado ilegal de combustíveis*
+• A Lei Complementar 225/2026 estabelece critérios para diferenciar o inadimplente eventual do contumaz no mercado de combustíveis.
+_Fontes: Estadão_
+
+_Gerado pelo AlphaFeed_

@@ -1109,18 +1109,15 @@ class FileLoader:
             # Verifica se já existe (dedup exata por hash)
             artigo_existente = get_artigo_by_hash(db, hash_unico)
             if artigo_existente:
-                print(f"⚠️ AVISO: Artigo já existe no banco (hash): {artigo_existente.id}")
-                return "hash_dup"  # Retorna string para diferenciar de "salvo com sucesso"
+                return "hash_dup"
             
             # Verifica dedup semantica (artigos muito parecidos nas ultimas 48h)
             try:
                 from backend.processing import verificar_duplicata_semantica
                 dup = verificar_duplicata_semantica(db, artigo_data['texto_bruto'], threshold=0.85, horas=48)
                 if dup:
-                    print(f"⚠️ DEDUP SEMANTICA: Artigo similar encontrado (id={dup['artigo_id']}, "
-                          f"sim={dup['similaridade']:.2f}, titulo='{dup['titulo']}'). Ignorando.")
                     db.close()
-                    return "dedup"  # Retorna string para diferenciar de "salvo com sucesso"
+                    return "dedup"
             except Exception as e:
                 # Falha na dedup semantica nao impede a insercao
                 print(f"[Dedup Semantica] Aviso: {e}")

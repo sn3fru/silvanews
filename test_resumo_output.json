@@ -1,326 +1,237 @@
 {
   "ok": true,
-  "data": "2026-03-13",
-  "personas_resultados": {
-    "estrategista": {
-      "ok": true,
-      "contract_dict": {
-        "tldr_executivo": "BTG Pactual está em negociações avançadas para adquirir o Banco Digimais, visando expandir sua atuação no varejo digital.",
-        "clusters_selecionados": [
-          {
-            "cluster_id": 53225,
-            "titulo_whatsapp": "🏦 BTG Pactual negocia compra do Banco Digimais",
-            "bullet_impacto": "BTG Pactual busca expandir sua atuação no varejo digital com a aquisição do Banco Digimais.",
-            "fonte_principal": "Valor Econômico"
-          }
-        ]
+  "data": "2026-03-15",
+  "contract_dict": {
+    "tldr_executivo": "Destaque para alta esperada nas recuperações judiciais devido ao endividamento e Selic elevada. No regulatório, TJ-SP mantém suspensão de alvarás em SP, impactando a construção civil.",
+    "clusters_selecionados": [
+      {
+        "cluster_id": 53331,
+        "secao": "distressed",
+        "titulo_whatsapp": "💀 Alta esperada em RJs",
+        "bullet_impacto": "Espera-se alta nas recuperações judiciais nos próximos dois anos devido ao alto endividamento das empresas e à taxa Selic elevada, mesmo com a possível queda.",
+        "fonte_principal": "O Estado de S. Paulo"
       },
-      "error": null
-    },
-    "distressed": {
-      "ok": true,
-      "contract_dict": {
-        "tldr_executivo": "O dia apresenta notícias sobre a reintegração de funcionários da Stone por decisão judicial e discussões sobre a CPI do Banco Master. Não há eventos de grande impacto no cenário de distressed assets.",
-        "clusters_selecionados": [
-          {
-            "cluster_id": 53258,
-            "titulo_whatsapp": "⚖️ Justiça determina reintegração de 370 funcionários da Stone",
-            "bullet_impacto": "Decisão judicial obriga Stone a reintegrar 370 funcionários demitidos em massa, com multa diária de R$ 500 por trabalhador em caso de descumprimento.",
-            "fonte_principal": "Migalhas"
-          }
-        ]
+      {
+        "cluster_id": 53307,
+        "secao": "regulatorio",
+        "titulo_whatsapp": "⚖️ TJ-SP mantém suspensão de alvarás",
+        "bullet_impacto": "TJ-SP mantém suspensão de novas autorizações para construções e demolições em SP, impactando a construção civil. Câmara Municipal alega perda de R$ 4,2 milhões por dia e investimentos comprometidos de até R$ 90 bilhões.",
+        "fonte_principal": "O Estado de S. Paulo"
       },
-      "error": null
-    },
-    "regulatorio": {
-      "ok": true,
-      "contract_dict": {
-        "tldr_executivo": "O STJ decidiu que planos de saúde não podem limitar sessões de terapias para autistas (Tema 1.295). O STF decidiu que empresas não precisam recolher contribuição ao Seguro de Acidente de Trabalho (SAT) sobre valores pagos a autônomos pré-98.",
-        "clusters_selecionados": [
-          {
-            "cluster_id": 53269,
-            "titulo_whatsapp": "⚖️ STJ proíbe limite em terapias TEA",
-            "bullet_impacto": "STJ (Tema 1.295) impede planos de saúde de limitarem sessões de terapias multidisciplinares para autistas, com efeito vinculante.",
-            "fonte_principal": "Conjur"
-          },
-          {
-            "cluster_id": 53276,
-            "titulo_whatsapp": "⚖️ STF afasta SAT sobre autônomos pré-98",
-            "bullet_impacto": "STF dispensa empresas de recolher SAT sobre pagamentos a autônomos anteriores a 1998, alterando a contribuição.",
-            "fonte_principal": "Conjur, Migalhas"
-          }
-        ]
+      {
+        "cluster_id": 53306,
+        "secao": "distressed",
+        "titulo_whatsapp": "💀 Crises financeiras em grandes empresas",
+        "bullet_impacto": "Juros elevados, problemas de gestão e governança estão levando mais empresas à recuperação, como Raízen, Grupo Pão de Açúcar e outras.",
+        "fonte_principal": "O Estado de S. Paulo"
       },
-      "error": null
-    }
-  },
-  "clusters_avaliados_ids": [
-    53269,
-    53258,
-    53291,
-    53290,
-    53289,
-    53288,
-    53287,
-    53286,
-    53285,
-    53284,
-    53282,
-    53281,
-    53280,
-    53279,
-    53277,
-    53276,
-    53275,
-    53273,
-    53272,
-    53271,
-    53270,
-    53268,
-    53266,
-    53264,
-    53263,
-    53262,
-    53261,
-    53260,
-    53257,
-    53256,
-    53255,
-    53254,
-    53253,
-    53251,
-    53250,
-    53249,
-    53248,
-    53247,
-    53245,
-    53244,
-    53243,
-    53242,
-    53241,
-    53240,
-    53239,
-    53238,
-    53237,
-    53236,
-    53235,
-    53234,
-    53233,
-    53232,
-    53231,
-    53230,
-    53229,
-    53228,
-    53227,
-    53225,
-    53224,
-    53223
-  ],
-  "todos_clusters_escolhidos_ids": [
-    53225,
-    53258,
-    53269,
-    53276
-  ],
-  "fontes_map": {
-    "53269": [
-      "Conjur"
-    ],
-    "53258": [
-      "Migalhas"
-    ],
-    "53291": [
-      "The New York Times",
-      "THE NEW YORK TIMES BUSINESS"
-    ],
-    "53290": [
-      "Migalhas"
-    ],
-    "53289": [
-      "Conjur"
-    ],
-    "53288": [
-      "Conjur"
-    ],
-    "53287": [
-      "Migalhas"
-    ],
-    "53286": [
-      "Migalhas"
-    ],
-    "53285": [
-      "Migalhas"
-    ],
-    "53284": [
-      "Migalhas"
-    ],
-    "53282": [
-      "Migalhas"
-    ],
-    "53281": [
-      "JOTA"
-    ],
-    "53280": [
-      "JOTA"
-    ],
-    "53279": [
-      "Migalhas"
-    ],
-    "53277": [
-      "Conjur"
-    ],
-    "53276": [
-      "Conjur",
-      "Migalhas"
-    ],
-    "53275": [
-      "Brazil Journal"
-    ],
-    "53273": [
-      "Conjur"
-    ],
-    "53272": [
-      "Migalhas"
-    ],
-    "53271": [
-      "Valor Econômico"
-    ],
-    "53270": [
-      "JOTA"
-    ],
-    "53268": [
-      "JOTA"
-    ],
-    "53266": [
-      "Brazil Journal"
-    ],
-    "53264": [
-      "Valor Econômico"
-    ],
-    "53263": [
-      "Brazil Journal"
-    ],
-    "53262": [
-      "Conjur"
-    ],
-    "53261": [
-      "Migalhas"
-    ],
-    "53260": [
-      "Migalhas"
-    ],
-    "53257": [
-      "Migalhas"
-    ],
-    "53256": [
-      "Valor Econômico"
-    ],
-    "53255": [
-      "Valor Econômico"
-    ],
-    "53254": [
-      "Valor Econômico"
-    ],
-    "53253": [
-      "Conjur"
-    ],
-    "53251": [
-      "Migalhas"
-    ],
-    "53250": [
-      "Conjur"
-    ],
-    "53249": [
-      "Conjur",
-      "Migalhas"
-    ],
-    "53248": [
-      "Valor Econômico"
-    ],
-    "53247": [
-      "Conjur"
-    ],
-    "53245": [
-      "Conjur"
-    ],
-    "53244": [
-      "Conjur"
-    ],
-    "53243": [
-      "Conjur"
-    ],
-    "53242": [
-      "Conjur"
-    ],
-    "53241": [
-      "Valor Econômico"
-    ],
-    "53240": [
-      "Conjur"
-    ],
-    "53239": [
-      "Migalhas"
-    ],
-    "53238": [
-      "Migalhas"
-    ],
-    "53237": [
-      "Brazil Journal"
-    ],
-    "53236": [
-      "Migalhas"
-    ],
-    "53235": [
-      "Migalhas"
-    ],
-    "53234": [
-      "Conjur"
-    ],
-    "53233": [
-      "Folha de S.Paulo",
-      "Valor Econômico"
-    ],
-    "53232": [
-      "O GLOBO"
-    ],
-    "53231": [
-      "Folha de S.Paulo",
-      "Conjur",
-      "Valor Econômico",
-      "Migalhas"
-    ],
-    "53230": [
-      "O GLOBO",
-      "O ESTADO DE S. PAULO"
-    ],
-    "53229": [
-      "O GLOBO",
-      "O ESTADO DE S. PAULO",
-      "Folha de S.Paulo"
-    ],
-    "53228": [
-      "Valor A3",
-      "O ESTADO DE S. PAULO"
-    ],
-    "53227": [
-      "O GLOBO",
-      "O ESTADO DE S. PAULO",
-      "Valor Econômico",
-      "Brazil Journal",
-      "Folha de S.Paulo"
-    ],
-    "53225": [
-      "Valor C",
-      "Ines249"
-    ],
-    "53224": [
-      "Folha de S.Paulo",
-      "O ESTADO DE S. PAULO"
-    ],
-    "53223": [
-      "Folha de S.Paulo",
-      "Valor Econômico"
+      {
+        "cluster_id": 53319,
+        "secao": "distressed",
+        "titulo_whatsapp": "💀 Recuperação extrajudicial em alta",
+        "bullet_impacto": "Em 2025, a recuperação extrajudicial está em alta, enquanto a judicialização recua, refletindo um cenário de stress financeiro para empresas devido a juros elevados.",
+        "fonte_principal": "O Estado de S. Paulo"
+      },
+      {
+        "cluster_id": 53304,
+        "secao": "regulatorio",
+        "titulo_whatsapp": "⚖️ Combate ao mercado ilegal de combustíveis",
+        "bullet_impacto": "A Lei Complementar 225/2026 estabelece critérios para diferenciar o inadimplente eventual do contumaz no mercado de combustíveis.",
+        "fonte_principal": "Estadão"
+      },
+      {
+        "cluster_id": 53303,
+        "secao": "distressed",
+        "titulo_whatsapp": "💀 Empresas enfrentam teste de governança",
+        "bullet_impacto": "O aumento de recuperações judiciais expõe fragilidades na gestão de riscos financeiros e controle do endividamento das empresas.",
+        "fonte_principal": "O Estado de S. Paulo"
+      }
     ]
   },
-  "prompt_version": "MULTI-PERSONA_V1"
+  "clusters_avaliados_ids": [
+    53310,
+    53307,
+    53347,
+    53346,
+    53345,
+    53344,
+    53343,
+    53341,
+    53340,
+    53339,
+    53338,
+    53337,
+    53336,
+    53335,
+    53334,
+    53332,
+    53331,
+    53330,
+    53329,
+    53327,
+    53326,
+    53324,
+    53323,
+    53322,
+    53321,
+    53320,
+    53319,
+    53317,
+    53316,
+    53314,
+    53312,
+    53311,
+    53309,
+    53306,
+    53305,
+    53304,
+    53303,
+    53302,
+    53300,
+    53299,
+    53295,
+    53294,
+    53293
+  ],
+  "todos_clusters_escolhidos_ids": [
+    53303,
+    53304,
+    53306,
+    53307,
+    53319,
+    53331
+  ],
+  "fontes_map": {
+    "53310": [
+      "O Estado de S. Paulo"
+    ],
+    "53307": [
+      "O Estado de S. Paulo"
+    ],
+    "53347": [
+      "Conjur"
+    ],
+    "53346": [
+      "Conjur"
+    ],
+    "53345": [
+      "Conjur"
+    ],
+    "53344": [
+      "Valor Econômico"
+    ],
+    "53343": [
+      "Valor Econômico"
+    ],
+    "53341": [
+      "Conjur"
+    ],
+    "53340": [
+      "Conjur"
+    ],
+    "53339": [
+      "Conjur"
+    ],
+    "53338": [
+      "Conjur"
+    ],
+    "53337": [
+      "Conjur"
+    ],
+    "53336": [
+      "Migalhas"
+    ],
+    "53335": [
+      "Migalhas"
+    ],
+    "53334": [
+      "Valor Econômico"
+    ],
+    "53332": [
+      "O Estado de S. Paulo",
+      "Valor Econômico"
+    ],
+    "53331": [
+      "O Estado de S. Paulo"
+    ],
+    "53330": [
+      "O Estado de S. Paulo"
+    ],
+    "53329": [
+      "O Estado de S. Paulo"
+    ],
+    "53327": [
+      "O Estado de S. Paulo"
+    ],
+    "53326": [
+      "O Estado de S. Paulo"
+    ],
+    "53324": [
+      "O Estado de S. Paulo"
+    ],
+    "53323": [
+      "O Estado de S. Paulo"
+    ],
+    "53322": [
+      "O Estado de S. Paulo"
+    ],
+    "53321": [
+      "O Estado de S. Paulo"
+    ],
+    "53320": [
+      "O Estado de S. Paulo"
+    ],
+    "53319": [
+      "O Estado de S. Paulo"
+    ],
+    "53317": [
+      "O Estado de S. Paulo"
+    ],
+    "53316": [
+      "O Estado de S. Paulo"
+    ],
+    "53314": [
+      "O Estado de S. Paulo"
+    ],
+    "53312": [
+      "O Estado de S. Paulo"
+    ],
+    "53311": [
+      "O Estado de S. Paulo"
+    ],
+    "53309": [
+      "O Estado de S. Paulo"
+    ],
+    "53306": [
+      "O Estado de S. Paulo"
+    ],
+    "53305": [
+      "O Estado de S. Paulo"
+    ],
+    "53304": [
+      "Estadão"
+    ],
+    "53303": [
+      "O Estado de S. Paulo"
+    ],
+    "53302": [
+      "O Estado de S. Paulo"
+    ],
+    "53300": [
+      "O Estado de S. Paulo"
+    ],
+    "53299": [
+      "O Estado de S. Paulo"
+    ],
+    "53295": [
+      "O Estado de S. Paulo"
+    ],
+    "53294": [
+      "O Estado de S. Paulo"
+    ],
+    "53293": [
+      "SP O Estado de S Paulo - 150326"
+    ]
+  },
+  "prompt_version": "UNIFICADO_V3"
 }

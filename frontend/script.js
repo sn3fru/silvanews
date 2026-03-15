@@ -4470,6 +4470,7 @@ function mostrarOnboardingModal() {
             if (resp.ok) {
                 overlay.remove();
                 carregarResumoDoDia();
+                carregarPrefsBanner();
             } else {
                 alert('Erro ao salvar preferencias. Tente novamente.');
             }
@@ -4479,10 +4480,30 @@ function mostrarOnboardingModal() {
     });
 }
 
-// Bind botao de gerar resumo + onboarding
+async function carregarPrefsBanner() {
+    const banner = document.getElementById('user-prefs-banner');
+    if (!banner) return;
+    const token = getAuthToken();
+    if (!token || token === 'admin') { banner.style.display = 'none'; return; }
+    try {
+        const resp = await fetchAuth(`${API_BASE}/api/user/preferencias`);
+        if (!resp.ok) return;
+        const prefs = await resp.json();
+        const tags = prefs.tags_interesse || [];
+        const tam = prefs.tamanho_resumo || 'medio';
+        if (tags.length > 0) {
+            banner.style.display = 'block';
+            banner.innerHTML = `Seus interesses: <strong>${tags.join(', ')}</strong> · Tamanho: <strong>${tam}</strong>`;
+        }
+    } catch {}
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const btn = document.getElementById('btn-refresh-summary');
     if (btn) btn.addEventListener('click', gerarResumoDoDia);
+    const btnPrefs = document.getElementById('btn-edit-preferences');
+    if (btnPrefs) btnPrefs.addEventListener('click', mostrarOnboardingModal);
     carregarResumoDoDia();
+    carregarPrefsBanner();
     verificarOnboarding();
 });

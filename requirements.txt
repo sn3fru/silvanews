@@ -46,6 +46,10 @@ PyPDF2
 python-jose[cryptography]
 passlib[bcrypt]
 
+# --- Telegram Listener (user account, Telethon) ---
+# Escuta grupos/canais sem ser bot/admin. Baixa jornais automaticamente.
+telethon
+
 # --- Utilitarios ---
 # 'rich' para logs e saidas formatadas no console, o que e util para debug dos scripts.
 # 'APScheduler' para tarefas agendadas, como descrito na tabela 'configuracoes_coleta'.

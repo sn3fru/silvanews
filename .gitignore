@@ -8,6 +8,9 @@ CRAWLERS/src/*/data/cookies.txt
 CRAWLERS/dump/
 CRAWLERS/output/
 
+# Telegram — sessao do Telethon (NUNCA commitar, contem tokens do user)
+.telegram_session*
+
 # Python
 __pycache__/
 *.py[cod]

@@ -999,9 +999,9 @@ def migrate_usuarios(
     try:
         rows = db_src.query(Usuario).filter(Usuario.created_at >= since).all()
     except Exception as e:
-        if "UndefinedTable" in str(type(e).__name__) or "does not exist" in str(e):
-            print("  ⏭️ Tabela 'usuarios' nao existe na origem. Pulando migracao de usuarios.")
-            print("     (Execute: python migrate_incremental.py --create-tables para criar)")
+        db_src.rollback()
+        if "does not exist" in str(e) or "UndefinedTable" in str(type(e).__name__):
+            print("  ⏭️ Tabela 'usuarios' nao existe. Pulando migracao multi-tenant.")
             return id_map
         raise
     if not rows:
@@ -1254,9 +1254,17 @@ def main() -> None:
         # ---- v3.0: Usuários Multi-Tenant ----
         if (args.include_usuarios or args.include_all) and want("usuarios"):
             user_id_map = migrate_usuarios(db_src, db_dst, since, args.no_update_existing)
-            migrate_preferencias_usuario(db_src, db_dst, since, user_id_map)
-            tpl_id_map = migrate_templates_resumo(db_src, db_dst, since, user_id_map)
-            migrate_resumos_usuario(db_src, db_dst, since, user_id_map, tpl_id_map)
+            if user_id_map is not None:
+                try:
+                    migrate_preferencias_usuario(db_src, db_dst, since, user_id_map)
+                    tpl_id_map = migrate_templates_resumo(db_src, db_dst, since, user_id_map)
+                    migrate_resumos_usuario(db_src, db_dst, since, user_id_map, tpl_id_map)
+                except Exception as e:
+                    if "does not exist" in str(e):
+                        db_src.rollback()
+                        print(f"  ⏭️ Tabelas multi-tenant incompletas. Pulando.")
+                    else:
+                        raise
 
         # Atualiza timestamp somente se nenhuma exceção ocorreu
         write_last_run(args.meta_file, datetime.now(timezone.utc))

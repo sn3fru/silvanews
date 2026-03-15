@@ -25,6 +25,11 @@ except Exception:
 
 class ClusterSelecionado(BaseModel):
     cluster_id: int
+    secao: str = Field(
+        "geral",
+        max_length=30,
+        description="Seção temática: 'distressed', 'regulatorio', 'estrategico' ou 'geral'."
+    )
     titulo_whatsapp: str = Field(
         ...,
         max_length=100,
@@ -41,12 +46,12 @@ class ClusterSelecionado(BaseModel):
 class ResumoDiarioContract(BaseModel):
     tldr_executivo: Optional[str] = Field(
         None,
-        max_length=300,
-        description="Opcional. Parágrafo de até 3 linhas; preferir omitir para poupar espaço na mensagem final."
+        max_length=500,
+        description="2-3 frases, panorama geral do dia."
     )
-    clusters_selecionados: conlist(ClusterSelecionado, min_length=1, max_length=12) = Field(
+    clusters_selecionados: conlist(ClusterSelecionado, min_length=1, max_length=15) = Field(
         ...,
-        description="Lista de oportunidades, 1 a 12 itens."
+        description="Lista de oportunidades, 1 a 15 itens."
     )
 
 

@@ -129,16 +129,43 @@
 # - Se criar arquivo de teste: deletar apos uso (nao guardar lixo).
 # - Credenciais/cookies NUNCA no Git. Usar .env ou .gitignore.
 
-# REGRA OBRIGATORIA: TESTAR + DOCUMENTAR APOS IMPLEMENTAR
-# Apos CADA implementacao significativa (nova feature, bugfix, refactor):
-#   1. TESTAR: Criar um script temporario (tmp_test_*.py) que valide a funcionalidade.
-#      Rodar o teste e confirmar que funciona. Deletar o script temporario apos confirmar.
-#   2. DOCUMENTAR: Atualizar IMEDIATAMENTE os arquivos de documentacao afetados:
-#      - docs/SYSTEM.md (se alterou arquitetura, tabelas, funcoes)
-#      - docs/OPERATIONS.md (se alterou endpoints, setup, deploy)
-#      - docs/AGENTE_RESUMO_DIARIO_SPEC.md (se alterou agente de resumo)
-#      - README.md (se alterou pipeline, comandos, setup)
-#      - .cursorrules (se adicionou tabela, endpoint, tool ou regra nova)
-#   3. VERIFICAR imports: Garantir que todas as funcoes chamadas existem e estao importadas.
-#   4. VERIFICAR caminhos: Testar que os caminhos de arquivos/pastas existem no filesystem.
-#   Nao considerar a tarefa concluida ate que os testes passem e a documentacao esteja atualizada.
+# ═══════════════════════════════════════════════════════════
+# WORKFLOW OBRIGATORIO PARA TODA IMPLEMENTACAO
+# ═══════════════════════════════════════════════════════════
+# PASSO 1 — LER: Antes de tocar em qualquer codigo, LER:
+#   - .cursorrules (este arquivo, mapa do projeto)
+#   - docs/ relevantes (SYSTEM.md, OPERATIONS.md, AGENTE_RESUMO_DIARIO_SPEC.md)
+#   - O codigo que sera alterado (funcoes, imports, dependencias)
+#
+# PASSO 2 — PLANEJAR: Identificar TODOS os arquivos impactados.
+#   - Listar quais funcoes serao alteradas/criadas.
+#   - Verificar se ha efeitos colaterais (outros arquivos que chamam essas funcoes).
+#   - Decidir a abordagem antes de escrever codigo.
+#
+# PASSO 3 — IMPLEMENTAR: Escrever o codigo.
+#   - Type hints estrito. Pydantic para validacao.
+#   - Erros em LLM: fallback gracioso. Nunca crashar o pipeline.
+#   - Frontend: toda chamada API deve usar fetchAuth() + tratamento de erro.
+#   - VERIFICAR imports: garantir que todas as funcoes existem e estao importadas.
+#   - VERIFICAR caminhos: testar que os caminhos de arquivos/pastas existem.
+#
+# PASSO 4 — TESTAR: Criar script temporario (tmp_test_*.py).
+#   - Rodar o teste e confirmar que funciona.
+#   - Deletar o script temporario apos confirmar (nao guardar lixo).
+#
+# PASSO 5 — DOCUMENTAR: Atualizar IMEDIATAMENTE:
+#   - docs/SYSTEM.md (se alterou arquitetura, tabelas, funcoes)
+#   - docs/OPERATIONS.md (se alterou endpoints, setup, deploy)
+#   - docs/AGENTE_RESUMO_DIARIO_SPEC.md (se alterou agente de resumo)
+#   - README.md (se alterou pipeline, comandos, setup)
+#   - .cursorrules (se adicionou tabela, endpoint, tool, variavel de ambiente ou regra nova)
+#
+# NAO considerar a tarefa concluida ate que os testes passem E a documentacao esteja atualizada.
+# ═══════════════════════════════════════════════════════════
+
+# REGRAS ADICIONAIS
+# - Se modificar database.py: OBRIGATORIO atualizar migrate_incremental.py.
+# - Novos CRUD: seguir padrao de crud.py (session como 1o param, returns tipados).
+# - Credenciais/cookies NUNCA no Git. Usar .env ou .gitignore.
+# - Fontes (jornais): usar normalizar_fonte_display() de backend/utils.py para exibicao.
+# - Telegram Listener: telegram_listener.py (Telethon, user account). Sessao em .telegram_session*.

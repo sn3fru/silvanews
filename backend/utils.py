@@ -513,6 +513,80 @@ def normalizar_jornal(nome: Optional[str]) -> str:
     return ALIASES_JORNAL.get(s, s)
 
 
+_FONTE_DISPLAY_MAP = {
+    "estadao": "O Estado de S.Paulo",
+    "o estado de s paulo": "O Estado de S.Paulo",
+    "estado de s paulo": "O Estado de S.Paulo",
+    "valor economico": "Valor Econômico",
+    "valor": "Valor Econômico",
+    "valor pro": "Valor Econômico",
+    "folha": "Folha de S.Paulo",
+    "folha de s paulo": "Folha de S.Paulo",
+    "brazil journal": "Brazil Journal",
+    "exame": "Exame",
+    "infomoney": "InfoMoney",
+    "investing": "Investing.com",
+    "bloomberg": "Bloomberg",
+    "reuters": "Reuters",
+    "financial times": "Financial Times",
+    "conjur": "Conjur",
+    "jota": "JOTA",
+    "migalhas": "Migalhas",
+    "neofeed": "NeoFeed",
+    "pipeline": "Pipeline Valor",
+    "capital aberto": "Capital Aberto",
+    "o globo": "O Globo",
+    "gazeta": "Gazeta do Povo",
+    "correio braziliense": "Correio Braziliense",
+    "broadcast": "Broadcast",
+    "reset": "Reset",
+    "wall street journal": "The Wall Street Journal",
+    "wsj": "The Wall Street Journal",
+    "new york times": "The New York Times",
+    "nyt": "The New York Times",
+}
+
+_FONTE_LIXO_PATTERNS = re.compile(
+    r"^[a-z0-9_]{2,20}$"   # parece username (ex: "ines249", "user_abc")
+    r"|^json.?dump$"
+    r"|^fonte.?desconhecida$"
+    r"|^n/?a$"
+    r"|^sem.?fonte$"
+    r"|^unknown$",
+    re.IGNORECASE,
+)
+
+
+def normalizar_fonte_display(nome: Optional[str]) -> str:
+    """
+    Retorna o nome de exibicao limpo e padronizado de uma fonte.
+    Ex: "SP O Estado de S Paulo - 150326" -> "O Estado de S.Paulo"
+        "ines249" -> "" (lixo, ignorado)
+        "Valor Econômico" -> "Valor Econômico"
+    """
+    if not nome or not isinstance(nome, str):
+        return ""
+    s = nome.strip()
+    if not s:
+        return ""
+
+    if _FONTE_LIXO_PATTERNS.match(s):
+        return ""
+
+    chave = normalizar_jornal(s)
+    if chave in _FONTE_DISPLAY_MAP:
+        return _FONTE_DISPLAY_MAP[chave]
+
+    for keyword, display in _FONTE_DISPLAY_MAP.items():
+        if keyword in s.lower():
+            return display
+
+    if len(s) < 3 or s.replace(" ", "").isdigit():
+        return ""
+
+    return s.strip()
+
+
 def inferir_tipo_fonte_por_jornal(nome_jornal: Optional[str]) -> str:
     """
     Inferência heurística de tipo de fonte ('nacional' ou 'internacional') a partir do nome do jornal.
