@@ -168,4 +168,4 @@
 # - Novos CRUD: seguir padrao de crud.py (session como 1o param, returns tipados).
 # - Credenciais/cookies NUNCA no Git. Usar .env ou .gitignore.
 # - Fontes (jornais): usar normalizar_fonte_display() de backend/utils.py para exibicao.
-# - Telegram Listener: telegram_listener.py (Telethon, user account). Sessao em .telegram_session*.
+# - Telegram Listener: TELEGRAM_LISTENER/ (Telethon, user account). Sessao em .telegram_session*. Ver TELEGRAM_LISTENER/README.md.

@@ -393,7 +393,7 @@ Os nomes de fontes (jornais/portais) passam por `normalizar_fonte_display()` em 
 - [ ] Módulo de envio WhatsApp (provedor a definir).
 - [ ] Tabela `resumos_enviados_whatsapp` para idempotência global.
 - [ ] Extrair modelo Gemini para config/env.
-- [ ] Telegram Listener: `telegram_listener.py` (Telethon, user account, sem bot).
+- [x] Telegram Listener: `TELEGRAM_LISTENER/` (Telethon, user account, sem bot). Ver `TELEGRAM_LISTENER/README.md`.
 
 ---
 

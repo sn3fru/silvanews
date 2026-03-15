@@ -848,3 +848,15 @@ TELEGRAM_CHAT_ID=-100XXXXXXXXXX
 ```
 
 Spec completa: `docs/TELEGRAM_MODULE_SPEC.md`
+
+### 14.1. Listener Telegram (Coleta de PDFs)
+
+Subprojeto independente em `TELEGRAM_LISTENER/` — escuta grupos/canais usando a conta do usuário (Telethon, não bot), baixa PDFs de jornais e dispara o `load_news.py` do pipeline principal.
+
+| Componente | Arquivo | Papel |
+|---|---|---|
+| Agente | `TELEGRAM_LISTENER/agent.py` | Conexão Telethon, detecção de docs, download, dedup |
+| Config | `TELEGRAM_LISTENER/config.py` | Padrões de jornais, caminhos |
+| CLI | `TELEGRAM_LISTENER/run.py` | Ponto de entrada: `python -m TELEGRAM_LISTENER` |
+
+Variáveis: `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `TELEGRAM_PHONE`, `TELEGRAM_LISTEN_CHATS`. Ver `TELEGRAM_LISTENER/README.md`.

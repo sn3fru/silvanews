@@ -36,6 +36,7 @@ Frontend (HTML/CSS/JS)  ←→  FastAPI + SQLAlchemy  ←→  PostgreSQL
 - **Hero Section**: Resumo do dia exibido no topo do frontend com botao de regeneracao
 - **Onboarding**: Modal automatico para novos usuarios configurarem suas preferencias
 - **Crawlers**: Coleta automatizada de noticias de 5+ fontes online (CRAWLERS/src/news_manager.py)
+- **Telegram Listener**: Escuta grupos Telegram e baixa PDFs automaticamente (`TELEGRAM_LISTENER/`, ver README da pasta)
 - **Micro-batch**: Processamento incremental de PDFs com lock file anti-race-condition
 - **Web Search**: Tool Tivaly para agentes buscarem informacoes complementares
 - **Cleanup Automatico**: Remove dados com mais de 90 dias do banco, preservando resumos

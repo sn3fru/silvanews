@@ -80,6 +80,21 @@ python tests/revert_bad_clusters.py
 python reprocess_incremental_today.py
 ```
 
+### Telegram Listener (Coleta de PDFs)
+
+```bash
+# Escuta em tempo real e dispara load_news apos cada download
+python -m TELEGRAM_LISTENER
+
+# Backfill: baixa PDFs das ultimas 24h e encerra
+python -m TELEGRAM_LISTENER --backfill
+
+# Apenas download, sem processamento
+python -m TELEGRAM_LISTENER --no-process
+```
+
+Vars: `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `TELEGRAM_PHONE`, `TELEGRAM_LISTEN_CHATS` em `backend/.env`.
+
 ### Telegram (Notificacoes + Daily Briefing)
 
 ```bash
