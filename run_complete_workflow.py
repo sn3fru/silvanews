@@ -56,10 +56,6 @@ def _subprocess_env():
         # Falha silenciosa: continuará com env atual
         pass
     
-    # DEBUG: Verifica se as variáveis críticas estão sendo passadas
-    print(f"🔍 DEBUG: GEMINI_API_KEY presente: {'Sim' if env.get('GEMINI_API_KEY') else 'Não'}")
-    print(f"🔍 DEBUG: DATABASE_URL presente: {'Sim' if env.get('DATABASE_URL') else 'Não'}")
-    
     return env
 
 def check_env_file():
@@ -77,7 +73,7 @@ def check_env_file():
 def check_and_start_local_db():
     """Verifica se o banco local está rodando e inicia se necessário."""
     try:
-        print("ETAPA 0: Verificando banco de dados local...")
+        print("  Verificando banco de dados local...")
         
         # Configurações do banco local (hardcoded para evitar parâmetros)
         DB_HOST = "localhost"
@@ -268,85 +264,137 @@ def run_crawlers():
         return False
 
 
+def _filter_subprocess_output(stdout: str, stderr: str, show_errors: bool = True) -> str:
+    """Filtra output de subprocessos: mostra apenas linhas relevantes (consolidados e erros)."""
+    lines = []
+    for line in (stdout or "").split("\n"):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        # Pular linhas excessivamente verbosas
+        if any(skip in stripped for skip in [
+            "Enviando artigo", "salvo no banco", "SUCESSO: Artigo criado",
+            "Processando página", "Enviando '", "para extração via Gemini",
+            "notícias candidatas extraídas", "Fallback: extração simples",
+            "Amostra da resposta", "prompts.py:", "Módulos para processamento",
+            "Cliente Gemini", "Modo de envio", "DEBUG:",
+            "Processando diretório completo", "Iniciando processamento",
+            "Próximo passo", "Processando arquivo:",
+        ]):
+            continue
+        lines.append(f"  {stripped}")
+    if show_errors and stderr:
+        for line in stderr.strip().split("\n"):
+            stripped = line.strip()
+            if stripped and "DEBUG:" not in stripped:
+                lines.append(f"  [stderr] {stripped}")
+    return "\n".join(lines[-40:])  # Ultimas 40 linhas relevantes
+
+
 def run_load_news():
-    """Executa o carregamento de notícias."""
+    """Executa o carregamento de noticias.
+
+    Apos ingestao bem-sucedida, move os arquivos para pdfs/processados/
+    para evitar re-processamento em execucoes futuras.
+    """
     try:
-        print("ETAPA 1: Carregando notícias...")
-        
-        # Diretório de PDFs hardcoded (relativo ao diretório pai)
         pdfs_dir = Path(__file__).parent.parent / "pdfs"
-        
+
         if not pdfs_dir.exists():
-            print(f"[ERRO] ERRO: Diretório de PDFs não encontrado: {pdfs_dir}")
-            print("Certifique-se de que existe uma pasta 'pdfs' no diretório pai")
+            print(f"  [ERRO] Diretorio de PDFs nao encontrado: {pdfs_dir}")
             return False
-        
-        # Lista arquivos disponíveis
+
         arquivos = list(pdfs_dir.glob("*.json")) + list(pdfs_dir.glob("*.pdf"))
         if not arquivos:
-            print(f"[AVISO] AVISO: Nenhum arquivo encontrado em: {pdfs_dir}")
-            print("Coloque arquivos .pdf ou .json na pasta 'pdfs' antes de executar")
-            return False
-        
-        print(f"[INFO] Encontrados {len(arquivos)} arquivos para processar:")
-        for arquivo in arquivos[:5]:  # Mostra apenas os primeiros 5
-            print(f"   - {arquivo.name}")
+            print(f"  [INFO] Nenhum arquivo novo em {pdfs_dir}. Pulando ingestao.")
+            return True  # Nao e erro — pode ser que os crawlers nao geraram nada
+
+        print(f"\n{'=' * 60}")
+        print(f"  ETAPA 1: INGESTAO DE NOTICIAS")
+        print(f"{'=' * 60}")
+        print(f"  Arquivos: {len(arquivos)} ({sum(1 for a in arquivos if a.suffix=='.pdf')} PDFs, {sum(1 for a in arquivos if a.suffix=='.json')} JSONs)")
+        for arquivo in arquivos[:5]:
+            print(f"    - {arquivo.name}")
         if len(arquivos) > 5:
-            print(f"   ... e mais {len(arquivos) - 5} arquivos")
-        
-        # Executa o carregamento com parâmetros hardcoded
-        print(f"[INFO] Executando: python load_news.py --dir {pdfs_dir} --direct --yes")
+            print(f"    ... +{len(arquivos) - 5} arquivos")
+
         result = subprocess.run([
             sys.executable, "load_news.py", "--dir", str(pdfs_dir), "--direct", "--yes"
         ], cwd=Path(__file__).parent, capture_output=True, text=True, encoding='utf-8', errors='replace', env=_subprocess_env())
-        
+
+        filtered = _filter_subprocess_output(result.stdout, result.stderr if result.returncode != 0 else "")
+        if filtered.strip():
+            print(filtered)
+
         if result.returncode == 0:
-            print("[OK] SUCESSO: Carregamento de notícias concluído!")
-            print(result.stdout)
+            # Move arquivos processados para subpasta (evita re-processamento)
+            processados_dir = pdfs_dir / "processados"
+            processados_dir.mkdir(exist_ok=True)
+            moved = 0
+            for arq in arquivos:
+                try:
+                    dest = processados_dir / arq.name
+                    if dest.exists():
+                        dest = processados_dir / f"{arq.stem}_{int(time.time())}{arq.suffix}"
+                    arq.rename(dest)
+                    moved += 1
+                except Exception as e:
+                    print(f"  [AVISO] Falha ao mover {arq.name}: {e}")
+            if moved:
+                print(f"  [OK] Ingestao concluida. {moved} arquivos movidos para processados/")
+            else:
+                print("  [OK] Ingestao concluida.")
             return True
         else:
-            print("[ERRO] ERRO: Erro no carregamento de notícias:")
-            print(result.stderr)
+            print("  [ERRO] Falha na ingestao.")
             return False
-            
+
     except Exception as e:
-        print(f"[ERRO] ERRO: Erro ao executar carregamento: {e}")
+        print(f"  [ERRO] {e}")
         return False
 
 def run_process_articles():
     """Executa o processamento de artigos."""
     try:
-        print("\nETAPA 2: Processando artigos...")
-        
-        # Executa o processamento com comando hardcoded
-        print("[INFO] Executando: python process_articles.py")
+        print(f"\n{'=' * 60}")
+        print(f"  ETAPA 2: PROCESSAMENTO DE ARTIGOS")
+        print(f"{'=' * 60}")
+
         result = subprocess.run([
             sys.executable, "process_articles.py"
         ], cwd=Path(__file__).parent, capture_output=True, text=True, encoding='utf-8', errors='replace', env=_subprocess_env())
-        
+
+        filtered = _filter_subprocess_output(result.stdout, result.stderr if result.returncode != 0 else "")
+        if filtered.strip():
+            print(filtered)
+
         if result.returncode == 0:
-            print("[OK] SUCESSO: Processamento de artigos concluído!")
-            print(result.stdout)
+            print("  [OK] Processamento concluido.")
             return True
         else:
-            print("[ERRO] ERRO: Erro no processamento de artigos:")
-            print(result.stderr)
+            print("  [ERRO] Falha no processamento.")
+            if result.stderr:
+                for line in result.stderr.strip().split("\n")[-10:]:
+                    print(f"  [stderr] {line.strip()}")
             return False
-            
+
     except Exception as e:
-        print(f"[ERRO] ERRO: Erro ao executar processamento: {e}")
+        print(f"  [ERRO] {e}")
         return False
 
 def run_migrate_incremental():
-    """Executa a migração incremental do banco de dados."""
+    """Executa a migracao incremental do banco de dados."""
     try:
-        print("\nMIGRAÇÃO: Executando migração incremental do banco...")
-        
+        print(f"\n{'=' * 60}")
+        print(f"  ETAPA 4: MIGRACAO LOCAL → PRODUCAO")
+        print(f"{'=' * 60}")
+
         SOURCE_DB = "postgresql+psycopg2://postgres_local@localhost:5433/devdb"
         DEST_DB = PRODUCTION_DATABASE_URL
 
-        print(f"[INFO] Origem: {SOURCE_DB}")
-        print(f"[INFO] Destino: {DEST_DB}")
+        dest_host = DEST_DB.split("@")[-1].split("/")[0] if "@" in DEST_DB else "???"
+        print(f"  Origem: localhost:5433/devdb")
+        print(f"  Destino: {dest_host}")
         
         result = subprocess.run([
             sys.executable, "-m", "migrate_incremental", 
@@ -356,14 +404,14 @@ def run_migrate_incremental():
         ], cwd=Path(__file__).parent, capture_output=False, text=True, encoding='utf-8', errors='replace', env=_subprocess_env())
         
         if result.returncode == 0:
-            print("[OK] SUCESSO: Migração incremental concluída!")
+            print("  [OK] Migracao concluida.")
             return True
         else:
-            print("[ERRO] ERRO: Erro na migração incremental")
+            print("  [ERRO] Falha na migracao.")
             return False
-            
+
     except Exception as e:
-        print(f"[ERRO] ERRO: Erro ao executar migração: {e}")
+        print(f"  [ERRO] {e}")
         return False
 
 def run_test_workflow():
@@ -699,11 +747,13 @@ def run_microbatch_cycle(pdfs_dir: str = None, batch_interval_minutes: int = 3):
 
 
 def run_single_cycle(skip_load: bool = False):
-    """Executa um unico ciclo do pipeline (para uso incremental de hora em hora)."""
+    """Executa um unico ciclo do pipeline completo."""
     print("=" * 60)
-    print(f"BTG AlphaFeed - Ciclo de Processamento")
-    print(f"Horario: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"  BTG AlphaFeed v3.0 — Pipeline Completo")
+    print(f"  {time.strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
+    print("  Etapas: Crawlers → Ingestao → Processamento → Resumo → Migracao → Notificacao → Cleanup")
+    print()
     
     # Verificações iniciais
     if not check_env_file():
@@ -849,66 +899,11 @@ def main():
         ok = run_single_cycle(skip_load=args.skip_load)
         sys.exit(0 if ok else 1)
     
-    # Modo padrao (legado): fluxo completo sem loop
-    print("=" * 60)
-    print("BTG AlphaFeed - Fluxo Completo Automatizado")
-    print("=" * 60)
-    
-    # Verificações iniciais
+    # Modo padrao: usa run_single_cycle (mesmo pipeline completo do --single)
     if not check_conda_env():
         sys.exit(1)
-    
-    if not check_env_file():
-        sys.exit(1)
-    
-    # ETAPA 0: Verifica e inicia banco local se necessário
-    if not check_and_start_local_db():
-        print("[ERRO] Falha na verificação/inicialização do banco local")
-        sys.exit(1)
-    
-    # Informações do que será executado (sem confirmação interativa)
-    print("\nEste script executará:")
-    print("   0. Verificação/inicialização do banco local")
-    print("   *. Feedback Learning (analise de likes/dislikes)")
-    print("   1. Carregamento de notícias (load_news.py --direct --yes)")
-    print("   2. Processamento de artigos (process_articles.py)")
-    print("   3. Migração incremental do banco (migrate_incremental)")
-    print("   4. Notificacoes Telegram individuais (se configurado)")
-    print("   5. Daily Briefing sintetizado (se configurado)")
-    print("   6. Resumo do dia (multi-persona — banco local, printado no final)")
-    
-    # PRE-STEP: Feedback Learning (atualiza regras antes do processamento)
-    run_feedback_learning()
-    
-    # ETAPA 1: Carregamento de notícias
-    if not run_load_news():
-        print("[ERRO] Falha no carregamento de notícias")
-        sys.exit(1)
-    
-    # ETAPA 2: Processamento de artigos
-    if not run_process_articles():
-        print("[ERRO] Falha no processamento de artigos")
-        sys.exit(1)
-    
-    # ETAPA 3: Resumo do dia foi movido para o final do pipeline conforme pedido do usuário
-
-    # ETAPA 4: Migração incremental do banco
-    if not run_migrate_incremental():
-        print("[ERRO] Falha na migração incremental")
-        sys.exit(1)
-    
-    # ETAPA 5: Notificacoes individuais
-    run_notify()
-    
-    # ETAPA 6: Daily Briefing sintetizado
-    run_telegram_briefing()
-
-    print("\n[OK] Pipeline completo concluido!")
-
-    print("\n" + "=" * 60)
-    print("  ETAPA FINAL: Gerando Resumo para o WhatsApp")
-    print("=" * 60)
-    run_resumo_diario()
+    ok = run_single_cycle(skip_load=False)
+    sys.exit(0 if ok else 1)
 
 if __name__ == "__main__":
     main() 

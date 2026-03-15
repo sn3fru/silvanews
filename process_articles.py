@@ -2237,10 +2237,9 @@ IMPORTANTE: Retorne APENAS o JSON válido para este lote.
                                 associate_artigo_to_cluster(db, artigo.id, cluster.id)
                                 artigos_agrupados_local += 1
 
-                            print(f"  ✅ Grupo: '{tema_principal[:100]}' ({tipo_fonte}) - {len(artigos_do_grupo)} artigos")
 
                         except Exception as e:
-                            print(f"  ❌ Erro ao processar grupo no lote {rotulo} {num_lote}: {e}")
+                            print(f"  ❌ Erro ao criar cluster no lote {rotulo} {num_lote}: {e}")
                             continue
 
                 except Exception as e_lote:
@@ -2624,16 +2623,17 @@ def processar_artigo_sem_cluster(db: Session, id_artigo: int, client) -> bool:
 
         # ETAPA 3.5: Extração de fato gerador (contrato estruturado: entidade_alvo + acao_material)
         fato_gerador_ok = False
+        _fato_fail_reason = ""
         existing_fato = (metadados or {}).get("fato_gerador") if isinstance(metadados, dict) else None
         if existing_fato and isinstance(existing_fato, dict):
-            # Aceita tanto novo formato (entidade_alvo, acao_material) quanto antigo (fato_gerador_padronizado)
             if (existing_fato.get("entidade_alvo") and existing_fato.get("acao_material")) or existing_fato.get("fato_gerador_padronizado"):
                 fato_gerador_ok = True
         if not fato_gerador_ok:
             from backend.prompts import PROMPT_EXTRACAO_FATO_GERADOR_V1
             from backend.models import FatoGeradorContract
             trecho = (noticia_validada.get("texto_completo") or "")[:2000]
-            payload_fato = f"Título: {noticia_validada.get('titulo', '')}\n\nTrecho:\n{trecho}"
+            titulo_artigo = noticia_validada.get('titulo', '(sem titulo)')
+            payload_fato = f"Título: {titulo_artigo}\n\nTrecho:\n{trecho}"
             prompt_fato = PROMPT_EXTRACAO_FATO_GERADOR_V1.strip() + "\n\n" + payload_fato
             try:
                 resp_fato = client.generate_content(
@@ -2645,7 +2645,6 @@ def processar_artigo_sem_cluster(db: Session, id_artigo: int, client) -> bool:
                 if status_json.startswith("SUCESSO") and raw_json:
                     obj = raw_json[0] if isinstance(raw_json, list) and raw_json else raw_json
                     if isinstance(obj, dict):
-                        # Novo formato: entidade_alvo, acao_material, valor_financeiro
                         ent = (obj.get("entidade_alvo") or "").strip() or (obj.get("entidade_primaria") or "").strip()
                         acao = (obj.get("acao_material") or "").strip() or (obj.get("verbo_acao_financeira") or "").strip()
                         val = (obj.get("valor_financeiro") or obj.get("valor_envolvido") or "N/A").strip() or "N/A"
@@ -2662,16 +2661,26 @@ def processar_artigo_sem_cluster(db: Session, id_artigo: int, client) -> bool:
                             artigo.metadados = metadados_novo
                             db.commit()
                             fato_gerador_ok = True
+                        else:
+                            _fato_fail_reason = f"entidade={repr(ent)}, acao={repr(acao)} (campos vazios no JSON)"
+                    else:
+                        _fato_fail_reason = f"LLM retornou tipo {type(obj).__name__} em vez de dict"
+                else:
+                    _fato_fail_reason = f"parse JSON falhou: {status_json}"
+                    if text_fato:
+                        _fato_fail_reason += f" | resposta: {text_fato[:150]}"
             except Exception as e_fato:
+                _fato_fail_reason = f"excecao: {e_fato}"
                 create_log(db, "WARNING", "processor", f"Extração fato gerador artigo {id_artigo}: {e_fato}")
             if not fato_gerador_ok:
-                # Sem fallback fraco: artigos sem fato gerador extraído não entram na Etapa 2 (evitar clusters N/A - N/A)
                 metadados_novo = dict(artigo.metadados or {})
                 metadados_novo["fato_gerador_erro"] = True
+                metadados_novo["fato_gerador_motivo"] = _fato_fail_reason[:300]
                 artigo.metadados = metadados_novo
                 db.commit()
-                print(f"❌ Artigo {id_artigo}: extração de fato gerador falhou; marcado como erro (não entra na Etapa 2)")
-                create_log(db, "ERROR", "processor", f"Extração fato gerador falhou - {id_artigo}")
+                titulo_curto = (titulo_artigo or "")[:60]
+                print(f"❌ Artigo {id_artigo} ({titulo_curto}): fato gerador falhou — {_fato_fail_reason}")
+                create_log(db, "ERROR", "processor", f"Fato gerador falhou {id_artigo}: {_fato_fail_reason[:200]}")
                 update_artigo_status(db, id_artigo, "erro")
                 return False
 

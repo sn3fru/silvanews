@@ -560,7 +560,7 @@ class FileLoader:
         """
         artigos_formatados = []
         try:
-            print(f"  🧠 Enviando '{pdf_path.name}' para extração via Gemini File API...")
+            # Envio silencioso para Gemini File API
             # Compatibilidade com diferentes clientes (google.genai vs google.generativeai wrappers)
             uploaded_file = None
             try:
@@ -657,11 +657,8 @@ class FileLoader:
                 response_text,
                 {"arquivo": nome_arquivo_original, "pagina": numero_pagina, "temp_pdf": pdf_path.name}
             )
-            print(f"  ✨ {len(noticias_extraidas)} notícias candidatas extraídas.")
             if not noticias_extraidas:
-                # Amostra limitada da resposta para debugging (apenas em caso de falha)
-                preview = response_text[:400].replace('\n', ' ') if isinstance(response_text, str) else ''
-                print(f"  🛠️ Amostra da resposta (truncada): {preview}")
+                pass  # Pagina sem noticias — fallback sera tentado abaixo
 
             # Converte a saída do LLM para o formato esperado pelo banco de dados
             for noticia in noticias_extraidas:
@@ -742,7 +739,7 @@ class FileLoader:
                                 'link': None
                             }
                         })
-                        print("  🔁 Fallback: extração simples de texto aplicada para esta página.")
+                        pass  # Fallback silencioso
                 except Exception as fe:
                     print(f"  ⚠️ Fallback de texto falhou: {fe}")
         except Exception as e:
@@ -827,19 +824,19 @@ class FileLoader:
                         return True
                     return False
 
+                _pages_skipped = [0]
+
                 def processar_pagina(idx: int) -> List[Dict[str, Any]]:
                     numero_pagina_local = idx + 1
-                    print(f"  🔎 Processando página {numero_pagina_local}/{num_paginas}...")
-                    
-                    # Pre-filtro: extrai texto via PyMuPDF e verifica se e balanco/DRE
+
                     try:
                         page = doc[idx]
                         page_text = page.get_text("text") or ""
                         if _is_financial_page(page_text):
-                            print(f"  ⏭️ Página {numero_pagina_local} ignorada (demonstração financeira/balanço)")
+                            _pages_skipped[0] += 1
                             return []
                     except Exception:
-                        pass  # Se falhar, envia para Gemini normalmente
+                        pass
                     
                     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as temp_file:
                         temp_page_path = Path(temp_file.name)
@@ -860,8 +857,7 @@ class FileLoader:
                             except Exception:
                                 pass
 
-                # Executa páginas em paralelo com limite para não saturar a API
-                max_workers = min(8, num_paginas)  # limite conservador
+                max_workers = min(8, num_paginas)
                 try:
                     import concurrent.futures
                     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -870,10 +866,12 @@ class FileLoader:
                         if lista:
                             artigos_finais.extend(lista)
                 except Exception as e:
-                    # Fallback sequencial em caso de ambientes sem suporte a threads
                     print(f"  ⚠️ Falha no paralelismo, executando sequencialmente: {e}")
                     for idx in range(num_paginas):
                         artigos_finais.extend(processar_pagina(idx))
+
+                skipped_info = f", {_pages_skipped[0]} ignoradas (balanco/DRE)" if _pages_skipped[0] else ""
+                print(f"  📊 {num_paginas} paginas processadas{skipped_info} → {len(artigos_finais)} artigos extraidos")
         except Exception as e:
             print(f"❌ Erro crítico ao orquestrar processamento do PDF '{file_path.name}': {e}")
 
@@ -991,42 +989,36 @@ class FileLoader:
             print(f"⚠️ AVISO: Nenhum artigo extraído de {file_path.name}")
             return 0
         
-        print(f"📊 Encontrados {len(artigos_brutos)} artigos em {file_path.name}")
-        
-        # Envia artigos
+        # Envia artigos (silencioso — print consolidado no final)
         sucessos = 0
+        falhas = 0
         dedup_count = 0
         for i, artigo in enumerate(artigos_brutos, 1):
-            print(f"  📤 Enviando artigo {i}/{len(artigos_brutos)}...")
-            
             if usar_api:
                 resultado = self.enviar_artigo_via_api(artigo)
                 if resultado:
                     sucessos += 1
-                    print(f"    ✅ Artigo {i} enviado via API")
                 else:
-                    print(f"    ❌ Falha ao enviar artigo {i} via API")
+                    falhas += 1
             else:
                 resultado = self.enviar_artigo_direto_db(artigo)
                 if resultado in ("dedup", "hash_dup"):
                     dedup_count += 1
-                    # Nao imprime "salvo" - o print de dedup ja foi feito dentro da funcao
                 elif resultado:
                     sucessos += 1
-                    print(f"    ✅ Artigo {i} salvo no banco")
                 else:
-                    print(f"    ❌ Falha ao salvar artigo {i} no banco")
-            
-            # Aguarda um pouco entre envios
+                    falhas += 1
+
             time.sleep(0.05)
-        
-        dedup_msg = f" ({dedup_count} duplicatas ignoradas)" if dedup_count else ""
-        print(f"🎉 SUCESSO: {sucessos}/{len(artigos_brutos)} artigos processados de {file_path.name}{dedup_msg}")
+
+        dedup_msg = f", {dedup_count} duplicatas" if dedup_count else ""
+        falha_msg = f", {falhas} falhas" if falhas else ""
+        print(f"  📊 {file_path.name}: {sucessos} salvos{dedup_msg}{falha_msg} (de {len(artigos_brutos)} extraidos)")
         return sucessos
         
     def processar_diretorio(self, usar_api: bool) -> Dict[str, int]:
         """Processa um diretório completo em paralelo para otimizar o tempo."""
-        print(f"🚀 Iniciando processamento do diretório: {self.files_directory}")
+        print(f"  Diretorio: {self.files_directory}")
         
         files = list(self.files_directory.glob('*.json')) + list(self.files_directory.glob('*.pdf'))
         
@@ -1034,7 +1026,9 @@ class FileLoader:
             print("⚠️ Nenhum arquivo .json ou .pdf encontrado para processar.")
             return {"arquivos_processados": 0, "artigos_criados": 0}
             
-        print(f"📊 Encontrados {len([f for f in files if f.suffix.lower() == '.json'])} JSONs e {len([f for f in files if f.suffix.lower() == '.pdf'])} PDFs")
+        n_json = len([f for f in files if f.suffix.lower() == '.json'])
+        n_pdf = len([f for f in files if f.suffix.lower() == '.pdf'])
+        print(f"  Arquivos: {n_json} JSONs, {n_pdf} PDFs")
         
         # Para processamento sequencial (mais seguro para APIs com rate limits)
         stats = {"arquivos_processados": 0, "artigos_criados": 0}
@@ -1209,7 +1203,6 @@ class FileLoader:
                       f"Artigo criado: {novo_artigo.id}",
                       {"arquivo": artigo_data.get('metadados', {}).get('arquivo_origem', 'desconhecido')})
             
-            print(f"✅ SUCESSO: Artigo criado no banco: {novo_artigo.id}")
             return True
             
         except Exception as e:

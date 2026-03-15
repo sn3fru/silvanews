@@ -996,7 +996,14 @@ def migrate_usuarios(
 ) -> Dict[int, int]:
     """Migra usuarios. Retorna mapa {src_id: dst_id}."""
     id_map: Dict[int, int] = {}
-    rows = db_src.query(Usuario).filter(Usuario.created_at >= since).all()
+    try:
+        rows = db_src.query(Usuario).filter(Usuario.created_at >= since).all()
+    except Exception as e:
+        if "UndefinedTable" in str(type(e).__name__) or "does not exist" in str(e):
+            print("  ⏭️ Tabela 'usuarios' nao existe na origem. Pulando migracao de usuarios.")
+            print("     (Execute: python migrate_incremental.py --create-tables para criar)")
+            return id_map
+        raise
     if not rows:
         print("  ⏭️ Nenhum usuário novo.")
         return id_map
@@ -1028,7 +1035,14 @@ def migrate_preferencias_usuario(
     db_src: Session, db_dst: Session, since: datetime, user_id_map: Dict[int, int]
 ) -> None:
     """Migra preferencias de usuario."""
-    rows = db_src.query(PreferenciaUsuario).filter(PreferenciaUsuario.updated_at >= since).all()
+    try:
+        rows = db_src.query(PreferenciaUsuario).filter(PreferenciaUsuario.updated_at >= since).all()
+    except Exception as e:
+        if "does not exist" in str(e):
+            print("  ⏭️ Tabela 'preferencias_usuario' nao existe. Pulando.")
+            db_src.rollback()
+            return
+        raise
     if not rows:
         print("  ⏭️ Nenhuma preferência nova.")
         return
@@ -1060,7 +1074,14 @@ def migrate_templates_resumo(
 ) -> Dict[int, int]:
     """Migra templates de resumo. Retorna mapa {src_id: dst_id}."""
     tpl_map: Dict[int, int] = {}
-    rows = db_src.query(TemplateResumoUsuario).filter(TemplateResumoUsuario.updated_at >= since).all()
+    try:
+        rows = db_src.query(TemplateResumoUsuario).filter(TemplateResumoUsuario.updated_at >= since).all()
+    except Exception as e:
+        if "does not exist" in str(e):
+            print("  ⏭️ Tabela 'templates_resumo_usuario' nao existe. Pulando.")
+            db_src.rollback()
+            return tpl_map
+        raise
     if not rows:
         print("  ⏭️ Nenhum template novo.")
         return tpl_map
@@ -1098,7 +1119,14 @@ def migrate_resumos_usuario(
     user_id_map: Dict[int, int], tpl_id_map: Dict[int, int]
 ) -> None:
     """Migra resumos de usuario."""
-    rows = db_src.query(ResumoUsuario).filter(ResumoUsuario.created_at >= since).all()
+    try:
+        rows = db_src.query(ResumoUsuario).filter(ResumoUsuario.created_at >= since).all()
+    except Exception as e:
+        if "does not exist" in str(e):
+            print("  ⏭️ Tabela 'resumos_usuario' nao existe. Pulando.")
+            db_src.rollback()
+            return
+        raise
     if not rows:
         print("  ⏭️ Nenhum resumo de usuário novo.")
         return
