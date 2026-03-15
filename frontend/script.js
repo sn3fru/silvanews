@@ -4380,19 +4380,7 @@ async function gerarResumoDoDia() {
 // =======================================
 
 async function verificarOnboarding() {
-    const token = getAuthToken();
-    if (!token || token.length < 10) return;
-
-    try {
-        const resp = await fetchAuth(`${API_BASE}/api/user/preferencias`);
-        if (!resp.ok) return;
-        const prefs = await resp.json();
-
-        const hasTags = prefs.tags_interesse && prefs.tags_interesse.length > 0;
-        if (hasTags) return;
-
-        mostrarOnboardingModal();
-    } catch {}
+    // Preferencias so aparecem se o usuario clicar no botao. Nunca automaticamente.
 }
 
 async function mostrarOnboardingModal() {
@@ -4451,7 +4439,7 @@ async function mostrarOnboardingModal() {
         <div style="margin-bottom:1rem;">
             <label style="font-size:.8rem;color:#374151;font-weight:600;display:block;margin-bottom:.3rem;">Instrucoes para o agente (prompt personalizado)</label>
             <p style="font-size:.75rem;color:#9ca3af;margin:0 0 .3rem;">Escreva como o agente deve montar seu resumo. Ex: "Nao separe por topicos, escreva um texto corrido com analise juridica propria" ou "Foque apenas em energia e infraestrutura com impacto regulatorio".</p>
-            <textarea id="onboarding-instrucoes" rows="5" style="width:100%;padding:.5rem;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem;font-family:inherit;resize:vertical;box-sizing:border-box;" placeholder="Padrao: Analista-Chefe de Special Situations. Briefing em 3 secoes (Distressed, Regulatorio, M&A) com dados factuais concretos.&#10;&#10;Exemplos de customizacao:&#10;- Nao separe por topicos. Escreva um texto corrido com analise juridica e economica propria.&#10;- Foque em energia e infraestrutura. Ignore varejo e tech.&#10;- Formato conciso: apenas bullets com valores e nomes. Sem narrativa.">${existingInstrucoes}</textarea>
+            <textarea id="onboarding-instrucoes" rows="6" style="width:100%;padding:.5rem;border:1px solid #d1d5db;border-radius:6px;font-size:.82rem;font-family:inherit;resize:vertical;box-sizing:border-box;" placeholder="Deixe vazio para usar o padrao.">${existingInstrucoes || 'Voce e um analista de inteligencia financeira senior da mesa de Special Situations do BTG Pactual. Produza um resumo diario em 2 fases: (1) Triagem — leia todos os clusters e selecione os mais relevantes para o perfil do usuario, priorizando as tags de foco; (2) Aprofundamento — para clusters P1 e P2, use a tool obter_textos_brutos_cluster para extrair dados factuais concretos (valores R$, nomes, varas, tribunais). Escreva bullets com QUEM, O QUE, QUANTO. Nunca invente dados.'}</textarea>
         </div>
 
         <div style="display:flex;gap:.5rem;justify-content:flex-end;">

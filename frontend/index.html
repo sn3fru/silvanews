@@ -73,43 +73,42 @@
 
         <main class="conteudo-principal">
             <!-- Seletor de Data e Métricas -->
-            <div class="seletor-data">
-                <div class="header-actions" style="display:flex;align-items:center;gap:.5rem;">
-                    <button id="btn-toggle-sidebar" class="btn btn-terciario" title="Mostrar/ocultar filtros">☰ Filtros</button>
-                    <label id="btn-upload-pdf" class="btn btn-terciario" style="cursor:pointer;font-size:.8rem;padding:.4rem .7rem;" title="Enviar PDF de noticias">
-                        + PDF
+            <div class="seletor-data" style="display:flex;align-items:center;gap:.6rem;padding:.6rem 1rem;flex-wrap:nowrap;">
+                <div class="header-actions" style="display:flex;align-items:center;gap:.4rem;flex-shrink:0;">
+                    <button id="btn-toggle-sidebar" class="btn btn-terciario" title="Mostrar/ocultar filtros" style="padding:.4rem .6rem;font-size:.8rem;">☰</button>
+                    <label id="btn-upload-pdf" class="btn btn-terciario" style="cursor:pointer;font-size:.78rem;padding:.35rem .6rem;display:inline-flex;align-items:center;gap:.25rem;" title="Enviar PDF/JSON de noticias">
+                        ↑ Upload
                         <input type="file" id="input-upload-pdf" accept=".pdf,.json" style="display:none;" multiple>
                     </label>
-                    <button id="btn-logout" class="btn btn-terciario" style="font-size:.75rem;padding:.3rem .6rem;color:#ef4444;border-color:#fca5a5;" title="Sair">Sair</button>
                 </div>
-                <div class="data-info">
-                    <div class="data-navegacao">
+                <div class="data-info" style="flex-shrink:0;">
+                    <div class="data-navegacao" style="display:flex;align-items:center;gap:2px;">
                         <button id="data-anterior" class="data-nav-btn" title="Dia anterior">←</button>
-                        <button id="data-atual" class="data-btn">
+                        <button id="data-atual" class="data-btn" style="font-size:.8rem;padding:.3rem .5rem;">
                             <span id="data-texto">Hoje</span>
                         </button>
                         <button id="data-proxima" class="data-nav-btn" title="Próximo dia">→</button>
                     </div>
                 </div>
-                <div class="metricas-container">
+                <div class="metricas-container" style="display:flex;gap:.8rem;flex:1;justify-content:center;">
                     <div class="metrica-item">
-                        <span class="metrica-label">Notícias Coletadas</span>
+                        <span class="metrica-label">Coletadas</span>
                         <span class="metrica-valor" id="metric-coletadas">--</span>
                     </div>
                     <div class="metrica-item">
-                        <span class="metrica-label">Eventos Únicos</span>
+                        <span class="metrica-label">Eventos</span>
                         <span class="metrica-valor" id="metric-eventos">--</span>
                     </div>
                     <div class="metrica-item">
-                        <span class="metrica-label">Fontes Diferentes</span>
+                        <span class="metrica-label">Fontes</span>
                         <span class="metrica-valor" id="metric-fontes">--</span>
                     </div>
                     <div class="metrica-item">
-                        <span class="metrica-label">Com Resumo</span>
+                        <span class="metrica-label">Resumos</span>
                         <span class="metrica-valor" id="metric-com-resumo">--</span>
                     </div>
                 </div>
-                
+                <button id="btn-logout" class="btn btn-terciario" style="flex-shrink:0;font-size:.75rem;padding:.3rem .6rem;color:#94a3b8;border-color:#e2e8f0;" title="Sair da conta">Sair</button>
                 <input type="date" id="data-input" class="data-input oculto">
             </div>
 

@@ -31,10 +31,8 @@ except ImportError:
     jwt = None  # type: ignore
     JWTError = Exception  # type: ignore
 
-try:
-    from passlib.hash import bcrypt as passlib_bcrypt
-except ImportError:
-    passlib_bcrypt = None  # type: ignore
+import hashlib as _hashlib
+import secrets as _secrets
 
 JWT_SECRET = os.getenv("JWT_SECRET", "silva-alphafeed-secret-change-in-production")
 JWT_ALGORITHM = "HS256"
@@ -229,22 +227,27 @@ async def health_check(db: Session = Depends(get_db)):
 # ==============================================================================
 
 def _hash_password(password: str) -> str:
-    """Hash de senha com bcrypt (fallback para sha256 se passlib indisponível)."""
-    if passlib_bcrypt:
-        return passlib_bcrypt.hash(password)
-    import hashlib
-    return hashlib.sha256(password.encode()).hexdigest()
+    """Hash de senha com sha256 + salt. Formato: salt$hash."""
+    salt = _secrets.token_hex(16)
+    h = _hashlib.sha256((salt + password).encode()).hexdigest()
+    return f"{salt}${h}"
 
 
 def _verify_password(plain: str, hashed: str) -> bool:
-    """Verifica senha contra o hash armazenado."""
-    if passlib_bcrypt:
-        try:
-            return passlib_bcrypt.verify(plain, hashed)
-        except Exception:
-            pass
-    import hashlib
-    return hashlib.sha256(plain.encode()).hexdigest() == hashed
+    """Verifica senha. Suporta formato salt$hash e hash puro legado."""
+    if "$" in hashed and len(hashed) > 70:
+        parts = hashed.split("$", 1)
+        if len(parts) == 2:
+            salt, expected = parts
+            return _hashlib.sha256((salt + plain).encode()).hexdigest() == expected
+    plain_hash = _hashlib.sha256(plain.encode()).hexdigest()
+    if plain_hash == hashed:
+        return True
+    try:
+        from passlib.hash import bcrypt as _pb
+        return _pb.verify(plain, hashed)
+    except Exception:
+        return False
 
 
 def _create_token(user_id: int, email: str, role: str) -> str:

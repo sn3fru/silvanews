@@ -756,8 +756,10 @@ def init_database():
                 db.commit()
                 print("✅ Email do admin atualizado para admin@enforcegroup.com.br")
             elif not admin_exists:
-                import hashlib
-                senha = hashlib.sha256(os.getenv("ADMIN_PASSWORD", "admin").encode()).hexdigest()
+                import hashlib, secrets
+                _pwd = os.getenv("ADMIN_PASSWORD", "admin")
+                _salt = secrets.token_hex(16)
+                senha = f"{_salt}${hashlib.sha256((_salt + _pwd).encode()).hexdigest()}"
                 admin_user = Usuario(
                     nome="Administrador",
                     email="admin@enforcegroup.com.br",
