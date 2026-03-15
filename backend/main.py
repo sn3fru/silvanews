@@ -597,16 +597,26 @@ async def api_get_resumo_hoje(db: Session = Depends(get_db),
                                current_user: Optional[Dict] = Depends(get_current_user)):
     """Retorna o resumo do dia do usuario logado (ou o resumo global se anonimo)."""
     today = get_date_brasil()
+    resumo = None
     if current_user:
         resumo = get_resumo_usuario(db, current_user["id"], today)
-        if resumo:
-            return {
-                "id": resumo.id, "data": resumo.data_referencia.isoformat() if resumo.data_referencia else today.isoformat(),
-                "texto_gerado": resumo.texto_gerado, "texto_whatsapp": resumo.texto_whatsapp,
-                "clusters_escolhidos_ids": resumo.clusters_escolhidos_ids or [],
-                "prompt_version": resumo.prompt_version, "metadados": resumo.metadados or {},
-                "created_at": resumo.created_at.isoformat() if resumo.created_at else None,
-            }
+    if not resumo:
+        try:
+            from backend.database import ResumoUsuario
+            resumo = db.query(ResumoUsuario).filter(
+                ResumoUsuario.data_referencia == today,
+                ResumoUsuario.texto_gerado.isnot(None),
+            ).order_by(ResumoUsuario.created_at.desc()).first()
+        except Exception:
+            db.rollback()
+    if resumo:
+        return {
+            "id": resumo.id, "data": resumo.data_referencia.isoformat() if resumo.data_referencia else today.isoformat(),
+            "texto_gerado": resumo.texto_gerado, "texto_whatsapp": resumo.texto_whatsapp,
+            "clusters_escolhidos_ids": resumo.clusters_escolhidos_ids or [],
+            "prompt_version": resumo.prompt_version, "metadados": resumo.metadados or {},
+            "created_at": resumo.created_at.isoformat() if resumo.created_at else None,
+        }
     return {"data": today.isoformat(), "texto_gerado": None, "message": "Nenhum resumo gerado ainda hoje."}
 
 

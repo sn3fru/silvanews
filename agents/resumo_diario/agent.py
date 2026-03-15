@@ -834,7 +834,7 @@ def formatar_whatsapp(
     contract_dict = resultado.get("contract_dict", {})
 
     if not contract_dict:
-        return [f"🚨 *RESUMO DO DIA* 🚨\n📅 {data_str}\n\n(Nenhum evento relevante identificado hoje.)\n\n_Gerado pelo AlphaFeed_"]
+        return [f"*Resumo do dia {data_str}*\n\n(Nenhum evento relevante identificado hoje.)"]
 
     tldr = contract_dict.get("tldr_executivo", "")
     clusters = contract_dict.get("clusters_selecionados", [])
@@ -845,9 +845,13 @@ def formatar_whatsapp(
         secao = cs.get("secao", "geral")
         por_secao.setdefault(secao, []).append(cs)
 
-    header = f"🚨 *RESUMO DO DIA — SPECIAL SITUATIONS* 🚨\n"
-    if data_str:
-        header += f"📅 {data_str}\n"
+    date_label = data_str
+    if data_str and "-" in data_str:
+        parts = data_str.split("-")
+        if len(parts) == 3:
+            date_label = f"{parts[2]}/{parts[1]}"
+
+    header = f"*Resumo do dia {date_label} — Special Situations*\n"
     if tldr:
         header += f"\n_{tldr}_\n"
     header += "\n"
@@ -885,22 +889,20 @@ def formatar_whatsapp(
             sections.append(section.strip())
 
     if not sections:
-        return [header + "(Nenhum evento relevante identificado hoje.)\n\n_Gerado pelo AlphaFeed_"]
+        return [header + "(Nenhum evento relevante identificado hoje.)"]
 
-    footer = "_Gerado pelo AlphaFeed_"
-    full_msg = header + "\n\n".join(sections) + "\n\n" + footer
+    full_msg = header + "\n\n".join(sections)
 
     if len(full_msg) <= max_chars_por_msg:
-        return [full_msg]
+        return [full_msg.strip()]
 
     msgs: List[str] = []
     current = header
     for section in sections:
         if len(current) + len(section) + 10 > max_chars_por_msg:
             msgs.append(current.strip())
-            current = "🚨 *RESUMO (cont.)* 🚨\n\n"
+            current = "*Resumo (cont.)*\n\n"
         current += section + "\n\n"
-    current += footer
     msgs.append(current.strip())
 
     return msgs
