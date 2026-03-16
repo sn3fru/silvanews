@@ -143,7 +143,7 @@ main()
   +-> V2 SHADOW MODE (se V2_SHADOW_MODE=1): workflow agentico (gatekeeper -> NER -> grafo -> historian -> writer)
 ```
 
-**Constantes globais (process_articles.py):** `BATCH_SIZE_AGRUPAMENTO = 200`, `MAX_OUTPUT_TOKENS_STAGE2 = 32768`, `MAX_TRECHO_CHARS_STAGE2 = 120`. Modelo: `gemini-2.5-flash`.
+**Constantes globais (process_articles.py):** `BATCH_SIZE_AGRUPAMENTO = 200`, `MAX_OUTPUT_TOKENS_STAGE2 = 32768`, `MAX_TRECHO_CHARS_STAGE2 = 120`. Modelo: `gemini-3.1-flash-lite-preview`.
 
 ### C.5 Funções críticas do pipeline (SYSTEM.md)
 

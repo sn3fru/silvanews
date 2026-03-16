@@ -4309,15 +4309,25 @@ async function gerarResumoDoDia() {
             body: JSON.stringify({ data: dataParam }),
         });
         if (resp.ok) {
+            const result = await resp.json();
+            if (result.status === 'ready') {
+                if (loading) loading.style.display = 'none';
+                if (btn) btn.disabled = false;
+                carregarResumoDoDia();
+                return;
+            }
             // Poll ate o resumo estar pronto (max 120s)
             let tries = 0;
+            const lastCreated = await (async () => {
+                try { const r = await fetchAuth(`${API_BASE}/api/resumo/hoje?data=${dataParam}`); if (r.ok) { const d = await r.json(); return d.created_at || ''; } } catch {} return '';
+            })();
             const poll = async () => {
                 if (tries++ > 24) { if (loading) loading.style.display = 'none'; if (btn) btn.disabled = false; return; }
                 await new Promise(r => setTimeout(r, 5000));
                 const check = await fetchAuth(`${API_BASE}/api/resumo/hoje?data=${dataParam}`);
                 if (check.ok) {
                     const d = await check.json();
-                    if (d.texto_gerado) { if (loading) loading.style.display = 'none'; if (btn) btn.disabled = false; carregarResumoDoDia(); return; }
+                    if (d.texto_gerado && d.created_at !== lastCreated) { if (loading) loading.style.display = 'none'; if (btn) btn.disabled = false; carregarResumoDoDia(); return; }
                 }
                 poll();
             };

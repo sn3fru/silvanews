@@ -1471,6 +1471,7 @@ NUNCA selecione clusters cujo FOCO CENTRAL seja:
 - Desporto: jogos, resultados, transferências de jogadores, transfer ban de clubes, dívidas de clubes de futebol (exceto SAF com ângulo corporativo explícito).
 - Fofoca, celebridades, entretenimento, novelas, filmes.
 - Programação de TV, audiência, Ibope, rating, atrações de canal.
+- Avisos administrativos de rotina: convocações de assembleias de debenturistas/cotistas/titulares de CRI/CRA sem evento material associado, publicações de atas, comunicados de remuneração periódica, pagamentos de juros programados, conversões ordinárias de debêntures, avisos de distribuição de dividendos/JCP de empresas saudáveis. Estes NÃO têm valor acionável para a mesa de Special Situations — só incluir se houver inadimplência, default, reestruturação ou evento extraordinário vinculado.
 Se o título ou resumo indicar claramente um desses temas, EXCLUA mesmo que haja menção a valores ou dívida.
 """
 
@@ -1731,7 +1732,7 @@ Categorize os eventos escolhidos nas seguintes seções (se não houver notícia
 
 1. 🎯 FOCO DO ANALISTA (secao="foco_analista"): Eventos que respondam diretamente às "Empresas no Radar", "Teses Jurídicas" ou "Tags de Foco" do analista. Esta é a seção de MAIOR VALOR — se o analista indicou preferências, preencha-a primeiro.
 
-2. 💀 DISTRESSED & NPLs (secao="distressed"): RJ, falências, NPLs, quebra de covenants, inadimplência CVM, rebaixamento de ratings, securitização de dívida ativa (FIDCs, CRIs), cessão de carteiras. NÃO INCLUIR M&A saudáveis, regulação genérica.
+2. 💀 DISTRESSED & NPLs (secao="distressed"): RJ, falências, NPLs, quebra de covenants, inadimplência CVM, rebaixamento de ratings, securitização de dívida ativa (FIDCs, CRIs), cessão de carteiras. NÃO INCLUIR M&A saudáveis, regulação genérica, convocações de assembleia de CRI/CRA/debêntures sem evento material (inadimplência ou reestruturação), avisos de pagamento programado.
 
 3. 🏛️ M&A & MOVIMENTOS CORPORATIVOS (secao="estrategico"): Fusões, aquisições, OPAs, turnarounds, capitalizações agressivas, mudanças de controle, privatizações, concessões. NÃO INCLUIR distress sem ângulo M&A.
 
@@ -1807,11 +1808,11 @@ INCLUIR:
 - Securitização de dívida ativa de estados/municípios (FIDCs, CRIs, legislação complementar aplicável).
 - Cessão de carteiras de NPLs por bancos ou fintechs.
 
-NÃO INCLUIR: M&A saudáveis, IPOs, regulação genérica, esportes, política.
+NÃO INCLUIR: M&A saudáveis, IPOs, regulação genérica, esportes, política, convocações de assembleia de CRI/CRA/debêntures sem evento material (inadimplência, default ou reestruturação), avisos de pagamento programado, comunicados de remuneração periódica.
 
 REGRA DE PROFUNDIDADE: Se um cluster sugere dívida, RJ ou securitização mas o VALOR EXATO, a VARA JUDICIAL ou o ESTRUTURADOR estiver omisso no resumo, você é OBRIGADO a chamar `obter_textos_brutos_cluster(cluster_id)` para confirmar antes de incluir.
 
-Teste de qualidade: "Um gestor de fundo de distressed assets agiria com base nesta informação?"
+Teste de qualidade: "Um gestor de fundo de distressed assets AGIRIA com base nesta informação?" Se a resposta for "não, é só um aviso administrativo", EXCLUA.
 
 ══════════════════════════════════════════════════════════════
 SEÇÃO 2: ⚖️ REGULATÓRIO & JURÍDICO (secao="regulatorio")

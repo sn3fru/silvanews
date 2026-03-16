@@ -652,17 +652,13 @@ async def api_gerar_resumo(payload: GerarResumoPayload = GerarResumoPayload(),
     else:
         target = get_date_brasil()
 
-    from backend.crud import get_preferencias_usuario, user_has_custom_prefs, get_resumo_default
+    from backend.crud import get_preferencias_usuario, user_has_custom_prefs
     prefs = get_preferencias_usuario(db, current_user["id"])
     if user_has_custom_prefs(prefs):
         background_tasks.add_task(_generate_user_summary, current_user["id"], target)
         return {"status": "processing", "data": target.isoformat(),
                 "message": f"Resumo personalizado sendo gerado para {target.isoformat()}."}
     else:
-        existing_default = get_resumo_default(db, target)
-        if existing_default:
-            return {"status": "ready", "data": target.isoformat(),
-                    "message": "Resumo default ja disponivel."}
         background_tasks.add_task(_generate_default_summary, target)
         return {"status": "processing", "data": target.isoformat(),
                 "message": f"Resumo default sendo gerado para {target.isoformat()}."}
@@ -676,7 +672,8 @@ def _generate_user_summary(user_id: int, target_date):
     de tags, tamanho e template injetadas no prompt.
     """
     try:
-        from agents.resumo_diario.agent import gerar_resumo_para_usuario, formatar_whatsapp
+        from agents.resumo_diario.agent import gerar_resumo_para_usuario, formatar_whatsapp, _CONTEXT_CACHE
+        _CONTEXT_CACHE.clear()
 
         resultado = gerar_resumo_para_usuario(user_id=user_id, target_date=target_date)
 
@@ -707,7 +704,8 @@ def _generate_user_summary(user_id: int, target_date):
 def _generate_default_summary(target_date):
     """Background task: gera resumo DEFAULT (user_id=None) compartilhado."""
     try:
-        from agents.resumo_diario.agent import gerar_resumo_diario, formatar_whatsapp
+        from agents.resumo_diario.agent import gerar_resumo_diario, formatar_whatsapp, _CONTEXT_CACHE
+        _CONTEXT_CACHE.clear()
 
         resultado = gerar_resumo_diario(target_date=target_date)
 

@@ -93,7 +93,7 @@ genai.configure(api_key=api_key)
 # Etapa 1 (extração) e Etapa 3 (resumos): modelo mais barato
 client = genai.GenerativeModel('gemini-2.0-flash')
 # Etapa 2 (agrupamento): modelo com mais capacidade de raciocínio para regras estritas
-client_agrupamento = genai.GenerativeModel('gemini-2.5-flash')
+client_agrupamento = genai.GenerativeModel('gemini-3.1-flash-lite-preview')
 print("SUCESSO: Gemini configurado (2.0 Flash para extração/resumos; 2.5 Flash para agrupamento).")
 
 # Funções auxiliares para escolher tags/prompts baseado no tipo_fonte

@@ -275,7 +275,7 @@ btg_alphafeed/
 
 ### Constantes Globais
 - `BATCH_SIZE_AGRUPAMENTO = 200`, `MAX_OUTPUT_TOKENS_STAGE2 = 32768`, `MAX_TRECHO_CHARS_STAGE2 = 120`
-- Gemini model: `gemini-2.5-flash` (configurado via `GEMINI_API_KEY`)
+- Gemini model: `gemini-3.1-flash-lite-preview` (configurado via `GEMINI_API_KEY`)
 
 ### Fluxo do `main()` (flags: `--stage`, `--modo`, `--limite`)
 

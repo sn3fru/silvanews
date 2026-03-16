@@ -991,7 +991,7 @@ def run_single_cycle(skip_load: bool = False):
     # PRE-STEP: Feedback Learning (atualiza regras antes do processamento)
     run_feedback_learning()
 
-    # ETAPA 0.5: Crawlers (roda ANTES do load para gerar dump.json na pasta pdfs)
+    # # ETAPA 0.5: Crawlers (roda ANTES do load para gerar dump.json na pasta pdfs)
     if not skip_load:
         run_crawlers()
 

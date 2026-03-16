@@ -1852,3 +1852,4 @@ Cluster 52553: ignorados=[63381] | justificativa=Artigo 63381 foi ignorado por t
 Cluster 52753: ignorados=[63691] | justificativa=O artigo 63691 foi ignorado por ser um artigo de opinião sem informações factuais relevantes.
 Cluster 52753: ignorados=[63532, 63641, 63649, 63691] | justificativa=Artigos 63641, 63649, 63532 e 63691 foram ignorados por serem de opinião, foco em Fachin e STF, sem impacto financeiro direto.
 Cluster 52926: ignorados=[63884] | justificativa=O artigo 63884 foi ignorado por ser apenas um título sem contexto adicional.
+Cluster 53599: ignorados=[65635] | justificativa=Artigo 65635 foi ignorado por se tratar de demonstrações financeiras da Casas Bahia, sem relação com a Tecban.
