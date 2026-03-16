@@ -114,28 +114,28 @@
             <div class="feed-noticias" style="padding:0 1.5rem;">
             
             <!-- Resumo do Dia -->
-            <section id="daily-summary-hero" style="margin:1rem 0;">
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem .8rem;border-bottom:2px solid #e5e7eb;">
+            <section id="daily-summary-hero" class="daily-summary-hero">
+                <div class="summary-header">
                     <div>
-                        <h2 style="margin:0;font-size:1rem;color:#1e3a5f;font-weight:700;">Resumo do Dia</h2>
-                        <span id="summary-timestamp" style="font-size:.72rem;color:#9ca3af;"></span>
+                        <h2 style="margin:0;font-size:1.05rem;color:var(--cor-destaque-btg);font-weight:700;">Resumo do Dia</h2>
+                        <span id="summary-timestamp" style="font-size:.72rem;color:var(--cor-texto-secundario);"></span>
                     </div>
                     <div style="display:flex;align-items:center;gap:.4rem;">
-                        <span id="summary-new-alert" class="summary-new-alert" style="display:none;font-size:.78rem;color:#d97706;">
-                            <span style="display:inline-block;width:7px;height:7px;background:#fbbf24;border-radius:50%;margin-right:3px;animation:pulse 1.5s infinite;"></span>
+                        <span id="summary-new-alert" class="summary-new-alert" style="display:none;">
+                            <span class="pulse-dot"></span>
                             <span id="summary-new-count">0</span> novos
                         </span>
                         <button id="btn-edit-preferences" class="btn btn-terciario" style="font-size:.73rem;padding:.25rem .5rem;" title="Editar preferencias do resumo">Preferencias</button>
                         <button id="btn-refresh-summary" class="btn btn-terciario" style="font-size:.73rem;padding:.25rem .5rem;">Atualizar Resumo</button>
                     </div>
                 </div>
-                <div id="user-prefs-banner" style="display:none;padding:.3rem .8rem;background:#eff6ff;font-size:.73rem;color:#4b5563;"></div>
-                <div id="summary-content" style="padding:.8rem;min-height:40px;">
-                    <p style="color:#6b7280;font-size:.9rem;margin:0;">Carregando resumo do dia...</p>
+                <div id="user-prefs-banner" style="display:none;padding:.3rem .8rem;background:rgba(201,168,76,.08);border-radius:4px;font-size:.73rem;color:var(--cor-texto-secundario);"></div>
+                <div id="summary-content" class="summary-content" style="min-height:40px;">
+                    <p class="summary-empty">Carregando resumo do dia...</p>
                 </div>
                 <div id="summary-loading" style="display:none;padding:.6rem .8rem;align-items:center;">
-                    <div style="width:14px;height:14px;border:2px solid #e5e7eb;border-top-color:#3b82f6;border-radius:50%;animation:spin .6s linear infinite;display:inline-block;"></div>
-                    <span style="margin-left:.4rem;color:#6b7280;font-size:.83rem;">Gerando resumo...</span>
+                    <div class="spinner" style="width:14px;height:14px;border-width:2px;display:inline-block;"></div>
+                    <span style="margin-left:.4rem;color:var(--cor-texto-secundario);font-size:.83rem;">Gerando resumo...</span>
                 </div>
             </section>
 
@@ -372,30 +372,18 @@
         </div>
     </div>
 
-    <div id="modal-estagiario-chat" class="modal-overlay oculto">
-        <div class="modal-container" style="width:90vw;height:88vh;max-width:none;">
-            <button class="modal-close-btn" onclick="document.getElementById('modal-estagiario-chat').classList.add('oculto')">&times;</button>
-            <header class="modal-header">
-                <h2>🤖 Estagiário — Chat</h2>
-                <div style="margin-left:auto;display:flex;gap:.5rem;align-items:center;">
-                    <button id="btn-estagiario-copiar" class="btn btn-secundario" title="Copiar resposta">📋 Copiar</button>
-                    <button id="btn-estagiario-historico" class="btn btn-terciario" title="Ver conversas de hoje">🕘 Histórico</button>
-                </div>
-            </header>
-            <div class="modal-body">
-                <div class="chat-container" style="display:flex;flex-direction:column;">
-                    <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem;">
-                        <select id="estagiario-history-select" class="btn-terciario" style="padding:.5rem;border-radius:6px;border:1px solid var(--cor-borda);background:#fff;">
-                            <option value="">Histórico de conversas de hoje</option>
-                        </select>
-                    </div>
-                    <div id="estagiario-thread-modal" class="chat-messages" style="min-height:50vh;"></div>
-                    <div class="chat-input-area">
-                        <input type="text" id="estagiario-input-modal" placeholder="Pergunte algo...">
-                        <button class="btn" id="estagiario-send-modal">Enviar</button>
-                    </div>
-                </div>
+    <div id="modal-estagiario-chat" class="estagiario-sidepanel oculto">
+        <div class="sidepanel-header">
+            <h3>Estagiário</h3>
+            <div style="display:flex;gap:.4rem;align-items:center;margin-left:auto;">
+                <button id="btn-estagiario-copiar" class="btn btn-secundario btn-sm" title="Copiar resposta">Copiar</button>
+                <button class="btn btn-sm" onclick="document.getElementById('modal-estagiario-chat').classList.add('oculto')" title="Fechar">&times;</button>
             </div>
+        </div>
+        <div id="estagiario-thread-modal" class="sidepanel-messages"></div>
+        <div class="sidepanel-input">
+            <input type="text" id="estagiario-input-modal" placeholder="Pergunte algo..." />
+            <button class="btn" id="estagiario-send-modal">Enviar</button>
         </div>
     </div>
     <!-- Graph Overlay (D3.js) -->

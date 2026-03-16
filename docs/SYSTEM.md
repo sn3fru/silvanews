@@ -34,7 +34,7 @@ btg_alphafeed/
     tools/definitions.py # Ferramentas: query_clusters, semantic_search
     tools/executor.py     # Registro e execucao de ferramentas
   agents/resumo_diario/
-    agent.py             # Agente resumo: multi-persona (legado) + per-user (v3.0)
+    agent.py             # Agente resumo: unificado (legado) + per-user PROMPT_MASTER_V2 (v4.0)
     tools/definitions.py # Tools: obter_textos_brutos_cluster, buscar_na_web (Tivaly)
   frontend/
     index.html + script.js   # Feed S.I.L.V.A. (~120 funcoes JS)
@@ -385,6 +385,8 @@ Global M&A | Global Legal and Regulatory | Sovereign Debt and Credit | Global Di
 | `PROMPT_ENTITY_EXTRACTION` | v2 No 2 | NER para o grafo |
 | `PROMPT_RESUMO_COM_CONTEXTO` | v2 No 5 | Resumo com historico |
 | `PROMPT_TELEGRAM_BRIEFING_V1` | Briefing | Daily Briefing HTML para Telegram (Morning Call) |
+| `PROMPT_MASTER_V2` | Resumo per-user (v4.0) | Chassis imutavel + slots personalizaveis. Secoes: foco_analista, distressed, estrategico, regulatorio, internacional |
+| `PROMPT_RESUMO_UNIFICADO_V1` | Resumo unificado (batch) | 1 chamada LLM, 3 secoes fixas (distressed, regulatorio, estrategico, geral) |
 
 **NOTA**: `PROMPT_EXTRACAO_PERMISSIVO_V8`, `PROMPT_EXTRACAO_JSON_V1` e `PROMPT_RESUMO_FINAL_V3` sao ALIASES de `PROMPT_ANALISE_E_SINTESE_CLUSTER_V1`.
 
@@ -524,78 +526,74 @@ DOMContentLoaded -> setupEventListeners() -> carregarContadoresSimples() -> carr
 
 ---
 
-## 10. Agente Estagiario (`agents/estagiario/`)
+## 10. Agente Estagiario v2 (`agents/estagiario/`)
 
-### Fluxo Principal (`agent.py` - 51 metodos na classe `EstagiarioAgent`)
+### Fluxo Principal (ReAct — `executor.py`)
 ```
 POST /api/estagiario/send
   -> EstagiarioAgent.answer_with_context(question, chat_history, date_str)
-     -> answer(question, date_str, context_prompt)
-        |
-        _classify_intent(question) -> LLM classifica intencao
-        |
-        _route_by_intent(intent, question, db, target_date)
-          |
-          CONSULTA   -> _handle_news_search / _handle_ofertas_search / _handle_geopolitical_analysis
-          |             -> _fallback_to_legacy_system()
-          |                -> _fetch_clusters(db, date, priority)
-          |                -> _infer_filters(question) ou _llm_generate_search_spec(question)
-          |                -> _rank_clusters(keywords, clusters)
-          |                -> _llm_select_candidates(question, candidates) [triagem semantica]
-          |                -> _fetch_details_for(db, ids)
-          |                -> _llm_answer(question, retrieved) ou _compose_markdown_from_retrieved()
-          |
-          EDICAO     -> _handle_edit_command(db, question, q, target_date)
-          |             -> _llm_understand_edit(question) ou _fallback_understand_edit(question)
-          |             -> _find_clusters_by_partial_title(db, titulo, date)
-          |             -> _resolve_tag_canonically(db, question, cluster_id, guess)
-          |             -> _resolve_priority(db, question, cluster_id, guess)
-          |             -> crud.update_cluster_priority() / crud.update_cluster_tags() / crud.merge_clusters()
-          |
-          FEEDBACK   -> _handle_feedback_likes / _handle_feedback_dislikes / _handle_feedback_general / _handle_feedback_count
-                        -> _fetch_feedback_likes(db, start, end)  [query direta: ArtigoBruto + FeedbackNoticia + ClusterEvento]
-                        -> _fetch_feedback_dislikes(db, start, end)
-                        -> _count_feedback(db, start, end)
+     -> answer(question, date_str, history_lines)
+        -> EstagiarioExecutor.run(user_input, chat_history, data_referencia)
+           |
+           Loop ReAct (max 10 iteracoes):
+             1. Monta prompt com REACT_PROMPT_TEMPLATE + scratchpad
+             2. LLM gera Thought + Action (JSON)
+             3. Parse JSON (com retry de parsing, max 2 tentativas)
+             4. Se "Final Answer" -> retorna resposta Markdown
+             5. Se tool -> executa via ToolExecutor -> append observation ao scratchpad
+             6. Se parsing falhou -> append erro -> tenta novamente
 ```
 
-### Metodos Criticos do Agente
-
-| Metodo | O que faz |
-|---|---|
-| `answer(question, date_str)` | Ponto de entrada principal. Orquestra classify+route+busca+resposta |
-| `_classify_intent(question)` | LLM classifica: CONSULTA/EDICAO/FEEDBACK/ADMIN + sub-tipo |
-| `_llm_generate_search_spec(question)` | LLM gera JSON com priorities/tags/keywords para busca |
-| `_infer_filters(question)` | Fallback heuristico: regex extrai prioridades/tags/keywords |
-| `_rank_clusters(keywords, clusters)` | Ranking: peso por prioridade + matches de keyword |
-| `_llm_select_candidates(question, candidates)` | Triagem semantica: LLM filtra candidatos relevantes |
-| `_handle_edit_command(db, question, q, date)` | Processa edicoes: resolve cluster, tag/prioridade, aplica |
-| `_find_clusters_by_partial_title(db, titulo, date)` | LIKE query em ClusterEvento.titulo_cluster |
-| `_catalogo_tags(db)` | Retorna tags canonicas de get_prompts_compilados |
-| `_extract_time_period(question, default)` | Extrai periodo: hoje/semana/mes/sem filtro |
-
-### Modo ReAct (`executor.py` - ESTAGIARIO_REACT=1)
-
-Loop: gera thought/action -> executa tool -> observa resultado -> repete (max 4 iteracoes)
+### Protocolo de Execucao (Prompt)
+1. **PLANEJE**: Na primeira iteracao, listar tools a usar. Comecar SEMPRE por `list_cluster_titles`.
+2. **APROFUNDE**: Usar `get_cluster_details` nos clusters relevantes.
+3. **BUSCA SEMANTICA**: Para perguntas abertas, usar `semantic_search`.
+4. **RESPONDA**: "Final Answer" com Markdown formatado, sem mencionar tools/clusters/IDs.
 
 ### Ferramentas (`tools/definitions.py`)
 
-| Ferramenta | Input | O que faz | Chama |
-|---|---|---|---|
-| `query_clusters` | data, prioridade, palavras_chave, limite | Busca clusters paginados | `crud.get_clusters_for_feed_by_date` |
-| `get_cluster_details` | cluster_id | Detalhes completos do cluster | `crud.get_cluster_details_by_id` |
-| `update_cluster_priority` | cluster_id, nova_prioridade | Atualiza prioridade com validacao | `crud.update_cluster_priority` |
-| `semantic_search` | consulta, limite, modelo | Busca semantica por embeddings | `semantic_search.semantic_search` |
+| Ferramenta | Input | O que faz |
+|---|---|---|
+| `list_cluster_titles` | data? | Lista TODOS os clusters (id, titulo, tags, prioridade, fontes) — leve, para planejamento |
+| `query_clusters` | data, prioridade, palavras_chave, limite | Busca clusters com filtros |
+| `get_cluster_details` | cluster_id | Detalhes completos (artigos, resumo, fontes) |
+| `update_cluster_priority` | cluster_id, nova_prioridade | Altera prioridade (unitario) |
+| `semantic_search` | consulta, limite | Busca semantica por embeddings |
+
+### UI: Input Inline + Side Panel
+- Card compacto com 1 linha: input placeholder + botao "Enviar"
+- Ao enviar ou clicar no card: abre side-panel (400px) a direita com chat completo
+- Side-panel: header navy, thread de mensagens, input na base
 
 ---
 
-## 10a. Agente de Resumo Diario (v3.0) (`agents/resumo_diario/`)
+## 10a. Agente de Resumo Diario (v4.0) (`agents/resumo_diario/`)
+
+### Arquitetura: Chassis + Slots (PROMPT_MASTER_V2)
+
+| Camada | Responsabilidade | Editavel pelo usuario? |
+|---|---|---|
+| **Chassis (imutavel)** | Rejeicao de ruido (`_REJEICAO_MACRO_PERSONAS`), tools, formato JSON, secoes obrigatorias, regra de volume | Nunca |
+| **Slots (personalizaveis)** | Tags foco, empresas no radar, teses juridicas, instrucao livre, tamanho | Sim, via modal de preferencias |
 
 ### Dois Modos de Operacao
 
-| Modo | Descricao | Chamadas LLM |
+| Modo | Prompt | Chamadas LLM |
 |---|---|---|
-| **Multi-persona (legado)** | 3 personas fixas em paralelo: distressed, regulatorio, estrategista | 3 por execucao |
-| **Per-user (v3.0)** | Uma chamada por usuario, com preferencias personalizadas | 1 por usuario |
+| **Unificado (terminal/batch)** | `PROMPT_RESUMO_UNIFICADO_V1` — 3 secoes fixas (distressed, regulatorio, estrategico) | 1 por execucao |
+| **Per-user (v4.0 API)** | `PROMPT_MASTER_V2` — chassis imutavel + slots personalizaveis | 1 por usuario |
+
+### Secoes tematicas (PROMPT_MASTER_V2)
+
+| Secao | Emoji | Condicao |
+|---|---|---|
+| `foco_analista` | 🎯 | So injetada se usuario configurou empresas/teses/tags |
+| `distressed` | 💀 | Sempre |
+| `estrategico` | 🏛️ | Sempre |
+| `regulatorio` | ⚖️ | Sempre |
+| `internacional` | 🌍 | Sempre (avalia clusters com tipo_fonte=="internacional") |
+
+**Nao existe secao "geral".** Eventos fora das 5 secoes sao ruido. Pydantic `Literal` estrito barra secoes inventadas pelo LLM.
 
 ### Contexto Compartilhado
 
@@ -610,20 +608,24 @@ Loop: gera thought/action -> executa tool -> observa resultado -> repete (max 4 
 | `obter_textos_brutos_cluster` | cluster_id | Retorna amostra (ate 3000 chars) dos textos originais do cluster | - |
 | `buscar_na_web` | query | Busca na web via Tivaly API | `TIVALY_API_KEY` |
 
-**Contratos Pydantic**: `ClusterSelecionado`, `ResumoDiarioContract` — validacao do JSON de saida do LLM.
+**Contratos Pydantic**: `ClusterSelecionado` (secao: `Literal` estrito), `ResumoDiarioContract` — validacao do JSON de saida do LLM.
 
-### Fluxo Per-User
+### Fluxo Per-User (v4.0)
 
 1. Le preferencias do usuario (`get_preferencias_usuario`)
-2. Monta prompt personalizado com tags, tamanho, foco
-3. Usa contexto compartilhado (`_build_context_block`)
-4. Uma chamada LLM por usuario
-5. Persiste em `resumos_usuario`
+2. Extrai slots: `tags_interesse`, `empresas_radar`, `teses_juridicas`, `instrucoes_resumo` de `config_extra`
+3. `_build_user_prompt()` injeta slots no chassis `PROMPT_MASTER_V2` (condicional: oculta secao foco_analista se slots vazios)
+4. Usa contexto compartilhado (`_build_context_block`)
+5. Uma chamada LLM por usuario
+6. Pre-sanitiza secoes invalidas → Pydantic valida → persiste em `resumos_usuario`
 
-### Modelo de Custo
+### Modelo de Custo (v4.1 — Resumo Default)
 
 - **Contexto**: lido UMA vez, reutilizado para todos os usuarios.
-- **100 usuarios** = 100 chamadas LLM (nao 300, como no modo multi-persona).
+- **Resumo Default**: 1 chamada LLM unificada, salvo com `user_id=NULL`. Todos os usuarios sem prefs customizadas veem o default.
+- **Per-User**: APENAS para quem tem `empresas_radar`, `teses_juridicas`, `instrucoes_resumo` ou `tags_interesse` preenchidos.
+- **100 usuarios (todos default)** = 1 chamada LLM total (antes eram 100).
+- `user_has_custom_prefs()` em `backend/crud.py` determina quem precisa de resumo personalizado.
 - READ-ONLY: nao altera clusters, prioridades ou tags.
 
 ---

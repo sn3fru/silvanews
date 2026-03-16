@@ -75,12 +75,15 @@
 #
 # Nova feature de AGENTE/CHAT:
 #   1. Chat por cluster: endpoints /api/chat/* em main.py
-#   2. Estagiario: agents/estagiario/
+#   2. Estagiario v2: agents/estagiario/ — ReAct agent (EstagiarioExecutor, max 10 iteracoes, planejamento)
+#      Tools: list_cluster_titles, query_clusters, get_cluster_details, update_cluster_priority, semantic_search
+#      UI: input inline -> side-panel (400px)
 #   3. Resumo Diario: agents/resumo_diario/ — PROMPT_MASTER_V2 (chassis imutavel + slots personalizaveis)
-#      Chassis: Rejeicao de ruido, tools, JSON, secoes (foco_analista, distressed, estrategico, regulatorio, internacional, geral)
+#      Chassis: Rejeicao de ruido, tools, JSON, secoes (foco_analista, distressed, estrategico, regulatorio, internacional)
 #      Slots: TAGS_FOCO, TAGS_IGNORADAS, EMPRESAS_RADAR, TESES_JURIDICAS, INSTRUCAO_LIVRE_USUARIO
 #      Tools: obter_textos_brutos_cluster, buscar_na_web (Tivaly)
 #      Entry points: gerar_resumo_diario() (unificado), gerar_resumo_para_usuario() (per-user com PROMPT_MASTER_V2)
+#      Resumo Default: user_id=NULL no banco. Todos veem o default salvo. Per-user só para quem tem prefs customizadas.
 #
 # Nova feature de AUTENTICACAO:
 #   1. JWT auth: POST /api/auth/login, GET /api/auth/me, POST /api/auth/register

@@ -7,7 +7,7 @@ import os
 from datetime import datetime
 from typing import Optional, List
 
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, LargeBinary, Float, JSON, Boolean, ForeignKey, Index
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, LargeBinary, Float, JSON, Boolean, ForeignKey, Index, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.dialects.postgresql import UUID
@@ -636,7 +636,7 @@ class ResumoUsuario(Base):
     __tablename__ = "resumos_usuario"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=True)
     data_referencia = Column(DateTime, nullable=False)
     template_id = Column(Integer, ForeignKey("templates_resumo_usuario.id", ondelete="SET NULL"), nullable=True)
     clusters_avaliados_ids = Column(JSON, default=list)
@@ -739,6 +739,14 @@ def init_database():
     
     # Cria as tabelas
     create_tables()
+
+    # Micro-migration: resumos_usuario.user_id nullable (para resumo default compartilhado)
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE resumos_usuario ALTER COLUMN user_id DROP NOT NULL"))
+            conn.commit()
+    except Exception:
+        pass
     
     # Cria uma sessão para inserir dados iniciais
     db = SessionLocal()

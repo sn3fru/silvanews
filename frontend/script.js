@@ -3417,19 +3417,11 @@ function inserirCardEstagiario() {
     const card = document.createElement('article');
     card.className = 'card-cluster estagiario-card';
     card.innerHTML = `
-        <div class="card-header" style="align-items: flex-start;">
-            <div class="card-title-area" style="flex: 1;">
-                <h3 class="card-titulo" style="display: inline;">Estagiário</h3>
-                <span class="card-resumo" style="display: inline; margin-left: 1rem; font-size: 0.9rem; color: var(--cor-texto-secundario);">Faça uma pergunta sobre as notícias do dia.</span>
-            </div>
+        <div class="estagiario-inline">
+            <input type="text" id="estagiario-input" placeholder="Pergunte sobre as notícias do dia para o estagiário..." />
+            <button class="btn" id="estagiario-send">Enviar</button>
         </div>
-        <div class="estagiario-chat" style="margin-top: 0.5rem;">
-            <div class="estagiario-chat-thread" id="estagiario-thread" style="max-height: 120px;"></div>
-            <div class="estagiario-chat-input">
-                <input type="text" id="estagiario-input" placeholder="Pergunte algo..." />
-                <button class="btn" id="estagiario-send">Enviar</button>
-            </div>
-        </div>
+        <div id="estagiario-thread" style="display:none;"></div>
     `;
     feedContainer.prepend(card);
 
@@ -3585,37 +3577,24 @@ function inserirCardEstagiario() {
             thread.appendChild(errDiv);
         } finally {
             if (modal) modal.classList.add('oculto');
-            const modalChat = document.getElementById('modal-estagiario-chat');
-            if (modalChat) {
-                modalChat.classList.remove('oculto');
+            const sidePanel = document.getElementById('modal-estagiario-chat');
+            if (sidePanel) {
+                sidePanel.classList.remove('oculto');
                 if (!fromModal) {
                     const modalThread = document.getElementById('estagiario-thread-modal');
                     const cardThread = document.getElementById('estagiario-thread');
                     if (modalThread && cardThread) modalThread.innerHTML = cardThread.innerHTML;
                 }
-                // bind copiar resposta
                 const copyBtn = document.getElementById('btn-estagiario-copiar');
                 if (copyBtn && !copyBtn.dataset.bound) {
                     copyBtn.dataset.bound = '1';
                     copyBtn.addEventListener('click', async () => {
-                        const al = document.getElementById('estagiario-answer-latest');
-                        if (!al) return;
-                        const tmp = document.createElement('textarea');
-                        tmp.value = al.textContent || '';
-                        document.body.appendChild(tmp);
-                        tmp.select();
-                        document.execCommand('copy');
-                        document.body.removeChild(tmp);
-                        copyBtn.textContent = '✅ Copiado';
-                        setTimeout(() => copyBtn.textContent = '📋 Copiar', 1200);
-                    });
-                }
-                // bind histórico (placeholder)
-                const histBtn = document.getElementById('btn-estagiario-historico');
-                if (histBtn && !histBtn.dataset.bound) {
-                    histBtn.dataset.bound = '1';
-                    histBtn.addEventListener('click', async () => {
-                        alert('Histórico de conversas do dia — em construção');
+                        const msgs = document.querySelectorAll('#estagiario-thread-modal .estagiario-msg.assistant');
+                        const last = msgs.length ? msgs[msgs.length - 1] : null;
+                        if (!last) return;
+                        try { await navigator.clipboard.writeText(last.textContent || ''); } catch(_) {}
+                        copyBtn.textContent = 'Copiado!';
+                        setTimeout(() => copyBtn.textContent = 'Copiar', 1200);
                     });
                 }
             }
@@ -3638,51 +3617,39 @@ function inserirCardEstagiario() {
         }
     });
 
-    // clique no card: abre modal de chat ampliado (70%)
-    card.addEventListener('click', (e) => {
-        // evita propagar clique do botão enviar
-        if (e.target && (e.target.id === 'estagiario-send' || e.target.id === 'estagiario-input')) return;
-        const modalChat = document.getElementById('modal-estagiario-chat');
-        if (modalChat) {
-            modalChat.classList.remove('oculto');
-            const modalThread = document.getElementById('estagiario-thread-modal');
-            const cardThread = document.getElementById('estagiario-thread');
-            if (modalThread && cardThread) modalThread.innerHTML = cardThread.innerHTML;
-            const inputModal = document.getElementById('estagiario-input-modal');
-            const sendModal = document.getElementById('estagiario-send-modal');
-            if (sendModal && inputModal) {
-                // Remove eventos anteriores para evitar duplicação
-                const newSendModal = sendModal.cloneNode(true);
-                sendModal.parentNode.replaceChild(newSendModal, sendModal);
-                const newInputModal = inputModal.cloneNode(true);
-                inputModal.parentNode.replaceChild(newInputModal, inputModal);
-                
-                // Reconfigura os eventos
-                newSendModal.addEventListener('click', async () => {
-                    const v = (newInputModal.value || '').trim();
+    function openSidePanel() {
+        const sidePanel = document.getElementById('modal-estagiario-chat');
+        if (!sidePanel) return;
+        sidePanel.classList.remove('oculto');
+        const modalThread = document.getElementById('estagiario-thread-modal');
+        const cardThread = document.getElementById('estagiario-thread');
+        if (modalThread && cardThread) modalThread.innerHTML = cardThread.innerHTML;
+        const inputModal = document.getElementById('estagiario-input-modal');
+        if (inputModal) inputModal.focus();
+
+        const sendModal = document.getElementById('estagiario-send-modal');
+        if (sendModal && inputModal && !sendModal.dataset.bound) {
+            sendModal.dataset.bound = '1';
+            sendModal.addEventListener('click', async () => {
+                const v = (inputModal.value || '').trim();
+                if (!v) return;
+                inputModal.value = '';
+                await sendMessage(v, true);
+            });
+            inputModal.addEventListener('keypress', async (ev) => {
+                if (ev.key === 'Enter') {
+                    const v = (inputModal.value || '').trim();
                     if (!v) return;
-                    newInputModal.value = '';
+                    inputModal.value = '';
                     await sendMessage(v, true);
-                });
-                newInputModal.addEventListener('keypress', async (ev) => {
-                    if (ev.key === 'Enter') {
-                        const v = (newInputModal.value || '').trim();
-                        if (!v) return;
-                        newInputModal.value = '';
-                        await sendMessage(v, true);
-                    }
-                });
-            }
-            // Bind histórico change: apenas rola o thread por enquanto
-            const hist = document.getElementById('estagiario-history-select');
-            if (hist && !hist.dataset.bound) {
-                hist.dataset.bound = '1';
-                hist.addEventListener('change', () => {
-                    const t = document.getElementById('estagiario-thread-modal');
-                    if (t) t.scrollTop = t.scrollHeight;
-                });
-            }
+                }
+            });
         }
+    }
+
+    card.addEventListener('click', (e) => {
+        if (e.target && (e.target.id === 'estagiario-send' || e.target.id === 'estagiario-input')) return;
+        openSidePanel();
     });
 }
 
@@ -3693,69 +3660,7 @@ renderizarClusters = function() {
     inserirCardEstagiario();
 };
 
-// Configuração global dos eventos do estagiário modal
-function configurarEventosEstagiarioModal() {
-    const inputModal = document.getElementById('estagiario-input-modal');
-    const sendModal = document.getElementById('estagiario-send-modal');
-    
-    if (sendModal && inputModal) {
-        console.log('Configurando eventos do estagiário modal...');
-        
-        // Remove eventos anteriores
-        const newSendModal = sendModal.cloneNode(true);
-        sendModal.parentNode.replaceChild(newSendModal, sendModal);
-        const newInputModal = inputModal.cloneNode(true);
-        inputModal.parentNode.replaceChild(newInputModal, inputModal);
-        
-        // Configura eventos
-        newSendModal.addEventListener('click', async (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            console.log('Botão estagiário modal clicado!');
-            
-            const v = (newInputModal.value || '').trim();
-            if (!v) {
-                console.log('Input vazio, ignorando...');
-                return;
-            }
-            
-            console.log('Enviando mensagem via modal:', v);
-            newInputModal.value = '';
-            await sendMessage(v, true);
-        });
-        
-        newInputModal.addEventListener('keypress', async (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                e.stopPropagation();
-                console.log('Enter pressionado no input modal!');
-                
-                const v = (newInputModal.value || '').trim();
-                if (!v) {
-                    console.log('Input vazio, ignorando...');
-                    return;
-                }
-                
-                console.log('Enviando mensagem via Enter no modal:', v);
-                newInputModal.value = '';
-                await sendMessage(v, true);
-            }
-        });
-        
-        console.log('Eventos do estagiário modal configurados com sucesso!');
-    }
-}
-
-// Configura eventos quando o DOM estiver pronto
-document.addEventListener('DOMContentLoaded', configurarEventosEstagiarioModal);
-
-// Também configura quando o modal for aberto
-document.addEventListener('click', (e) => {
-    if (e.target && e.target.id === 'estagiario-send-modal') {
-        console.log('Botão estagiário clicado via evento global!');
-        configurarEventosEstagiarioModal();
-    }
-});
+// Side-panel events are bound inside inserirCardEstagiario > openSidePanel
 
 // =======================================
 // FUNÇÃO PARA VER ARTIGOS BRUTOS

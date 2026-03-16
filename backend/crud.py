@@ -2087,12 +2087,12 @@ def delete_template_resumo(db: Session, template_id: int) -> bool:
 # CRUD - RESUMOS DE USUARIO
 # ==============================================================================
 
-def create_resumo_usuario(db: Session, user_id: int, data_referencia, template_id: Optional[int],
+def create_resumo_usuario(db: Session, user_id: Optional[int], data_referencia, template_id: Optional[int],
                           clusters_avaliados: list, clusters_escolhidos: list,
                           texto: Optional[str], texto_whatsapp: Optional[str],
                           prompt_version: Optional[str] = None,
                           metadados: Optional[dict] = None) -> ResumoUsuario:
-    """Cria um novo resumo para um usuário."""
+    """Cria um novo resumo. user_id=None indica resumo default compartilhado."""
     resumo = ResumoUsuario(
         user_id=user_id,
         data_referencia=data_referencia,
@@ -2116,6 +2116,24 @@ def get_resumo_usuario(db: Session, user_id: int, data_referencia) -> Optional[R
         ResumoUsuario.user_id == user_id,
         func.date(ResumoUsuario.data_referencia) == data_referencia,
     ).order_by(desc(ResumoUsuario.created_at)).first()
+
+
+def get_resumo_default(db: Session, data_referencia) -> Optional[ResumoUsuario]:
+    """Busca o resumo default (user_id IS NULL) para uma data."""
+    return db.query(ResumoUsuario).filter(
+        ResumoUsuario.user_id.is_(None),
+        func.date(ResumoUsuario.data_referencia) == data_referencia,
+    ).order_by(desc(ResumoUsuario.created_at)).first()
+
+
+def user_has_custom_prefs(prefs) -> bool:
+    """Verifica se o usuario configurou preferencias que justificam resumo personalizado."""
+    if not prefs:
+        return False
+    if prefs.tags_interesse:
+        return True
+    ce = prefs.config_extra or {}
+    return bool(ce.get("empresas_radar") or ce.get("teses_juridicas") or ce.get("instrucoes_resumo"))
 
 
 def list_resumos_usuario(db: Session, user_id: int, limit: int = 30) -> List[ResumoUsuario]:

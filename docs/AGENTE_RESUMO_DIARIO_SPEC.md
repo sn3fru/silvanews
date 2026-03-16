@@ -34,25 +34,23 @@
 - **Processo:** O **script em Python** faz uma **pré-query** e injeta no prompt inicial um bloco de contexto (títulos + resumos para P1/P2/P3; para P3 o resumo é curto, 1 frase). O agente opera em **fluxo single-shot**: lê o contexto, pode chamar tools **read-only** (`obter_textos_brutos_cluster`, `buscar_na_web`) conforme budget, e **devolve** o JSON final. O agente **seleciona** até 12 oportunidades por **thresholding de qualidade** (sem mínimo fixo). Sem loops de planeamento ou checagem estéreis.
 - **Saída:** Um **resumo do dia** (TL;DR executivo opcional + clusters selecionados com título/bullet/fonte), formatado para envio via **WhatsApp**. O agente **nunca** altera o banco (sem split/merge).
 
-### 1.2 Dois modos de operação
+### 1.2 Três modos de operação
 
 | Modo | Função | Descrição |
 |------|--------|-----------|
-| **Unificado (padrão)** | `gerar_resumo_diario(date)` | **1 chamada LLM** que cobre todos os ângulos (distressed, regulatório, estratégico, geral). O LLM recebe todos os títulos+resumos do dia e decide onde aprofundar com tools. Custo: 1 chamada + até 5 tool calls. |
-| **Per-User (v3.0)** | `gerar_resumo_para_usuario(user_id, date)` | Lê preferências do usuário no banco, monta prompt personalizado com o contexto compartilhado, faz **1 chamada LLM**. Custo: 1 chamada por usuário + até 8 tool calls. |
+| **Default (v4.1)** | `gerar_resumo_diario(date)` | **1 chamada LLM** unificada. Resultado salvo com `user_id=NULL` no banco. Todos os usuários sem prefs customizadas veem este resumo. Custo: 1 chamada + até 5 tool calls. |
+| **Per-User (v3.0)** | `gerar_resumo_para_usuario(user_id, date)` | **Apenas** para usuários com preferências customizadas (`empresas_radar`, `teses_juridicas`, `instrucoes_resumo`, ou `tags_interesse`). Custo: 1 chamada por usuário + até 8 tool calls. |
 
-**Modo Unificado (padrão — terminal/WhatsApp):**
-- Contexto montado **UMA VEZ** via `_build_context_block()`.
-- **1 chamada LLM** com `PROMPT_RESUMO_UNIFICADO_V1` (cobre distressed + regulatório + estratégico + geral).
-- O LLM marca cada cluster com `secao` ("distressed", "regulatorio", "estrategico", "geral").
-- Tools disponíveis com budget de 5 chamadas — o LLM decide onde aprofundar.
-- Formatador agrupa por seção automaticamente.
+**Resumo Default (v4.1):**
+- `run_resumo_diario()` gera 1 resumo unificado via `gerar_resumo_diario()` e salva com `user_id=NULL`.
+- Endpoint `GET /api/resumo/hoje`: tenta resumo do usuário logado, fallback para `user_id IS NULL` (default).
+- Otimização: se nenhum usuário tem prefs customizadas → 0 chamadas LLM extras (apenas o default).
+- Critério "tem preferências customizadas": `user_has_custom_prefs()` em `backend/crud.py`.
 
 **Per-User (v3.0):**
 - Contexto compartilhado com **cache** (chave: `date + max(updated_at)`).
-- Uma chamada LLM por usuário com preferências personalizadas.
-- Custo: 1x tokens/usuário.
-- Ideal para escala (100+ usuários).
+- Uma chamada LLM por usuário COM preferências personalizadas.
+- Usuários sem customização são ignorados (usam o default).
 
 ### 1.3 Princípios
 

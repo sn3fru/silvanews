@@ -220,6 +220,14 @@ python -m migrate_incremental --source ... --dest ... --include-all --since 2026
 | GET | `/api/user/preferencias` | Obtem preferencias do usuario |
 | PUT | `/api/user/preferencias` | Atualiza preferencias |
 
+Campos de `config_extra` usados pelo `PROMPT_MASTER_V2`:
+
+| Campo | Tipo | Descricao |
+|---|---|---|
+| `empresas_radar` | string | Empresas priorizadas (ex: "Petrobras, Vale, Banco Master") |
+| `teses_juridicas` | string | Teses regulatorias (ex: "Lei de Falencias, ICMS, securitizacao") |
+| `instrucoes_resumo` | string | Instrucao livre complementar |
+
 ### Templates de Resumo
 
 | Metodo | Rota | Descricao |
@@ -229,13 +237,17 @@ python -m migrate_incremental --source ... --dest ... --include-all --since 2026
 | PUT | `/api/templates-resumo/{id}` | Atualiza template |
 | DELETE | `/api/templates-resumo/{id}` | Remove template |
 
-### Resumo Diario
+### Resumo Diario (v4.1 — Resumo Default + Per-User)
 
 | Metodo | Rota | Descricao |
 |---|---|---|
-| GET | `/api/resumo/hoje` | Resumo do dia atual |
-| POST | `/api/resumo/gerar` | Dispara geracao em background |
+| GET | `/api/resumo/hoje?data=YYYY-MM-DD` | Resumo do dia. Tenta resumo do usuario, fallback para default (`user_id IS NULL`). |
+| POST | `/api/resumo/gerar` | Dispara geracao em background. Se usuario sem prefs customizadas e default ja existe, retorna imediatamente. |
 | GET | `/api/resumo/historico` | Lista resumos gerados |
+
+**Resumo Default**: `run_resumo_diario()` salva com `user_id=NULL`. Todos veem o mesmo resumo. Per-user so roda para quem tem `empresas_radar`, `teses_juridicas`, `instrucoes_resumo` ou `tags_interesse` preenchidos.
+
+**Chassis**: `PROMPT_MASTER_V2` (imutavel). Secoes: foco_analista (condicional), distressed, estrategico, regulatorio, internacional.
 
 ### Admin Prompts
 

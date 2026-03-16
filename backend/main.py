@@ -80,6 +80,7 @@ try:
         get_preferencias_usuario, upsert_preferencias_usuario,
         create_template_resumo, list_templates_resumo, get_template_resumo, update_template_resumo, delete_template_resumo,
         create_resumo_usuario, get_resumo_usuario, list_resumos_usuario, count_clusters_since,
+        get_resumo_default, user_has_custom_prefs,
     )
     from .processing import processar_artigo_pipeline, gerar_resumo_cluster, inicializar_processamento
     from .utils import gerar_hash_unico, formatar_timestamp_relativo, get_date_brasil, parse_date_brasil, extrair_json_da_resposta, get_gemini_model
@@ -113,6 +114,7 @@ except ImportError:
         get_preferencias_usuario, upsert_preferencias_usuario,
         create_template_resumo, list_templates_resumo, get_template_resumo, update_template_resumo, delete_template_resumo,
         create_resumo_usuario, get_resumo_usuario, list_resumos_usuario, count_clusters_since,
+        get_resumo_default, user_has_custom_prefs,
     )
     from backend.processing import processar_artigo_pipeline, gerar_resumo_cluster, inicializar_processamento
     from backend.utils import gerar_hash_unico, formatar_timestamp_relativo, get_date_brasil, parse_date_brasil, extrair_json_da_resposta, get_gemini_model
@@ -613,11 +615,8 @@ async def api_get_resumo_hoje(data: Optional[str] = None,
         resumo = get_resumo_usuario(db, current_user["id"], target)
     if not resumo:
         try:
-            from backend.database import ResumoUsuario
-            resumo = db.query(ResumoUsuario).filter(
-                func.date(ResumoUsuario.data_referencia) == target,
-                ResumoUsuario.texto_gerado.isnot(None),
-            ).order_by(ResumoUsuario.created_at.desc()).first()
+            from backend.crud import get_resumo_default
+            resumo = get_resumo_default(db, target)
         except Exception:
             db.rollback()
     if resumo:
@@ -653,9 +652,20 @@ async def api_gerar_resumo(payload: GerarResumoPayload = GerarResumoPayload(),
     else:
         target = get_date_brasil()
 
-    background_tasks.add_task(_generate_user_summary, current_user["id"], target)
-    return {"status": "processing", "data": target.isoformat(),
-            "message": f"Resumo sendo gerado para {target.isoformat()}. Consulte GET /api/resumo/hoje?data={target.isoformat()}."}
+    from backend.crud import get_preferencias_usuario, user_has_custom_prefs, get_resumo_default
+    prefs = get_preferencias_usuario(db, current_user["id"])
+    if user_has_custom_prefs(prefs):
+        background_tasks.add_task(_generate_user_summary, current_user["id"], target)
+        return {"status": "processing", "data": target.isoformat(),
+                "message": f"Resumo personalizado sendo gerado para {target.isoformat()}."}
+    else:
+        existing_default = get_resumo_default(db, target)
+        if existing_default:
+            return {"status": "ready", "data": target.isoformat(),
+                    "message": "Resumo default ja disponivel."}
+        background_tasks.add_task(_generate_default_summary, target)
+        return {"status": "processing", "data": target.isoformat(),
+                "message": f"Resumo default sendo gerado para {target.isoformat()}."}
 
 
 def _generate_user_summary(user_id: int, target_date):
@@ -690,6 +700,37 @@ def _generate_user_summary(user_id: int, target_date):
             db.close()
     except Exception as e:
         print(f"[ResumoUsuario] Erro ao gerar resumo: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def _generate_default_summary(target_date):
+    """Background task: gera resumo DEFAULT (user_id=None) compartilhado."""
+    try:
+        from agents.resumo_diario.agent import gerar_resumo_diario, formatar_whatsapp
+
+        resultado = gerar_resumo_diario(target_date=target_date)
+
+        db = SessionLocal()
+        try:
+            if resultado.get("ok"):
+                texto_wpp = formatar_whatsapp(resultado)
+                texto_full = "\n\n---\n\n".join(texto_wpp) if texto_wpp else None
+                create_resumo_usuario(
+                    db, None, target_date, template_id=None,
+                    clusters_avaliados=resultado.get("clusters_avaliados_ids", []),
+                    clusters_escolhidos=resultado.get("todos_clusters_escolhidos_ids", []),
+                    texto=texto_full, texto_whatsapp=texto_full,
+                    prompt_version=resultado.get("prompt_version", "DEFAULT_UNIFICADO"),
+                    metadados=resultado.get("contract_dict", {}),
+                )
+                print(f"[ResumoDefault] Resumo default salvo para data={target_date}")
+            else:
+                print(f"[ResumoDefault] Falha: {resultado.get('error', 'desconhecido')}")
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"[ResumoDefault] Erro: {e}")
         import traceback
         traceback.print_exc()
 

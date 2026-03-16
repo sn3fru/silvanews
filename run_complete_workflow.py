@@ -589,9 +589,9 @@ def _ensure_env_loaded():
 def run_resumo_diario():
     """
     Gera o resumo do dia em 2 fases:
-    1. Resumo UNIFICADO (terminal/WhatsApp) — 1 chamada LLM generica
-    2. Resumos PER-USER — 1 chamada LLM por usuario ativo com preferencias personalizadas
-       Salva no banco para que o frontend ja tenha o resumo pronto ao abrir.
+    1. Resumo DEFAULT (compartilhado) — 1 chamada LLM, salvo com user_id=None.
+       Todos os usuarios sem preferencias customizadas veem este resumo.
+    2. Resumos PER-USER — apenas para usuarios com preferencias diferentes do default.
     Nao bloqueia o pipeline em caso de falha.
     """
     try:
@@ -607,12 +607,12 @@ def run_resumo_diario():
         target_date = get_date_brasil()
         print(f"  Data: {target_date.isoformat()}")
 
-        # --- Fase 1: Resumo unificado (terminal) ---
+        # --- Fase 1: Resumo DEFAULT (salvo com user_id=None) ---
         resultado = gerar_resumo_diario(target_date=target_date)
 
         if not resultado.get("ok"):
             err = resultado.get("error", "desconhecido")
-            print(f"  [AVISO] Resumo unificado falhou: {err}")
+            print(f"  [AVISO] Resumo default falhou: {err}")
         else:
             mensagens = formatar_whatsapp(resultado)
             print()
@@ -621,22 +621,52 @@ def run_resumo_diario():
                 print()
             total = len(resultado.get("todos_clusters_escolhidos_ids", []))
             avaliados = len(resultado.get("clusters_avaliados_ids", []))
-            print(f"  [OK] Resumo terminal: {total} clusters de {avaliados} avaliados.")
+            print(f"  [OK] Resumo default: {total} clusters de {avaliados} avaliados.")
 
-        # --- Fase 2: Resumos per-user (salva no banco para frontend) ---
+            # Salva como resumo default (user_id=None)
+            try:
+                from backend.database import SessionLocal
+                from backend.crud import create_resumo_usuario
+                db_default = SessionLocal()
+                try:
+                    texto_full = "\n\n---\n\n".join(mensagens) if mensagens else None
+                    create_resumo_usuario(
+                        db_default, None, target_date, template_id=None,
+                        clusters_avaliados=resultado.get("clusters_avaliados_ids", []),
+                        clusters_escolhidos=resultado.get("todos_clusters_escolhidos_ids", []),
+                        texto=texto_full, texto_whatsapp=texto_full,
+                        prompt_version=resultado.get("prompt_version", "DEFAULT_UNIFICADO"),
+                        metadados=resultado.get("contract_dict", {}),
+                    )
+                    print(f"  [OK] Resumo default salvo no banco (user_id=NULL)")
+                finally:
+                    db_default.close()
+            except Exception as e:
+                print(f"  [AVISO] Falha ao salvar resumo default: {e}")
+
+        # --- Fase 2: Resumos per-user (APENAS para quem tem prefs customizadas) ---
         try:
             from backend.database import SessionLocal
-            from backend.crud import list_usuarios, create_resumo_usuario
+            from backend.crud import list_usuarios, create_resumo_usuario, get_preferencias_usuario, user_has_custom_prefs
             db = SessionLocal()
             try:
                 usuarios = list_usuarios(db, apenas_ativos=True)
             except Exception:
                 usuarios = []
+
+            custom_users = []
+            for user in usuarios:
+                try:
+                    prefs = get_preferencias_usuario(db, user.id)
+                    if user_has_custom_prefs(prefs):
+                        custom_users.append(user)
+                except Exception:
+                    pass
             db.close()
 
-            if usuarios:
-                print(f"\n  Gerando resumos personalizados para {len(usuarios)} usuario(s)...")
-                for user in usuarios:
+            if custom_users:
+                print(f"\n  Gerando resumos personalizados para {len(custom_users)} usuario(s) com preferencias customizadas...")
+                for user in custom_users:
                     try:
                         res_user = gerar_resumo_para_usuario(user_id=user.id, target_date=target_date)
                         if res_user.get("ok"):
@@ -661,7 +691,8 @@ def run_resumo_diario():
                     except Exception as e:
                         print(f"    [ERRO] {user.nome or user.email}: {e}")
             else:
-                print("  [INFO] Nenhum usuario ativo — resumos per-user nao gerados.")
+                n_total = len(usuarios)
+                print(f"  [OK] {n_total} usuario(s) ativo(s), todos usam resumo default (0 chamadas LLM extras).")
         except Exception as e:
             print(f"  [AVISO] Fase per-user falhou: {e}")
 
