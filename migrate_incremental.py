@@ -178,6 +178,8 @@ def create_sessions(source_url: str, dest_url: str) -> Tuple[Session, Session]:
     _ensure_new_columns(source_engine)
     _ensure_new_columns(dest_engine)
 
+    # Cria tabelas que faltam em AMBOS os bancos (ex: tabelas multi-tenant v3.0)
+    Base.metadata.create_all(bind=source_engine)
     Base.metadata.create_all(bind=dest_engine)
 
     SourceSession = sessionmaker(bind=source_engine, autocommit=False, autoflush=False)

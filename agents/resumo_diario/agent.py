@@ -167,7 +167,7 @@ def _build_context_block(db, target_date: datetime.date) -> Tuple[str, List[int]
                 seen_fontes.add(fn.lower())
                 nomes_fontes_unique.append(fn)
         fontes_map[cid] = nomes_fontes_unique
-        fontes_label = ", ".join(nomes_fontes_unique[:3]) if nomes_fontes_unique else "Fonte não identificada"
+        fontes_label = ", ".join(nomes_fontes_unique[:3]) if nomes_fontes_unique else ""
 
         if prio in ("P1_CRITICO", "P2_ESTRATEGICO"):
             resumo = resumo_raw
@@ -176,9 +176,10 @@ def _build_context_block(db, target_date: datetime.date) -> Tuple[str, List[int]
 
         tipo_fonte = tipo_fonte_map.get(cid, "")
 
+        fontes_ctx = f"(Fontes: {fontes_label})" if fontes_label else "(Use obter_textos_brutos_cluster para identificar a fonte)"
         linhas.append(
             f"[ID={cid}] [{prio}] [{tag}] [{tipo_fonte}] "
-            f"(Fontes: {fontes_label})\n"
+            f"{fontes_ctx}\n"
             f"  Título: {titulo}\n"
             f"  Resumo: {resumo}\n"
         )
@@ -889,7 +890,9 @@ def formatar_whatsapp(
             real_fontes = fontes_map.get(cid, []) if cid else []
             fontes_str = _format_fontes_label(real_fontes)
             if not fontes_str:
-                fontes_str = cs.get('fonte_principal', '')
+                fp = cs.get('fonte_principal', '') or ''
+                if fp.lower() not in ('', 'fonte não identificada', 'fonte desconhecida', 'n/a'):
+                    fontes_str = fp
             if fontes_str:
                 section += f"_Fontes: {fontes_str}_\n"
             section += "\n"

@@ -304,8 +304,8 @@ html, body { height: 100%; overflow: hidden; }
 }
 
 .metrica-item { text-align: center; }
-.metrica-label { font-size: 0.8rem; color: var(--cor-texto-secundario); text-transform: uppercase; }
-.metrica-valor { display: block; font-size: 1.75rem; font-weight: 600; color: var(--cor-destaque-btg); }
+.metrica-label { font-size: 0.7rem; color: rgba(255,255,255,.6); text-transform: uppercase; letter-spacing: .5px; }
+.metrica-valor { display: block; font-size: 1.5rem; font-weight: 700; color: #ffffff; }
 
 .card-sintese {
     background-color: #eef2ff;
@@ -405,6 +405,9 @@ html, body { height: 100%; overflow: hidden; }
 .btn-secundario:hover { background-color: #ced4da; }
 .btn-terciario { background-color: transparent; border: 1px solid var(--cor-borda); color: var(--cor-texto-principal); }
 .btn-terciario:hover { background-color: var(--cor-fundo); border-color: var(--cor-texto-secundario); }
+
+.seletor-data .btn-terciario { border-color: rgba(255,255,255,.25); color: rgba(255,255,255,.85); }
+.seletor-data .btn-terciario:hover { background-color: rgba(255,255,255,.12); border-color: var(--cor-acento); color: #fff; }
 
 /* Estado desativado para botões (cinza e não clicáveis) */
 .btn[disabled],
@@ -2076,14 +2079,6 @@ hr { border: none; border-top: 1px solid var(--cor-borda); margin: 1.5rem 0; }
     margin-bottom: 1.25rem;
     box-shadow: var(--sombra-card);
 }
-.summary-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: .75rem;
-    flex-wrap: wrap;
-    gap: .5rem;
-}
 .summary-content {
     line-height: 1.65;
     font-size: .92rem;
@@ -2093,6 +2088,8 @@ hr { border: none; border-top: 1px solid var(--cor-borda); margin: 1.5rem 0; }
 }
 .summary-content p { margin: 0 0 .5rem; }
 .summary-empty { color: #94a3b8; font-style: italic; }
+.summary-footer { display: flex; align-items: center; gap: .5rem; padding-top: .5rem; border-top: 1px solid var(--cor-borda); margin-top: .5rem; }
+.summary-footer .btn-terciario:hover { opacity: 1 !important; }
 .summary-new-alert { color: #d97706; font-weight: 600; font-size: .85rem; }
 .pulse-dot {
     display: inline-block;

@@ -47,7 +47,7 @@ TAGS_SPECIAL_SITUATIONS = {
         "descricao": "Assuntos relacionados à gestão da divida ativa dos Estados, MUnicípios e da União",
         "exemplos": [
             "Qualquer noticia relacionada a divida ativa de Estado, Município ou mesmo da União",
-            "Qualquer noticia relacionada a lei complementar nº 208, de 2 de julho de 2024 que regula a securitização da divida dos entes publicos, estados e municipios",
+            "Qualquer noticia relacionada a legislação que regula a securitização da divida ativa dos entes publicos, estados e municipios",
             "Qualquer notícia relacionada a matéria tributária, ou à cobrança de impostos, taxas, que afetem a arrecadação, especialmente sobre divida ativa",
             "Notícias sobre a liquidação ou venda de carteiras de Precatórios",
             "AlteraçÕes nas leis de cobrança de impostos municipais ou estaduais (especialmente ICMS, ISS E IPTU)",
@@ -1489,7 +1489,7 @@ Selecione APENAS eventos relacionados a:
 4. Liquidação de ativos, leilões de massa falida, NPLs (Non-Performing Loans).
 5. Bancos com carteiras de crédito podre ou sob escrutínio regulatório por risco de solvência.
 6. Atrasos de pagamento de debêntures, CRIs, CRAs ou qualquer instrumento de dívida corporativa.
-7. Securitização de carteiras de crédito — em especial securitização de dívida ativa de Estados e Municípios (ex.: municípios ou estados vendendo carteiras de dívida ativa via FIDCs, CRIs, ou estruturas reguladas pela Lei Complementar 208/2024). Esta categoria é de altíssimo valor estratégico: capture qualquer movimentação, leilão, edital, decisão judicial ou regulatória que envolva a venda ou cessão dessas carteiras.
+7. Securitização de carteiras de crédito — em especial securitização de dívida ativa de Estados e Municípios (ex.: municípios ou estados vendendo carteiras de dívida ativa via FIDCs, CRIs, ou estruturas reguladas por legislação complementar aplicável). Esta categoria é de altíssimo valor estratégico: capture qualquer movimentação, leilão, edital, decisão judicial ou regulatória que envolva a venda ou cessão dessas carteiras.
 8. Cessão ou venda de carteiras de NPLs por bancos ou fintechs (ex.: banco X cedeu R$ Xbi em carteira inadimplente).
 
 <<< LISTA DE REJEIÇÃO ABSOLUTA (FORA DO SEU ESCOPO) >>>
@@ -1721,6 +1721,7 @@ REGRAS DE EXECUÇÃO E TOOLS (CHASSIS — IMUTÁVEL)
 3. Máximo {MAX_TOOL_CALLS} chamadas de `obter_textos_brutos_cluster`. Use também `buscar_na_web(query)` para dados complementares (máx 2 buscas).
 4. Selecione entre {MIN_ITENS} e {MAX_ITENS} eventos no total.
 5. NÃO invente dados factuais. Se a tool não retornar o dado, escreva sem ele.
+6. REGRA ANTI-ALUCINAÇÃO (CRÍTICA): Ao redigir bullets, use EXATAMENTE os números de lei, datas, valores monetários, nomes de empresas e dados factuais que constam no texto-fonte do cluster. NUNCA substitua, "corrija" ou altere um número de lei, valor ou nome por outro que você "acha" correto. Se o texto diz "Lei Complementar nº 225/2026", escreva "Lei Complementar nº 225/2026" — não troque por outra lei, mesmo que pareça similar. Fidelidade factual ao texto-fonte é inegociável.
 
 ══════════════════════════════════════════════════════════════
 ESTRUTURA OBRIGATÓRIA DO RESUMO (SEÇÕES)
@@ -1730,7 +1731,7 @@ Categorize os eventos escolhidos nas seguintes seções (se não houver notícia
 
 1. 🎯 FOCO DO ANALISTA (secao="foco_analista"): Eventos que respondam diretamente às "Empresas no Radar", "Teses Jurídicas" ou "Tags de Foco" do analista. Esta é a seção de MAIOR VALOR — se o analista indicou preferências, preencha-a primeiro.
 
-2. 💀 DISTRESSED & NPLs (secao="distressed"): RJ, falências, NPLs, quebra de covenants, inadimplência CVM, rebaixamento de ratings, securitização de dívida ativa (FIDCs, CRIs, Lei 208/2024), cessão de carteiras. NÃO INCLUIR M&A saudáveis, regulação genérica.
+2. 💀 DISTRESSED & NPLs (secao="distressed"): RJ, falências, NPLs, quebra de covenants, inadimplência CVM, rebaixamento de ratings, securitização de dívida ativa (FIDCs, CRIs), cessão de carteiras. NÃO INCLUIR M&A saudáveis, regulação genérica.
 
 3. 🏛️ M&A & MOVIMENTOS CORPORATIVOS (secao="estrategico"): Fusões, aquisições, OPAs, turnarounds, capitalizações agressivas, mudanças de controle, privatizações, concessões. NÃO INCLUIR distress sem ângulo M&A.
 
@@ -1803,7 +1804,7 @@ INCLUIR:
 - Liquidação de ativos, leilões de massa falida, NPLs.
 - Bancos com carteiras de crédito podre ou sob risco de solvência.
 - Atrasos de pagamento de debêntures, CRIs, CRAs, dívida corporativa.
-- Securitização de dívida ativa de estados/municípios (FIDCs, CRIs, Lei Complementar 208/2024).
+- Securitização de dívida ativa de estados/municípios (FIDCs, CRIs, legislação complementar aplicável).
 - Cessão de carteiras de NPLs por bancos ou fintechs.
 
 NÃO INCLUIR: M&A saudáveis, IPOs, regulação genérica, esportes, política.
@@ -1852,10 +1853,15 @@ REGRA DE PROFUNDIDADE: Se um cluster sugere M&A, OPA ou mudança de controle mas
 Teste de qualidade: "Um analista de M&A estruturaria uma proposta com base nesta informação?"
 
 ══════════════════════════════════════════════════════════════
-SEÇÃO BONUS: 📋 DESTAQUES GERAIS (secao="geral")
+SEÇÃO 4: 🌍 RADAR GLOBAL / INTERNACIONAL (secao="internacional")
 ══════════════════════════════════════════════════════════════
-Itens que não se encaixam nas 3 seções acima mas são relevantes para Special Situations.
-Use APENAS se houver eventos macro significativos (ex: mudanças drásticas de Selic, câmbio, commodities). Esta seção é OPCIONAL — não inclua itens genéricos para preencher espaço.
+Público: analistas que precisam de contexto macro e geopolítico global.
+
+OBRIGATÓRIO avaliar clusters com tipo_fonte == "internacional" (Financial Times, WSJ, Bloomberg, Reuters, Economist).
+Selecione 1 a 3 eventos de impacto macro, geopolítico ou setorial global que afetem teses de Special Situations.
+Se não houver nenhum cluster internacional relevante, omita esta seção.
+
+NÃO EXISTE seção "geral". Se um evento não se encaixa nas 4 seções acima, ele é RUÍDO e NÃO deve entrar no resumo.
 
 ══════════════════════════════════════════════════════════════
 PROCESSO OBRIGATÓRIO
@@ -1878,6 +1884,9 @@ PASSO 3 — REDAÇÃO FINAL: Escreva bullets CONCRETOS com dados factuais (R$ va
 <<< FERRAMENTAS DISPONÍVEIS >>>
 - `obter_textos_brutos_cluster(cluster_id)`: Textos originais dos artigos. USE quando a REGRA DE PROFUNDIDADE exigir. Máximo 5 chamadas — priorize os clusters mais importantes.
 - `buscar_na_web(query)`: Busca na web. Use para dados complementares.
+
+<<< REGRA ANTI-ALUCINAÇÃO (CRÍTICA) >>>
+Ao redigir bullets, use EXATAMENTE os números de lei, datas, valores monetários, nomes de empresas e dados factuais que constam no texto-fonte do cluster. NUNCA substitua, "corrija" ou altere um número de lei, valor ou nome por outro que você "acha" correto. Se o texto diz "Lei Complementar nº 225/2026", escreva "Lei Complementar nº 225/2026" — não troque por outra lei, mesmo que pareça similar. Fidelidade factual ao texto-fonte é inegociável.
 
 <<< FORMATO DE SAÍDA (JSON ESTRITO) >>>
 Responda APENAS com JSON:
@@ -1908,7 +1917,7 @@ Responda APENAS com JSON:
   ]
 }}
 
-Valores de "secao": "distressed", "regulatorio", "estrategico", "geral".
+Valores de "secao": "distressed", "regulatorio", "estrategico", "internacional".
 
 <<< CONTEXTO DO DIA >>>
 {CONTEXTO_CLUSTERS_DIA}

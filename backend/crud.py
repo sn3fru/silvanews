@@ -915,8 +915,12 @@ def get_clusters_for_feed_by_date(db: Session, target_date: datetime.date, page:
         # Formata fontes para o frontend (sempre carrega)
         fontes = []
         for artigo in artigos:
+            nome_fonte = artigo.jornal
+            if not nome_fonte:
+                meta = artigo.metadados or {}
+                nome_fonte = meta.get("fonte_original") or meta.get("jornal") or meta.get("arquivo_origem", "").replace(".pdf", "").replace(".json", "") or None
             fonte = {
-                "nome": artigo.jornal or "Fonte Desconhecida",
+                "nome": nome_fonte or "Fonte Desconhecida",
                 "tipo": "web" if artigo.url_original else "pdf",
                 "url": artigo.url_original,
                 "autor": artigo.autor or "N/A",
@@ -2157,29 +2161,83 @@ def count_clusters_since(db: Session, since: datetime) -> int:
 
 def cleanup_old_data(db: Session, days: int = 90) -> Dict[str, int]:
     """
-    Remove artigos brutos e clusters com mais de N dias. Preserva resumos do dia (curtos).
-
-    Ordem: artigos primeiro (FK), depois clusters orfaos.
+    Remove artigos brutos e clusters com mais de N dias.
+    Deleta dependencias FK na ordem correta para evitar ForeignKeyViolation.
     Nao deleta: resumos_usuario, templates, preferencias, usuarios.
     """
     cutoff = datetime.utcnow() - timedelta(days=days)
-    stats = {"artigos_deleted": 0, "clusters_deleted": 0, "chat_deleted": 0}
+    stats = {"artigos_deleted": 0, "clusters_deleted": 0, "chat_deleted": 0, "deps_deleted": 0}
 
-    artigos_deleted = db.query(ArtigoBruto).filter(
-        ArtigoBruto.created_at < cutoff,
-    ).delete(synchronize_session=False)
-    stats["artigos_deleted"] = artigos_deleted
+    old_artigo_ids = [r[0] for r in db.query(ArtigoBruto.id).filter(ArtigoBruto.created_at < cutoff).all()]
+    old_cluster_ids = [r[0] for r in db.query(ClusterEvento.id).filter(ClusterEvento.created_at < cutoff).all()]
 
-    clusters_deleted = db.query(ClusterEvento).filter(
-        ClusterEvento.created_at < cutoff,
-    ).delete(synchronize_session=False)
-    stats["clusters_deleted"] = clusters_deleted
+    if not old_artigo_ids and not old_cluster_ids:
+        return stats
 
+    deps = 0
+
+    # 1. Dependencias de artigos_brutos
+    if old_artigo_ids:
+        try:
+            from backend.database import FeedbackNoticia
+            deps += db.query(FeedbackNoticia).filter(FeedbackNoticia.artigo_id.in_(old_artigo_ids)).delete(synchronize_session=False)
+        except Exception:
+            db.rollback()
+
+        try:
+            from backend.database import GraphEdge
+            deps += db.query(GraphEdge).filter(GraphEdge.artigo_id.in_(old_artigo_ids)).delete(synchronize_session=False)
+        except Exception:
+            db.rollback()
+
+        try:
+            from sqlalchemy import text as sa_text
+            db.execute(sa_text("DELETE FROM artigo_embeddings WHERE artigo_id = ANY(:ids)"), {"ids": old_artigo_ids})
+        except Exception:
+            db.rollback()
+
+    # 2. Dependencias de clusters_eventos
+    if old_cluster_ids:
+        try:
+            from backend.database import SinteseExecutiva
+            deps += db.query(SinteseExecutiva).filter(SinteseExecutiva.cluster_id.in_(old_cluster_ids)).delete(synchronize_session=False)
+        except Exception:
+            db.rollback()
+
+        try:
+            from backend.database import ClusterAlteracao
+            deps += db.query(ClusterAlteracao).filter(ClusterAlteracao.cluster_id.in_(old_cluster_ids)).delete(synchronize_session=False)
+        except Exception:
+            db.rollback()
+
+        try:
+            from backend.database import DeepResearchJob, SocialResearchJob
+            deps += db.query(DeepResearchJob).filter(DeepResearchJob.cluster_id.in_(old_cluster_ids)).delete(synchronize_session=False)
+            deps += db.query(SocialResearchJob).filter(SocialResearchJob.cluster_id.in_(old_cluster_ids)).delete(synchronize_session=False)
+        except Exception:
+            db.rollback()
+
+        try:
+            from backend.database import ChatMessage
+            db.query(ChatMessage).filter(ChatMessage.cluster_id.in_(old_cluster_ids)).delete(synchronize_session=False)
+        except Exception:
+            db.rollback()
+
+    stats["deps_deleted"] = deps
+
+    # 3. Artigos e clusters (agora sem FK pendentes)
+    if old_artigo_ids:
+        stats["artigos_deleted"] = db.query(ArtigoBruto).filter(ArtigoBruto.id.in_(old_artigo_ids)).delete(synchronize_session=False)
+
+    if old_cluster_ids:
+        stats["clusters_deleted"] = db.query(ClusterEvento).filter(ClusterEvento.id.in_(old_cluster_ids)).delete(synchronize_session=False)
+
+    # 4. Chat sessions antigas
     try:
-        from backend.database import ChatSession, ChatMessage, EstagiarioChatSession, EstagiarioChatMessage
-        chat_sessions = db.query(ChatSession).filter(ChatSession.created_at < cutoff).delete(synchronize_session=False)
-        estagiario_sessions = db.query(EstagiarioChatSession).filter(EstagiarioChatSession.created_at < cutoff).delete(synchronize_session=False)
-        stats["chat_deleted"] = chat_sessions + estagiario_sessions
+        from backend.database import ChatSession, EstagiarioChatSession, EstagiarioChatMessage
+        chat_del = db.query(ChatSession).filter(ChatSession.created_at < cutoff).delete(synchronize_session=False)
+        est_del = db.query(EstagiarioChatSession).filter(EstagiarioChatSession.created_at < cutoff).delete(synchronize_session=False)
+        stats["chat_deleted"] = chat_del + est_del
     except Exception:
         pass
 

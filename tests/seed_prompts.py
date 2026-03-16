@@ -40,7 +40,7 @@ TAGS_SPECIAL_SITUATIONS_ORIGINAL = {
         'descricao': 'Oportunidades de aquisição ou securitização de créditos detidos por ou contra entidades públicas.',
         "exemplos": [
             "Qualquer noticia relacionada a divida ativa de Estado, Município ou mesmo da União",
-            "Qualquer noticia relacionada a lei complementar nº 208, de 2 de julho de 2024 que regula a securitização da divida dos entes publicos, estados e municipios",
+            "Qualquer noticia relacionada a legislação que regula a securitização da divida ativa dos entes publicos, estados e municipios",
             "Qualquer notícia relacionada a matéria tributária, ou à cobrança de impostos, taxas, que afetem a arrecadação, especialmente sobre divida ativa",
             "Notícias sobre a liquidação ou venda de carteiras de Precatórios",
             "AlteraçÕes nas leis de cobrança de impostos municipais ou estaduais (especialmente ICMS, ISS E IPTU)",

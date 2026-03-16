@@ -166,6 +166,152 @@ def check_and_start_local_db():
         print(f"[ERRO] Erro ao verificar/iniciar banco local: {e}")
         return False
 
+def sync_prod_to_local():
+    """
+    ETAPA 0: Sincroniza dados multi-tenant de producao para o banco local.
+    Traz usuarios, preferencias e templates que foram criados/alterados no frontend (producao).
+    Isso garante que o pipeline local saiba das preferencias de cada usuario antes de gerar resumos.
+    """
+    try:
+        print(f"\n{'=' * 60}")
+        print("  ETAPA 0: SYNC PRODUCAO → LOCAL (usuarios/preferencias)")
+        print(f"{'=' * 60}")
+
+        LOCAL_DB = "postgresql+psycopg2://postgres_local@localhost:5433/devdb"
+        PROD_DB = PRODUCTION_DATABASE_URL
+
+        from sqlalchemy import create_engine, text as sa_text
+        from sqlalchemy.orm import sessionmaker
+
+        def _norm_url(url):
+            u = url.strip().rstrip("| ")
+            if u.startswith("postgres://"):
+                return "postgresql+psycopg2://" + u[len("postgres://"):]
+            if u.startswith("postgresql://") and not u.startswith("postgresql+psycopg2://"):
+                return "postgresql+psycopg2://" + u[len("postgresql://"):]
+            return u
+
+        prod_engine = create_engine(_norm_url(PROD_DB), pool_pre_ping=True)
+        local_engine = create_engine(_norm_url(LOCAL_DB), pool_pre_ping=True)
+
+        from backend.database import Base, Usuario, PreferenciaUsuario, TemplateResumoUsuario
+        Base.metadata.create_all(bind=local_engine)
+        Base.metadata.create_all(bind=prod_engine)
+
+        ProdSession = sessionmaker(bind=prod_engine)
+        LocalSession = sessionmaker(bind=local_engine)
+        db_prod = ProdSession()
+        db_local = LocalSession()
+
+        try:
+            # --- Usuarios ---
+            try:
+                prod_users = db_prod.query(Usuario).all()
+            except Exception as e:
+                if "does not exist" in str(e):
+                    db_prod.rollback()
+                    print("  [INFO] Tabela 'usuarios' nao existe em producao. Nada a sincronizar.")
+                    return True
+                raise
+
+            synced_users = 0
+            user_id_map = {}
+            for pu in prod_users:
+                local_user = db_local.query(Usuario).filter(Usuario.email == pu.email).first()
+                if local_user:
+                    local_user.nome = pu.nome
+                    local_user.ativo = pu.ativo
+                    local_user.role = pu.role
+                    user_id_map[pu.id] = local_user.id
+                else:
+                    new_u = Usuario(
+                        nome=pu.nome, email=pu.email, senha_hash=pu.senha_hash,
+                        ativo=pu.ativo, role=pu.role,
+                    )
+                    db_local.add(new_u)
+                    db_local.flush()
+                    user_id_map[pu.id] = new_u.id
+                synced_users += 1
+            db_local.commit()
+            print(f"  [OK] Usuarios sincronizados: {synced_users}")
+
+            # --- Preferencias ---
+            try:
+                prod_prefs = db_prod.query(PreferenciaUsuario).all()
+            except Exception:
+                db_prod.rollback()
+                prod_prefs = []
+
+            synced_prefs = 0
+            for pp in prod_prefs:
+                local_uid = user_id_map.get(pp.user_id)
+                if not local_uid:
+                    continue
+                local_pref = db_local.query(PreferenciaUsuario).filter(
+                    PreferenciaUsuario.user_id == local_uid
+                ).first()
+                if local_pref:
+                    local_pref.tags_interesse = pp.tags_interesse
+                    local_pref.tags_ignoradas = pp.tags_ignoradas
+                    local_pref.tipo_fonte_preferido = pp.tipo_fonte_preferido
+                    local_pref.tamanho_resumo = pp.tamanho_resumo
+                    local_pref.config_extra = pp.config_extra
+                else:
+                    new_p = PreferenciaUsuario(
+                        user_id=local_uid,
+                        tags_interesse=pp.tags_interesse,
+                        tags_ignoradas=pp.tags_ignoradas,
+                        tipo_fonte_preferido=pp.tipo_fonte_preferido,
+                        tamanho_resumo=pp.tamanho_resumo,
+                        config_extra=pp.config_extra,
+                    )
+                    db_local.add(new_p)
+                synced_prefs += 1
+            db_local.commit()
+            print(f"  [OK] Preferencias sincronizadas: {synced_prefs}")
+
+            # --- Templates ---
+            try:
+                prod_templates = db_prod.query(TemplateResumoUsuario).all()
+            except Exception:
+                db_prod.rollback()
+                prod_templates = []
+
+            synced_tpl = 0
+            for pt in prod_templates:
+                local_uid = user_id_map.get(pt.user_id)
+                if not local_uid:
+                    continue
+                local_tpl = db_local.query(TemplateResumoUsuario).filter(
+                    TemplateResumoUsuario.user_id == local_uid,
+                    TemplateResumoUsuario.nome == pt.nome,
+                ).first()
+                if local_tpl:
+                    local_tpl.descricao = pt.descricao
+                    local_tpl.config = pt.config
+                    local_tpl.ativo = pt.ativo
+                else:
+                    new_t = TemplateResumoUsuario(
+                        user_id=local_uid, nome=pt.nome, descricao=pt.descricao,
+                        config=pt.config, ativo=pt.ativo,
+                    )
+                    db_local.add(new_t)
+                synced_tpl += 1
+            db_local.commit()
+            print(f"  [OK] Templates sincronizados: {synced_tpl}")
+
+        finally:
+            db_prod.close()
+            db_local.close()
+
+        print("  [OK] Sync producao → local concluido.")
+        return True
+
+    except Exception as e:
+        print(f"  [AVISO] Sync producao → local falhou: {e}")
+        return True
+
+
 def run_crawlers():
     """ETAPA 0.5: Roda crawlers de noticias online e copia dump.json para pasta pdfs.
 
@@ -511,7 +657,8 @@ def run_cleanup(days: int = 90):
             total = sum(stats.values())
             if total > 0:
                 print(f"[CLEANUP] Removidos: {stats['artigos_deleted']} artigos, "
-                      f"{stats['clusters_deleted']} clusters, {stats['chat_deleted']} chats")
+                      f"{stats['clusters_deleted']} clusters, {stats['chat_deleted']} chats, "
+                      f"{stats.get('deps_deleted', 0)} dependencias (feedbacks, sinteses, etc)")
             else:
                 print("[CLEANUP] Nenhum dado antigo para remover.")
         finally:
@@ -828,7 +975,19 @@ def run_single_cycle(skip_load: bool = False):
     if not check_and_start_local_db():
         print("[ERRO] Falha na verificacao do banco local")
         return False
-    
+
+    # Garante que TODAS as tabelas do ORM existem no banco local
+    # (incluindo multi-tenant: usuarios, preferencias, templates, resumos)
+    try:
+        _ensure_env_loaded()
+        from backend.database import init_database
+        init_database()
+    except Exception as e:
+        print(f"  [AVISO] init_database falhou: {e}")
+
+    # ETAPA 0: Sync producao → local (usuarios, preferencias, templates)
+    sync_prod_to_local()
+
     # PRE-STEP: Feedback Learning (atualiza regras antes do processamento)
     run_feedback_learning()
 
