@@ -76,9 +76,11 @@
 # Nova feature de AGENTE/CHAT:
 #   1. Chat por cluster: endpoints /api/chat/* em main.py
 #   2. Estagiario: agents/estagiario/
-#   3. Resumo Diario: agents/resumo_diario/ (2 modos: multi-persona legado, per-user v3)
+#   3. Resumo Diario: agents/resumo_diario/ — PROMPT_MASTER_V2 (chassis imutavel + slots personalizaveis)
+#      Chassis: Rejeicao de ruido, tools, JSON, secoes (foco_analista, distressed, estrategico, regulatorio, internacional, geral)
+#      Slots: TAGS_FOCO, TAGS_IGNORADAS, EMPRESAS_RADAR, TESES_JURIDICAS, INSTRUCAO_LIVRE_USUARIO
 #      Tools: obter_textos_brutos_cluster, buscar_na_web (Tivaly)
-#      Entry points: gerar_resumo_diario() (multi-persona), gerar_resumo_para_usuario() (per-user)
+#      Entry points: gerar_resumo_diario() (unificado), gerar_resumo_para_usuario() (per-user com PROMPT_MASTER_V2)
 #
 # Nova feature de AUTENTICACAO:
 #   1. JWT auth: POST /api/auth/login, GET /api/auth/me, POST /api/auth/register
@@ -89,7 +91,8 @@
 #   1. Tabelas: usuarios, preferencias_usuario, templates_resumo_usuario, resumos_usuario
 #   2. Endpoints: /api/user/preferencias, /api/templates-resumo/*, /api/resumo/*
 #   3. Onboarding: verificarOnboarding() em script.js (detecta prefs vazias -> modal)
-#   4. Agente: gerar_resumo_para_usuario() le prefs + template do banco, monta prompt unico
+#   4. Agente: gerar_resumo_para_usuario() le prefs (tags, empresas_radar, teses_juridicas, instrucoes) + monta PROMPT_MASTER_V2
+#   5. Preferencias: config_extra = { empresas_radar, teses_juridicas, instrucoes_resumo } — frontend exibe campos estruturados
 
 # ARQUIVOS CRITICOS (ler ANTES de editar)
 # backend/prompts.py          -> Tags, prioridades, prompts, get_prompt(), validar_prompt_update(), PERSONAS_RESUMO_DIARIO

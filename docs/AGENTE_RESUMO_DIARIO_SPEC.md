@@ -1,8 +1,8 @@
 # Especificação: Agente de Resumo Diário (Special Situations → WhatsApp)
 
-> **Status:** Implementado (v3.0 Multi-Tenant)  
+> **Status:** Implementado (v4.0 Master V2 — Chassis + Slots)  
 > **Objetivo:** Agente que produz um resumo do dia com as principais notícias e oportunidades para a mesa de Special Situations, consumindo **todos os sourcers** (Brasil Físico, Brasil Online, Internacional), com saída para **WhatsApp**.  
-> **Data:** 2026-03-06 | **Atualizado:** 2026-03-15
+> **Data:** 2026-03-06 | **Atualizado:** 2026-03-16
 
 ---
 
@@ -318,7 +318,7 @@ class ResumoDiarioContract(BaseModel):
 ```python
 class ClusterSelecionado(BaseModel):
     cluster_id: int
-    secao: str = Field("geral", max_length=30)  # "distressed", "regulatorio", "estrategico", "geral"
+    secao: Literal["foco_analista", "distressed", "estrategico", "regulatorio", "internacional"] = "distressed"
     titulo_whatsapp: str = Field(..., max_length=100)
     bullet_impacto: str = Field(..., max_length=280)
     fonte_principal: str = Field(..., max_length=80)
@@ -328,7 +328,7 @@ class ClusterSelecionado(BaseModel):
 |-------|-----------|
 | `tldr_executivo` | Opcional; max 300 caracteres |
 | `clusters_selecionados` | 1 a 12 itens |
-| `secao` | "distressed", "regulatorio", "estrategico" ou "geral" |
+| `secao` | `Literal["foco_analista", "distressed", "estrategico", "regulatorio", "internacional"]` |
 | `titulo_whatsapp` | Max 100 caracteres |
 | `bullet_impacto` | Max 280 caracteres |
 | `fonte_principal` | Max 80 caracteres |
@@ -341,8 +341,8 @@ class ClusterSelecionado(BaseModel):
 |---------|--------------|
 | **Pasta do agente** | `agents/resumo_diario/` — responsabilidade única. |
 | **Split/Merge** | **Não.** Agente é READ-ONLY. |
-| **Modo padrão (terminal)** | v3.1 Unificado via `gerar_resumo_diario()` — 1 chamada LLM, 5 tools. |
-| **Modo padrão (API)** | v3.0 Per-User via `POST /api/resumo/gerar` — 1 chamada LLM personalizada, 8 tools. |
+| **Modo padrão (terminal)** | v3.1 Unificado via `gerar_resumo_diario()` — `PROMPT_RESUMO_UNIFICADO_V1`, 5 tools. |
+| **Modo padrão (API)** | v4.0 Per-User via `POST /api/resumo/gerar` — `PROMPT_MASTER_V2` (chassis + slots), 8 tools. |
 | **Cache** | Compartilhado por data+updated_at; invalidado quando clusters mudam. |
 | **Idempotência** | Um resumo por `(user_id, data)`. Re-gerar sobrescreve. |
 
@@ -361,16 +361,39 @@ class ClusterSelecionado(BaseModel):
 | `gerar_resumo_para_usuario(user_id, date)` | Modo Per-User: contexto em cache + prompt personalizado + 1 chamada LLM. Budget: 8 tool calls. |
 | `formatar_whatsapp(resultado)` | Mensagem agrupada por seção temática (💀 → ⚖️ → 🏛️ → 📋), split se > 4096 chars. |
 
-### 15.2 Seções temáticas (modo unificado)
+### 15.2 Seções temáticas (PROMPT_MASTER_V2)
 
 | Seção | Emoji | Escopo |
 |-------|-------|--------|
-| **distressed** | 💀 | RJ, NPLs, falências, covenants, inadimplência CVM |
-| **regulatorio** | ⚖️ | STF/STJ, CARF, CADE, regulações, decisões tributárias |
+| **foco_analista** | 🎯 | Eventos que respondem diretamente às empresas/teses/tags do usuário |
+| **distressed** | 💀 | RJ, NPLs, falências, covenants, inadimplência CVM, securitização dívida ativa |
 | **estrategico** | 🏛️ | M&A, OPAs, turnarounds, mudanças de controle, privatizações |
-| **geral** | 📋 | Eventos relevantes fora das categorias acima |
+| **regulatorio** | ⚖️ | STF/STJ, CARF, CADE, regulações, decisões tributárias |
+| **internacional** | 🌍 | Clusters com tipo_fonte == "internacional" (FT, WSJ, Bloomberg, Reuters) |
+
+**Não existe seção "geral".** Eventos fora das 5 seções são ruído e descartados. Seções inválidas no JSON do LLM são remapeadas para `distressed` (fallback). Pydantic usa `Literal` estrito para barrar invenções.
 
 O LLM marca cada cluster com `secao` no JSON. O formatador agrupa automaticamente.
+
+### 15.2.1 Arquitetura de 2 camadas (Chassis + Slots)
+
+| Camada | Responsabilidade | Exemplos |
+|--------|------------------|----------|
+| **Chassis (imutável)** | Formato JSON, rejeição de ruído, tools, seções obrigatórias, regras de profundidade | `_REJEICAO_MACRO_PERSONAS`, limites de tools, formato de saída |
+| **Slots (personalizáveis)** | Preferências do analista, injetadas nos "buracos" do chassis | `TAGS_FOCO`, `EMPRESAS_RADAR`, `TESES_JURIDICAS`, `INSTRUCAO_LIVRE_USUARIO` |
+
+O chassis **nunca** é sobrescrito pelas preferências. As preferências são filtros seguros.
+
+### 15.2.2 Preferências do usuário (config_extra)
+
+| Campo | Frontend | Uso no prompt |
+|-------|----------|---------------|
+| `tags_interesse` | Checkboxes de temas | `{TAGS_FOCO}` — prioriza clusters dessas tags |
+| `tags_ignoradas` | (futuro) | `{TAGS_IGNORADAS}` — exclui clusters dessas tags |
+| `config_extra.empresas_radar` | Input texto | `{EMPRESAS_RADAR}` — prioriza noticias dessas empresas, mesmo P3 |
+| `config_extra.teses_juridicas` | Input texto | `{TESES_JURIDICAS}` — prioriza temas jurídicos/regulatórios |
+| `config_extra.instrucoes_resumo` | Textarea | `{INSTRUCAO_LIVRE_USUARIO}` — instrução complementar livre |
+| `tamanho_resumo` | Select (curto/medio/longo) | `{MIN_ITENS}` / `{MAX_ITENS}` (3-5, 5-8, 8-12) |
 
 ### 15.3 Histórico de versões
 
@@ -380,6 +403,7 @@ O LLM marca cada cluster com `secao` no JSON. O formatador agrupa automaticament
 | v2 (MULTI-PERSONA) | 2026-03-06 | 3 personas em paralelo; REGRA DE PROFUNDIDADE forçando tools; mensagem seccionada. |
 | v3.0 (MULTI-TENANT) | 2026-03-15 | Per-User: `gerar_resumo_para_usuario()`, cache de contexto, preferências do banco, tool `buscar_na_web` (Tivaly). |
 | v3.1 (UNIFICADO) | 2026-03-15 | Substituiu 3 personas por 1 chamada unificada (`PROMPT_RESUMO_UNIFICADO_V1`). Campo `secao` no `ClusterSelecionado`. Budget: 5 tools. Custo ~60% menor. |
+|| v4.0 (MASTER V2) | 2026-03-16 | Chassis imutável + slots: `PROMPT_MASTER_V2`. Seções: foco_analista (condicional), distressed, estrategico, regulatorio, internacional. Sem "geral". Pydantic `Literal` estrito. Prefs: empresas_radar, teses_juridicas. Frontend estruturado. |
 
 ### 15.4 Normalização de Fontes
 

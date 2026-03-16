@@ -422,6 +422,11 @@ def _validate_and_fix(raw_json_str: str, persona_name: str = "") -> ResumoDiario
     if data is None:
         raise ValueError(f"{tag} Impossível extrair JSON: {raw_json_str[:500]}")
 
+    _SECOES_VALIDAS_PYDANTIC = {"foco_analista", "distressed", "estrategico", "regulatorio", "internacional"}
+    for cs in data.get("clusters_selecionados", []):
+        if isinstance(cs, dict) and cs.get("secao") not in _SECOES_VALIDAS_PYDANTIC:
+            cs["secao"] = "distressed"
+
     try:
         return ResumoDiarioContract(**data)
     except ValidationError as e:
@@ -558,13 +563,13 @@ def gerar_resumo_diario(
     for cs in contract.clusters_selecionados:
         secoes.setdefault(cs.secao, []).append(cs)
 
-    SECAO_EMOJIS = {"distressed": "💀", "regulatorio": "⚖️", "estrategico": "🏛️", "geral": "📋"}
+    SECAO_EMOJIS = {"foco_analista": "🎯", "distressed": "💀", "estrategico": "🏛️", "regulatorio": "⚖️", "internacional": "🌍"}
     print(f"\n{'='*60}")
     print(f"[ResumoDiario] RESULTADO — {len(escolhidos)} itens de {len(avaliados_ids)} clusters")
     print(f"{'='*60}")
     if contract.tldr_executivo:
         print(f"  TL;DR: {contract.tldr_executivo}")
-    for secao_key in ["distressed", "regulatorio", "estrategico", "geral"]:
+    for secao_key in ["foco_analista", "distressed", "estrategico", "regulatorio", "internacional"]:
         items = secoes.get(secao_key, [])
         if not items:
             continue
@@ -587,72 +592,31 @@ def gerar_resumo_diario(
 
 
 # --------------------------------------------------------------------------- #
-# MODO PER-USER (v3.0): Uma chamada LLM por usuario com contexto compartilhado
+# MODO PER-USER (v4.0): Chassis imutável + slots personalizáveis
 # --------------------------------------------------------------------------- #
-
-_PROMPT_USER_TEMPLATE = """Você é um analista de inteligência financeira sênior da mesa de Special Situations do BTG Pactual.
-Seu objetivo: produzir um resumo diário PERSONALIZADO de alta qualidade.
-
-VOCÊ OPERA EM 2 FASES OBRIGATÓRIAS:
-
-═══════════════════════════════════════════════════════════
-FASE 1 — TRIAGEM (leia o contexto abaixo e selecione candidatos)
-═══════════════════════════════════════════════════════════
-
-{CONTEXTO_CLUSTERS_DIA}
-
-PREFERÊNCIAS DO USUÁRIO:
-- Tags de foco: {TAGS_FOCO}
-- Tags ignoradas: {TAGS_IGNORADAS}
-- Tipo de fonte preferido: {TIPO_FONTE}
-- Tamanho do resumo: {TAMANHO} itens
-
-INSTRUÇÃO PERSONALIZADA DO TEMPLATE:
-{INSTRUCAO_TEMPLATE}
-
-INSTRUÇÕES DA FASE 1:
-- Leia TODOS os clusters acima (títulos + resumos curtos).
-- Selecione {MIN_ITENS} a {MAX_ITENS} clusters candidatos que são relevantes para o perfil do usuário.
-- PRIORIZE clusters cujas tags estejam em "Tags de foco". Se não houver match, use os mais relevantes.
-- IGNORE clusters cujas tags estejam em "Tags ignoradas".
-
-═══════════════════════════════════════════════════════════
-FASE 2 — APROFUNDAMENTO (use a tool para enriquecer os selecionados)
-═══════════════════════════════════════════════════════════
-
-Após selecionar os candidatos na Fase 1:
-- Para CADA cluster P1_CRITICO e P2_ESTRATEGICO selecionado, use OBRIGATORIAMENTE a tool
-  `obter_textos_brutos_cluster(cluster_id)` para acessar dados factuais completos (valores, nomes,
-  datas, varas judiciais, montantes). O resumo curto do contexto NÃO contém esses dados.
-- Para clusters P3_MONITORAMENTO, o aprofundamento é OPCIONAL (use apenas se o resumo parecer vago).
-- Use também `buscar_na_web(query)` se precisar de informação complementar atualizada (max 2 buscas).
-- NÃO invente dados factuais. Se a tool não retornar o dado, escreva sem ele.
-
-═══════════════════════════════════════════════════════════
-RESPOSTA FINAL
-═══════════════════════════════════════════════════════════
-
-Após a Fase 2, produza o JSON final com os clusters enriquecidos.
-A prioridade P1/P2/P3 é informativa — NUNCA a altere.
-
-FORMATO DE RESPOSTA: JSON puro (sem markdown, sem ```):
-{{
-  "tldr_executivo": "Frase executiva de até 300 chars resumindo o dia para este perfil de investidor.",
-  "clusters_selecionados": [
-    {{
-      "cluster_id": <int>,
-      "titulo_whatsapp": "<emoji> Título curto (max 100 chars)",
-      "bullet_impacto": "Frase de impacto COM dados factuais concretos (max 280 chars)",
-      "fonte_principal": "Nome do jornal"
-    }}
-  ]
-}}
-"""
+# Arquitetura de 2 camadas:
+#   CHASSIS (imutável): PROMPT_MASTER_V2 em backend/prompts.py
+#     → Rejeição de ruído, tools, formato JSON, seções obrigatórias
+#   SLOTS (personalizáveis): Tags, empresas, teses, tamanho, instrução livre
+#     → Injetados nos "buracos" do chassis via _build_user_prompt()
+#
+# O chassis NUNCA é sobrescrito pelas preferências do usuário.
+# As preferências são filtros SEGUROS dentro de um prompt blindado.
+# --------------------------------------------------------------------------- #
 
 _TAMANHO_MAP = {
     "curto": {"min": 3, "max": 5, "label": "3-5"},
     "medio": {"min": 5, "max": 8, "label": "5-8"},
     "longo": {"min": 8, "max": 12, "label": "8-12"},
+}
+
+# Defaults para usuários que não configuraram preferências
+_DEFAULTS_PREFERENCIAS = {
+    "tags_foco": "Geral — Special Situations (distressed, M&A, regulatório)",
+    "tags_ignoradas": "Nenhuma",
+    "empresas_radar": "Sem filtro específico — priorizar os eventos mais críticos do dia",
+    "teses_juridicas": "Sem filtro específico — cobrir decisões relevantes do STF/STJ/CADE",
+    "instrucao_livre": "Priorize os eventos mais críticos do dia para a mesa de Special Situations.",
 }
 
 
@@ -663,19 +627,57 @@ def _build_user_prompt(
     tipo_fonte: Optional[str],
     tamanho: str,
     instrucao_template: str = "",
+    empresas_radar: str = "",
+    teses_juridicas: str = "",
 ) -> str:
-    """Monta o prompt personalizado para um usuario a partir das suas preferencias visuais."""
+    """
+    Monta o prompt personalizado usando o chassis PROMPT_MASTER_V2.
+
+    Injeções seguras (os únicos pontos de personalização):
+      TAGS_FOCO, TAGS_IGNORADAS, EMPRESAS_RADAR, TESES_JURIDICAS,
+      INSTRUCAO_LIVRE_USUARIO, MIN_ITENS, MAX_ITENS, CONTEXTO_CLUSTERS_DIA
+    """
+    try:
+        from backend.prompts import PROMPT_MASTER_V2
+    except ImportError:
+        raise RuntimeError("PROMPT_MASTER_V2 não encontrado em backend/prompts.py")
+
     t = _TAMANHO_MAP.get(tamanho, _TAMANHO_MAP["medio"])
-    return _PROMPT_USER_TEMPLATE.format(
-        CONTEXTO_CLUSTERS_DIA=contexto,
-        TAGS_FOCO=", ".join(tags_interesse) if tags_interesse else "Todas (sem filtro)",
-        TAGS_IGNORADAS=", ".join(tags_ignoradas) if tags_ignoradas else "Nenhuma",
-        TIPO_FONTE=tipo_fonte or "Todas",
-        TAMANHO=t["label"],
+
+    has_empresas = bool(empresas_radar and empresas_radar.strip())
+    has_teses = bool(teses_juridicas and teses_juridicas.strip())
+    has_tags_custom = bool(tags_interesse)
+    has_foco = has_empresas or has_teses or has_tags_custom
+
+    tags_foco_str = ", ".join(tags_interesse) if tags_interesse else _DEFAULTS_PREFERENCIAS["tags_foco"]
+    tags_ign_str = ", ".join(tags_ignoradas) if tags_ignoradas else _DEFAULTS_PREFERENCIAS["tags_ignoradas"]
+    empresas_str = empresas_radar.strip() if has_empresas else _DEFAULTS_PREFERENCIAS["empresas_radar"]
+    teses_str = teses_juridicas.strip() if has_teses else _DEFAULTS_PREFERENCIAS["teses_juridicas"]
+    instrucao_str = instrucao_template.strip() if instrucao_template and instrucao_template.strip() else _DEFAULTS_PREFERENCIAS["instrucao_livre"]
+
+    prompt = PROMPT_MASTER_V2.format(
+        TAGS_FOCO=tags_foco_str,
+        TAGS_IGNORADAS=tags_ign_str,
+        EMPRESAS_RADAR=empresas_str,
+        TESES_JURIDICAS=teses_str,
+        INSTRUCAO_LIVRE_USUARIO=instrucao_str,
         MIN_ITENS=t["min"],
         MAX_ITENS=t["max"],
-        INSTRUCAO_TEMPLATE=instrucao_template or "Use o padrão de analista de Special Situations.",
+        MAX_TOOL_CALLS=_MAX_TOOL_CALLS_USER,
+        CONTEXTO_CLUSTERS_DIA=contexto,
     )
+
+    if not has_foco:
+        prompt = prompt.replace(
+            '1. 🎯 FOCO DO ANALISTA (secao="foco_analista"): Eventos que respondam diretamente às "Empresas no Radar", "Teses Jurídicas" ou "Tags de Foco" do analista. Esta é a seção de MAIOR VALOR — se o analista indicou preferências, preencha-a primeiro.\n\n',
+            '',
+        )
+        prompt = prompt.replace(
+            'PASSO 1 — TRIAGEM: Leia TODOS os clusters. Marque os que atendem às diretrizes do analista (seção "Foco"). Depois, marque os que atendem aos critérios de cada seção temática.',
+            'PASSO 1 — TRIAGEM: Leia TODOS os clusters. Marque os que atendem aos critérios de cada seção temática.',
+        )
+
+    return prompt
 
 
 def gerar_resumo_para_usuario(
@@ -726,7 +728,7 @@ def gerar_resumo_para_usuario(
     if not avaliados_ids:
         return {"ok": False, "data": target_date.isoformat(), "error": "Nenhum cluster encontrado."}
 
-    # 2. Preferencias do usuario
+    # 2. Preferencias do usuario (extraidas do banco)
     db_prefs = _open_db()
     try:
         prefs = get_preferencias_usuario(db_prefs, user_id) if get_preferencias_usuario else None
@@ -746,14 +748,18 @@ def gerar_resumo_para_usuario(
         instrucoes_user = config_extra.get("instrucoes_resumo", "")
         if instrucoes_user:
             instrucao = instrucoes_user
+
+        empresas_radar = config_extra.get("empresas_radar", "")
+        teses_juridicas = config_extra.get("teses_juridicas", "")
     finally:
         db_prefs.close()
 
-    # 3. UMA chamada LLM personalizada (não 3 personas)
+    # 3. UMA chamada LLM — chassis PROMPT_MASTER_V2 + slots personalizáveis
     prompt_final = _build_user_prompt(
-        contexto, tags_interesse, tags_ignoradas, tipo_fonte, tamanho, instrucao
+        contexto, tags_interesse, tags_ignoradas, tipo_fonte, tamanho,
+        instrucao, empresas_radar, teses_juridicas,
     )
-    print(f"[UserResumo] Prompt montado: {len(prompt_final)} chars, tags_foco={tags_interesse}, tamanho={tamanho}")
+    print(f"[UserResumo] Prompt montado: {len(prompt_final)} chars, tags_foco={tags_interesse}, tamanho={tamanho}, empresas={empresas_radar or 'default'}")
 
     db_llm = _open_db()
     try:
@@ -784,7 +790,7 @@ def gerar_resumo_para_usuario(
         "clusters_avaliados_ids": avaliados_ids,
         "todos_clusters_escolhidos_ids": escolhidos,
         "fontes_map": fontes_map,
-        "prompt_version": "USER_PERSONALIZED_V1",
+        "prompt_version": "MASTER_V2_PERSONALIZED",
     }
 
 
@@ -823,10 +829,11 @@ def formatar_whatsapp(
         from backend.prompts import SECOES_RESUMO
     except ImportError:
         SECOES_RESUMO = {
+            "foco_analista": {"emoji": "🎯", "titulo": "FOCO DO ANALISTA"},
             "distressed": {"emoji": "💀", "titulo": "DISTRESSED & NPLs"},
-            "regulatorio": {"emoji": "⚖️", "titulo": "REGULATÓRIO & JURÍDICO"},
             "estrategico": {"emoji": "🏛️", "titulo": "M&A & MOVIMENTOS CORPORATIVOS"},
-            "geral": {"emoji": "📋", "titulo": "DESTAQUES GERAIS"},
+            "regulatorio": {"emoji": "⚖️", "titulo": "REGULATÓRIO & JURÍDICO"},
+            "internacional": {"emoji": "🌍", "titulo": "RADAR GLOBAL / INTERNACIONAL"},
         }
 
     data_str = resultado.get("data", "")
@@ -839,10 +846,12 @@ def formatar_whatsapp(
     tldr = contract_dict.get("tldr_executivo", "")
     clusters = contract_dict.get("clusters_selecionados", [])
 
-    # Agrupar por secao
+    _SECOES_VALIDAS = {"foco_analista", "distressed", "estrategico", "regulatorio", "internacional"}
     por_secao: Dict[str, List[Dict]] = {}
     for cs in clusters:
-        secao = cs.get("secao", "geral")
+        secao = cs.get("secao", "distressed")
+        if secao not in _SECOES_VALIDAS:
+            secao = "distressed"
         por_secao.setdefault(secao, []).append(cs)
 
     date_label = data_str
@@ -859,7 +868,7 @@ def formatar_whatsapp(
     sections: List[str] = []
     vistos: set = set()
 
-    for secao_key in ["distressed", "regulatorio", "estrategico", "geral"]:
+    for secao_key in ["foco_analista", "distressed", "estrategico", "regulatorio", "internacional"]:
         items = por_secao.get(secao_key, [])
         if not items:
             continue

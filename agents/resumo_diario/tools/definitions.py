@@ -9,7 +9,7 @@ Contém:
 
 import os
 from pydantic import BaseModel, Field, conlist
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Literal, Optional
 
 try:
     from backend.database import SessionLocal
@@ -25,10 +25,9 @@ except Exception:
 
 class ClusterSelecionado(BaseModel):
     cluster_id: int
-    secao: str = Field(
-        "geral",
-        max_length=30,
-        description="Seção temática: 'distressed', 'regulatorio', 'estrategico' ou 'geral'."
+    secao: Literal["foco_analista", "distressed", "estrategico", "regulatorio", "internacional"] = Field(
+        "distressed",
+        description="Seção temática obrigatória."
     )
     titulo_whatsapp: str = Field(
         ...,

@@ -4443,57 +4443,72 @@ async function mostrarOnboardingModal() {
 
     const existingTags = existingPrefs.tags_interesse || [];
     const existingTamanho = existingPrefs.tamanho_resumo || 'medio';
-    const existingInstrucoes = existingPrefs.instrucoes_resumo || (existingPrefs.config_extra || {}).instrucoes_resumo || '';
+    const ce = existingPrefs.config_extra || {};
+    const existingEmpresas = ce.empresas_radar || '';
+    const existingTeses = ce.teses_juridicas || '';
+    const existingInstrucoes = existingPrefs.instrucoes_resumo || ce.instrucoes_resumo || '';
 
     const overlay = document.createElement('div');
     overlay.id = 'onboarding-overlay';
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;overflow-y:auto;';
 
     const TAGS_DISPONIVEIS = [
-        'M&A', 'Recuperação Judicial', 'Regulatório', 'Distressed Assets',
-        'Crédito', 'NPL', 'Fundos', 'Energia', 'Infraestrutura', 'Telecom',
-        'Varejo', 'Saúde', 'Agro', 'Real Estate', 'Tech', 'Finanças',
-        'Jurídico', 'Internacional'
+        'M&A', 'Recuperacao Judicial', 'Regulatorio', 'Distressed Assets',
+        'Credito', 'NPL', 'Fundos', 'Energia', 'Infraestrutura', 'Telecom',
+        'Varejo', 'Saude', 'Agro', 'Real Estate', 'Tech', 'Financas',
+        'Juridico', 'Internacional'
     ];
 
     const tagsHtml = TAGS_DISPONIVEIS.map(t => {
         const checked = existingTags.includes(t) ? 'checked' : '';
         const bg = checked ? 'background:#eff6ff;border-color:#3b82f6;' : '';
-        return `<label style="display:inline-flex;align-items:center;gap:.3rem;padding:.3rem .6rem;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:.85rem;user-select:none;transition:all .2s;${bg}">
+        return `<label style="display:inline-flex;align-items:center;gap:.3rem;padding:.3rem .6rem;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:.82rem;user-select:none;transition:all .2s;${bg}">
             <input type="checkbox" value="${t}" ${checked} style="accent-color:#3b82f6;"> ${t}
         </label>`;
     }).join('');
 
     overlay.innerHTML = `
-    <div style="background:#fff;border-radius:12px;padding:2rem;max-width:600px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,.3);margin:1rem auto;">
-        <h2 style="margin:0 0 .3rem;color:#1e3a5f;font-size:1.2rem;">Preferencias do Resumo</h2>
-        <p style="color:#6b7280;font-size:.8rem;margin-bottom:.8rem;">Configure como o agente de IA gera seu resumo diario.</p>
+    <div style="background:#fff;border-radius:12px;padding:1.5rem;max-width:620px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,.3);margin:1rem auto;max-height:92vh;overflow-y:auto;">
+        <h2 style="margin:0 0 .2rem;color:#1e3a5f;font-size:1.1rem;">Preferencias do Resumo</h2>
+        <p style="color:#9ca3af;font-size:.73rem;margin:0 0 .8rem;">O AlphaFeed garante a filtragem de ruido (esportes, entretenimento, politica partidaria) e extrai valores exatos dos documentos automaticamente. Configure aqui apenas a sua tese de investimento.</p>
 
-        <div style="margin-bottom:.8rem;">
-            <label style="font-size:.8rem;color:#374151;font-weight:600;display:block;margin-bottom:.3rem;">Temas de interesse (filtro de prioridade)</label>
-            <div id="onboarding-tags" style="display:flex;flex-wrap:wrap;gap:.4rem;">
+        <div style="margin-bottom:.7rem;">
+            <label style="font-size:.8rem;color:#374151;font-weight:600;display:block;margin-bottom:.3rem;">Temas de interesse</label>
+            <div id="onboarding-tags" style="display:flex;flex-wrap:wrap;gap:.35rem;">
                 ${tagsHtml}
             </div>
         </div>
 
-        <div style="margin-bottom:.8rem;">
+        <div style="margin-bottom:.7rem;">
             <label style="font-size:.8rem;color:#374151;font-weight:600;">Tamanho do resumo:</label>
-            <select id="onboarding-tamanho" style="margin-left:.5rem;padding:.3rem .6rem;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem;">
+            <select id="onboarding-tamanho" style="margin-left:.5rem;padding:.3rem .6rem;border:1px solid #d1d5db;border-radius:6px;font-size:.82rem;">
                 <option value="curto" ${existingTamanho === 'curto' ? 'selected' : ''}>Curto (3-5 itens)</option>
                 <option value="medio" ${existingTamanho === 'medio' ? 'selected' : ''}>Medio (5-8 itens)</option>
                 <option value="longo" ${existingTamanho === 'longo' ? 'selected' : ''}>Longo (8-12 itens)</option>
             </select>
         </div>
 
-        <div style="margin-bottom:1rem;">
-            <label style="font-size:.8rem;color:#374151;font-weight:600;display:block;margin-bottom:.3rem;">Instrucoes para o agente (prompt personalizado)</label>
-            <p style="font-size:.75rem;color:#9ca3af;margin:0 0 .3rem;">Escreva como o agente deve montar seu resumo. Ex: "Nao separe por topicos, escreva um texto corrido com analise juridica propria" ou "Foque apenas em energia e infraestrutura com impacto regulatorio".</p>
-            <textarea id="onboarding-instrucoes" rows="6" style="width:100%;padding:.5rem;border:1px solid #d1d5db;border-radius:6px;font-size:.82rem;font-family:inherit;resize:vertical;box-sizing:border-box;" placeholder="Deixe vazio para usar o padrao.">${existingInstrucoes || 'Voce e um analista de inteligencia financeira senior da mesa de Special Situations do BTG Pactual. Produza um resumo diario em 2 fases: (1) Triagem — leia todos os clusters e selecione os mais relevantes para o perfil do usuario, priorizando as tags de foco; (2) Aprofundamento — para clusters P1 e P2, use a tool obter_textos_brutos_cluster para extrair dados factuais concretos (valores R$, nomes, varas, tribunais). Escreva bullets com QUEM, O QUE, QUANTO. Nunca invente dados.'}</textarea>
+        <div style="margin-bottom:.7rem;">
+            <label style="font-size:.8rem;color:#374151;font-weight:600;display:block;margin-bottom:.2rem;">Empresas no radar</label>
+            <p style="font-size:.72rem;color:#9ca3af;margin:0 0 .2rem;">O agente priorizara noticias dessas empresas, mesmo que sejam P3.</p>
+            <input id="onboarding-empresas" type="text" style="width:100%;padding:.4rem .5rem;border:1px solid #d1d5db;border-radius:6px;font-size:.82rem;box-sizing:border-box;" placeholder="Ex: Petrobras, Vale, Banco Master, Light" value="${existingEmpresas}">
+        </div>
+
+        <div style="margin-bottom:.7rem;">
+            <label style="font-size:.8rem;color:#374151;font-weight:600;display:block;margin-bottom:.2rem;">Teses juridicas / regulatorias</label>
+            <p style="font-size:.72rem;color:#9ca3af;margin:0 0 .2rem;">Leis, marcos regulatorios ou temas juridicos que voce acompanha.</p>
+            <input id="onboarding-teses" type="text" style="width:100%;padding:.4rem .5rem;border:1px solid #d1d5db;border-radius:6px;font-size:.82rem;box-sizing:border-box;" placeholder="Ex: Lei de Falencias, securitizacao divida ativa, ICMS" value="${existingTeses}">
+        </div>
+
+        <div style="margin-bottom:.8rem;">
+            <label style="font-size:.8rem;color:#374151;font-weight:600;display:block;margin-bottom:.2rem;">Instrucoes adicionais (opcional)</label>
+            <p style="font-size:.72rem;color:#9ca3af;margin:0 0 .2rem;">Complementa as opcoes acima. Ex: "Texto corrido sem topicos" ou "Foque em leiloes de energia".</p>
+            <textarea id="onboarding-instrucoes" rows="3" style="width:100%;padding:.4rem .5rem;border:1px solid #d1d5db;border-radius:6px;font-size:.82rem;font-family:inherit;resize:vertical;box-sizing:border-box;" placeholder="Deixe vazio para usar o padrao.">${existingInstrucoes}</textarea>
         </div>
 
         <div style="display:flex;gap:.5rem;justify-content:flex-end;">
-            <button id="onboarding-skip" style="padding:.5rem 1rem;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;color:#6b7280;font-size:.85rem;">Fechar</button>
-            <button id="onboarding-save" style="padding:.5rem 1rem;border:none;border-radius:6px;background:#3b82f6;color:#fff;cursor:pointer;font-weight:500;font-size:.85rem;">Salvar preferencias</button>
+            <button id="onboarding-skip" style="padding:.4rem .8rem;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;color:#6b7280;font-size:.82rem;">Fechar</button>
+            <button id="onboarding-save" style="padding:.4rem .8rem;border:none;border-radius:6px;background:#3b82f6;color:#fff;cursor:pointer;font-weight:500;font-size:.82rem;">Salvar preferencias</button>
         </div>
     </div>`;
 
@@ -4517,15 +4532,20 @@ async function mostrarOnboardingModal() {
         const tags = [];
         overlay.querySelectorAll('#onboarding-tags input:checked').forEach(cb => tags.push(cb.value));
         const tamanho = document.getElementById('onboarding-tamanho').value;
+        const empresas = document.getElementById('onboarding-empresas').value.trim();
+        const teses = document.getElementById('onboarding-teses').value.trim();
         const instrucoes = document.getElementById('onboarding-instrucoes').value.trim();
 
         try {
-            const body = { tags_interesse: tags, tamanho_resumo: tamanho };
-            if (instrucoes) {
-                body.config_extra = { instrucoes_resumo: instrucoes };
-            } else {
-                body.config_extra = { instrucoes_resumo: '' };
-            }
+            const body = {
+                tags_interesse: tags,
+                tamanho_resumo: tamanho,
+                config_extra: {
+                    empresas_radar: empresas,
+                    teses_juridicas: teses,
+                    instrucoes_resumo: instrucoes,
+                },
+            };
             const resp = await fetchAuth(`${API_BASE}/api/user/preferencias`, {
                 method: 'PUT',
                 body: JSON.stringify(body),
@@ -4555,13 +4575,21 @@ async function carregarPrefsBanner() {
         const prefs = await resp.json();
         const tags = prefs.tags_interesse || [];
         const tam = prefs.tamanho_resumo || 'medio';
-        const instrucoes = prefs.instrucoes_resumo || '';
-        if (tags.length > 0 || instrucoes) {
+        const ce = prefs.config_extra || {};
+        const empresas = ce.empresas_radar || '';
+        const teses = ce.teses_juridicas || '';
+
+        const parts = [];
+        if (tags.length > 0) parts.push(`Temas: <strong>${tags.join(', ')}</strong>`);
+        if (empresas) parts.push(`Empresas: <strong>${empresas}</strong>`);
+        if (teses) parts.push(`Teses: <strong>${teses}</strong>`);
+        parts.push(`Tamanho: <strong>${tam}</strong>`);
+
+        if (parts.length > 1) {
             banner.style.display = 'block';
-            let html = '';
-            if (tags.length > 0) html += `Interesses: <strong>${tags.join(', ')}</strong> · Tamanho: <strong>${tam}</strong>`;
-            if (instrucoes) html += `${html ? ' · ' : ''}<em style="color:#6b7280;">Instrucoes: "${instrucoes.substring(0, 80)}${instrucoes.length > 80 ? '...' : ''}"</em>`;
-            banner.innerHTML = html;
+            banner.innerHTML = parts.join(' · ');
+        } else {
+            banner.style.display = 'none';
         }
     } catch {}
 }
