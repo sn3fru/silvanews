@@ -2163,6 +2163,7 @@ def cleanup_old_data(db: Session, days: int = 90) -> Dict[str, int]:
     """
     Remove artigos brutos e clusters com mais de N dias.
     Deleta dependencias FK na ordem correta para evitar ForeignKeyViolation.
+    Usa uma unica transacao: se qualquer etapa falhar, nada e deletado.
     Nao deleta: resumos_usuario, templates, preferencias, usuarios.
     """
     cutoff = datetime.utcnow() - timedelta(days=days)
@@ -2174,72 +2175,127 @@ def cleanup_old_data(db: Session, days: int = 90) -> Dict[str, int]:
     if not old_artigo_ids and not old_cluster_ids:
         return stats
 
-    deps = 0
+    BATCH = 500
 
-    # 1. Dependencias de artigos_brutos
-    if old_artigo_ids:
+    def _batch_delete(model_class, filter_col, ids) -> int:
+        """Deleta registros em lotes. Propaga exceções."""
+        deleted = 0
+        for i in range(0, len(ids), BATCH):
+            batch_ids = ids[i:i + BATCH]
+            deleted += db.query(model_class).filter(
+                filter_col.in_(batch_ids)
+            ).delete(synchronize_session=False)
+        return deleted
+
+    def _optional_delete(model_class_name: str, filter_attr: str, ids, label: str) -> int:
+        """Deleta se o modelo existir; silencia ImportError mas loga outros erros."""
         try:
-            from backend.database import FeedbackNoticia
-            deps += db.query(FeedbackNoticia).filter(FeedbackNoticia.artigo_id.in_(old_artigo_ids)).delete(synchronize_session=False)
-        except Exception:
-            db.rollback()
+            import importlib
+            mod = importlib.import_module("backend.database")
+            cls = getattr(mod, model_class_name, None)
+            if cls is None:
+                return 0
+            col = getattr(cls, filter_attr, None)
+            if col is None:
+                return 0
+            return _batch_delete(cls, col, ids)
+        except ImportError:
+            return 0
+        except Exception as e:
+            print(f"  [CLEANUP] Aviso ao limpar {label}: {e}")
+            return 0
 
-        try:
-            from backend.database import GraphEdge
-            deps += db.query(GraphEdge).filter(GraphEdge.artigo_id.in_(old_artigo_ids)).delete(synchronize_session=False)
-        except Exception:
-            db.rollback()
-
-        try:
-            from sqlalchemy import text as sa_text
-            db.execute(sa_text("DELETE FROM artigo_embeddings WHERE artigo_id = ANY(:ids)"), {"ids": old_artigo_ids})
-        except Exception:
-            db.rollback()
-
-    # 2. Dependencias de clusters_eventos
-    if old_cluster_ids:
-        try:
-            from backend.database import SinteseExecutiva
-            deps += db.query(SinteseExecutiva).filter(SinteseExecutiva.cluster_id.in_(old_cluster_ids)).delete(synchronize_session=False)
-        except Exception:
-            db.rollback()
-
-        try:
-            from backend.database import ClusterAlteracao
-            deps += db.query(ClusterAlteracao).filter(ClusterAlteracao.cluster_id.in_(old_cluster_ids)).delete(synchronize_session=False)
-        except Exception:
-            db.rollback()
-
-        try:
-            from backend.database import DeepResearchJob, SocialResearchJob
-            deps += db.query(DeepResearchJob).filter(DeepResearchJob.cluster_id.in_(old_cluster_ids)).delete(synchronize_session=False)
-            deps += db.query(SocialResearchJob).filter(SocialResearchJob.cluster_id.in_(old_cluster_ids)).delete(synchronize_session=False)
-        except Exception:
-            db.rollback()
-
-        try:
-            from backend.database import ChatMessage
-            db.query(ChatMessage).filter(ChatMessage.cluster_id.in_(old_cluster_ids)).delete(synchronize_session=False)
-        except Exception:
-            db.rollback()
-
-    stats["deps_deleted"] = deps
-
-    # 3. Artigos e clusters (agora sem FK pendentes)
-    if old_artigo_ids:
-        stats["artigos_deleted"] = db.query(ArtigoBruto).filter(ArtigoBruto.id.in_(old_artigo_ids)).delete(synchronize_session=False)
-
-    if old_cluster_ids:
-        stats["clusters_deleted"] = db.query(ClusterEvento).filter(ClusterEvento.id.in_(old_cluster_ids)).delete(synchronize_session=False)
-
-    # 4. Chat sessions antigas
     try:
-        from backend.database import ChatSession, EstagiarioChatSession, EstagiarioChatMessage
-        chat_del = db.query(ChatSession).filter(ChatSession.created_at < cutoff).delete(synchronize_session=False)
-        est_del = db.query(EstagiarioChatSession).filter(EstagiarioChatSession.created_at < cutoff).delete(synchronize_session=False)
-        stats["chat_deleted"] = chat_del + est_del
-    except Exception:
-        pass
+        deps = 0
 
-    db.commit()
+        from backend.database import (
+            FeedbackNoticia, GraphEdge, LogProcessamento,
+            SinteseExecutiva, ClusterAlteracao,
+            ChatMessage, ChatSession,
+            EstagiarioChatSession, EstagiarioChatMessage,
+        )
+
+        # --- 1. Dependencias de artigos_brutos (FK -> artigos_brutos.id) ---
+        if old_artigo_ids:
+            # FeedbackNoticia é OBRIGATÓRIA — se falhar, rollback total
+            deps += _batch_delete(FeedbackNoticia, FeedbackNoticia.artigo_id, old_artigo_ids)
+            deps += _batch_delete(GraphEdge, GraphEdge.artigo_id, old_artigo_ids)
+            deps += _batch_delete(LogProcessamento, LogProcessamento.artigo_id, old_artigo_ids)
+
+            deps += _optional_delete("SemanticEmbedding", "artigo_id", old_artigo_ids, "semantic_embeddings")
+
+            try:
+                from sqlalchemy import text as sa_text
+                for i in range(0, len(old_artigo_ids), BATCH):
+                    batch_ids = old_artigo_ids[i:i + BATCH]
+                    db.execute(sa_text("DELETE FROM artigo_embeddings WHERE artigo_id = ANY(:ids)"), {"ids": batch_ids})
+            except Exception:
+                pass
+
+        # --- 2. Dependencias de clusters_eventos (FK -> clusters_eventos.id) ---
+        if old_cluster_ids:
+            # SinteseExecutiva nao tem FK para cluster — limpa por data
+            deps += db.query(SinteseExecutiva).filter(
+                SinteseExecutiva.created_at < cutoff
+            ).delete(synchronize_session=False)
+            deps += _batch_delete(ClusterAlteracao, ClusterAlteracao.cluster_id, old_cluster_ids)
+            deps += _batch_delete(LogProcessamento, LogProcessamento.cluster_id, old_cluster_ids)
+
+            deps += _optional_delete("DeepResearchJob", "cluster_id", old_cluster_ids, "deep_research")
+            deps += _optional_delete("SocialResearchJob", "cluster_id", old_cluster_ids, "social_research")
+
+            # Chat: messages antes de sessions
+            old_session_ids = [
+                r[0] for r in db.query(ChatSession.id).filter(
+                    ChatSession.cluster_id.in_(old_cluster_ids)
+                ).all()
+            ]
+            if old_session_ids:
+                deps += _batch_delete(ChatMessage, ChatMessage.session_id, old_session_ids)
+                deps += _batch_delete(ChatSession, ChatSession.id, old_session_ids)
+
+        stats["deps_deleted"] = deps
+
+        # --- 3. Artigos e clusters (agora sem FK pendentes) ---
+        if old_artigo_ids:
+            for i in range(0, len(old_artigo_ids), BATCH):
+                batch_ids = old_artigo_ids[i:i + BATCH]
+                stats["artigos_deleted"] += db.query(ArtigoBruto).filter(
+                    ArtigoBruto.id.in_(batch_ids)
+                ).delete(synchronize_session=False)
+
+        if old_cluster_ids:
+            for i in range(0, len(old_cluster_ids), BATCH):
+                batch_ids = old_cluster_ids[i:i + BATCH]
+                stats["clusters_deleted"] += db.query(ClusterEvento).filter(
+                    ClusterEvento.id.in_(batch_ids)
+                ).delete(synchronize_session=False)
+
+        # --- 4. Chat sessions antigas (sem FK para clusters/artigos) ---
+        try:
+            old_est_ids = [
+                r[0] for r in db.query(EstagiarioChatSession.id).filter(
+                    EstagiarioChatSession.created_at < cutoff
+                ).all()
+            ]
+            if old_est_ids:
+                db.query(EstagiarioChatMessage).filter(
+                    EstagiarioChatMessage.session_id.in_(old_est_ids)
+                ).delete(synchronize_session=False)
+            chat_del = db.query(ChatSession).filter(
+                ChatSession.created_at < cutoff
+            ).delete(synchronize_session=False)
+            est_del = db.query(EstagiarioChatSession).filter(
+                EstagiarioChatSession.created_at < cutoff
+            ).delete(synchronize_session=False)
+            stats["chat_deleted"] = chat_del + est_del
+        except Exception:
+            pass
+
+        db.commit()
+
+    except Exception as e:
+        db.rollback()
+        raise e
+
     return stats

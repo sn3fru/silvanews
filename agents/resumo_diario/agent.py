@@ -96,6 +96,56 @@ def _build_tipo_fonte_map(db, target_date: datetime.date) -> Dict[int, str]:
         return {}
 
 
+def _resolve_fontes_from_artigos(db, cluster_id: int) -> List[str]:
+    """
+    Fallback robusto: busca nomes de fontes diretamente dos artigos do cluster.
+    Tenta: artigo.jornal → metadados.fonte_original → metadados.arquivo_origem.
+    Normaliza cada nome via normalizar_fonte_display().
+    """
+    try:
+        from backend.database import ArtigoBruto
+        from backend.utils import normalizar_fonte_display
+    except ImportError:
+        return []
+
+    try:
+        artigos = db.query(
+            ArtigoBruto.jornal, ArtigoBruto.metadados
+        ).filter(ArtigoBruto.cluster_id == cluster_id).all()
+    except Exception:
+        return []
+
+    nomes: List[str] = []
+    for jornal, metadados in artigos:
+        raw_name = ""
+        if jornal:
+            raw_name = jornal.strip()
+        if not raw_name or raw_name.lower() in ("fonte desconhecida", "n/a", ""):
+            meta = metadados or {}
+            raw_name = (
+                meta.get("fonte_original")
+                or meta.get("jornal")
+                or ""
+            ).strip()
+        if not raw_name or raw_name.lower() in ("fonte desconhecida", "n/a", ""):
+            meta = metadados or {}
+            arq = meta.get("arquivo_origem", "")
+            if arq:
+                raw_name = arq.replace(".pdf", "").replace(".json", "").strip()
+
+        clean = normalizar_fonte_display(raw_name)
+        if clean:
+            nomes.append(clean)
+
+    seen = set()
+    unique = []
+    for n in nomes:
+        if n.lower() not in seen:
+            seen.add(n.lower())
+            unique.append(n)
+    return unique
+
+
 def _build_context_block(db, target_date: datetime.date) -> Tuple[str, List[int], Dict[int, List[str]]]:
     """
     Recolhe TODOS os clusters ativos do dia (P1, P2, P3), todas as fontes,
@@ -166,6 +216,11 @@ def _build_context_block(db, target_date: datetime.date) -> Tuple[str, List[int]
             if fn.lower() not in seen_fontes:
                 seen_fontes.add(fn.lower())
                 nomes_fontes_unique.append(fn)
+
+        # Fallback: se nenhuma fonte foi resolvida via CRUD, busca direto dos artigos
+        if not nomes_fontes_unique:
+            nomes_fontes_unique = _resolve_fontes_from_artigos(db, cid)
+
         fontes_map[cid] = nomes_fontes_unique
         fontes_label = ", ".join(nomes_fontes_unique[:3]) if nomes_fontes_unique else ""
 
@@ -891,8 +946,21 @@ def formatar_whatsapp(
             fontes_str = _format_fontes_label(real_fontes)
             if not fontes_str:
                 fp = cs.get('fonte_principal', '') or ''
-                if fp.lower() not in ('', 'fonte não identificada', 'fonte desconhecida', 'n/a'):
-                    fontes_str = fp
+                fp_lower = fp.lower()
+                _FONTES_INVALIDAS = (
+                    '', 'fonte não identificada', 'fonte desconhecida',
+                    'não identificada', 'n/a', 'desconhecida',
+                    'sem fonte', 'unknown',
+                )
+                is_invalid = (
+                    fp_lower in _FONTES_INVALIDAS
+                    or 'obter_textos_brutos' in fp_lower
+                    or 'não identificada' in fp_lower
+                    or 'usar obter' in fp_lower
+                    or 'identificar a fonte' in fp_lower
+                )
+                if not is_invalid and fp.strip():
+                    fontes_str = fp.strip()
             if fontes_str:
                 section += f"_Fontes: {fontes_str}_\n"
             section += "\n"

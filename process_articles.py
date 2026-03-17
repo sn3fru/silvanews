@@ -93,7 +93,7 @@ genai.configure(api_key=api_key)
 # Etapa 1 (extração) e Etapa 3 (resumos): modelo mais barato
 client = genai.GenerativeModel('gemini-2.0-flash')
 # Etapa 2 (agrupamento): modelo com mais capacidade de raciocínio para regras estritas
-client_agrupamento = genai.GenerativeModel('gemini-3.1-flash-lite-preview')
+client_agrupamento = genai.GenerativeModel('gemini-2.5-flash')
 print("SUCESSO: Gemini configurado (2.0 Flash para extração/resumos; 2.5 Flash para agrupamento).")
 
 # Funções auxiliares para escolher tags/prompts baseado no tipo_fonte
@@ -2074,6 +2074,7 @@ def agrupar_noticias_com_prompt(db: Session, client, day_str: Optional[str] = No
             lotes_local = [artigos_lista[i:i + BATCH_SIZE_AGRUPAMENTO] for i in range(0, len(artigos_lista), BATCH_SIZE_AGRUPAMENTO)]
             clusters_criados_local = 0
             artigos_agrupados_local = 0
+            ids_agrupados = set()  # Track which article DB IDs were grouped by LLM
 
             for num_lote, lote_artigos in enumerate(lotes_local, 1):
                 # Isolamento estrito: lote não pode misturar tipo_fonte
@@ -2236,6 +2237,7 @@ IMPORTANTE: Retorne APENAS o JSON válido para este lote.
                             for artigo in artigos_do_grupo:
                                 associate_artigo_to_cluster(db, artigo.id, cluster.id)
                                 artigos_agrupados_local += 1
+                                ids_agrupados.add(artigo.id)
 
 
                         except Exception as e:
@@ -2245,6 +2247,47 @@ IMPORTANTE: Retorne APENAS o JSON válido para este lote.
                 except Exception as e_lote:
                     print(f"❌ ERRO CRÍTICO ao processar o lote {rotulo} {num_lote}: {e_lote}")
                     continue  # Pula para o próximo lote
+
+            # --- FALLBACK: artigos não mencionados pelo LLM ganham cluster individual ---
+            # Exclui artigos que foram marcados como "erro" (sem fato gerador válido)
+            artigos_orfaos = [
+                a for a in artigos_lista
+                if a.id not in ids_agrupados and a.status not in ("erro", "processado", "irrelevante")
+            ]
+            if artigos_orfaos:
+                print(f"  📌 {len(artigos_orfaos)} artigos de {rotulo} não agrupados pelo LLM — criando clusters individuais...")
+                for artigo_orfao in artigos_orfaos:
+                    try:
+                        titulo_orfao = (artigo_orfao.titulo_extraido or gerar_titulo_fallback_curto(
+                            artigo_orfao.texto_processado or artigo_orfao.texto_bruto or ""
+                        ) or "Sem título")[:200]
+
+                        emb_orfao = None
+                        if artigo_orfao.embedding:
+                            emb_orfao = artigo_orfao.embedding
+
+                        tipo_fonte_orfao = getattr(artigo_orfao, 'tipo_fonte', None) or 'brasil_fisico'
+                        if tipo_fonte_orfao == 'nacional':
+                            tipo_fonte_orfao = 'brasil_fisico'
+
+                        from backend.models import ClusterEventoCreate
+                        cluster_data = ClusterEventoCreate(
+                            titulo_cluster=titulo_orfao,
+                            resumo_cluster=None,
+                            tag="PENDING",
+                            prioridade="PENDING",
+                            embedding_medio=emb_orfao,
+                            tipo_fonte=tipo_fonte_orfao,
+                        )
+                        cluster_orfao = create_cluster(db, cluster_data)
+                        associate_artigo_to_cluster(db, artigo_orfao.id, cluster_orfao.id)
+                        clusters_criados_local += 1
+                        artigos_agrupados_local += 1
+                    except Exception as e_orfao:
+                        print(f"  ⚠️ Falha ao criar cluster individual para artigo {artigo_orfao.id}: {e_orfao}")
+                        continue
+                db.flush()
+                print(f"  ✅ {len(artigos_orfaos)} clusters individuais criados para artigos órfãos de {rotulo}.")
 
             return (clusters_criados_local, artigos_agrupados_local)
 

@@ -316,6 +316,7 @@ main()
 |---|---|---|---|
 | `processar_artigos_pendentes(limite)` | 558-759 | Orquestra 4 etapas | get_artigos_pendentes, processar_artigo_sem_cluster, agrupar_noticias_incremental, classificar_e_resumir_cluster, consolidacao_final_clusters |
 | `processar_artigo_sem_cluster(db, id, client)` | 2075-2238 | Etapa 1: extrai dados, embedding, marca pronto_agrupar | update_artigo_dados_sem_status, gerar_embedding, create_log |
+| `agrupar_noticias_com_prompt(db, client, day_str)` | 2024-2280 | Etapa 2 (lote): agrupa por PROMPT_AGRUPAMENTO_V1 + fallback de clusters individuais para artigos não mencionados pelo LLM | create_cluster, associate_artigo_to_cluster |
 | `agrupar_noticias_incremental(db, client)` | 1359-1466 | Etapa 2: agrupa por tipo_fonte em lotes | processar_lote_incremental, marcar_artigos_processados |
 | `processar_lote_incremental(db, client, lote, clusters, n)` | 1484-1724 | Processa 1 lote incremental | associate_artigo_to_cluster, create_cluster, PROMPT_AGRUPAMENTO_INCREMENTAL_V2 |
 | `classificar_e_resumir_cluster(db, cluster_id, client, stats)` | 836-919 | Etapa 3: Agente 1 (materialidade) + classifica+resume (PROMPT_ANALISE_E_SINTESE_CLUSTER_V1) | get_cluster_by_id, get_artigos_by_cluster, PROMPT_AGENTE_MATERIALIDADE_V1, PROMPT_ANALISE_E_SINTESE_CLUSTER_V1 |

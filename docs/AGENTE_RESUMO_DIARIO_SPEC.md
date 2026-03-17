@@ -402,6 +402,7 @@ O chassis **nunca** é sobrescrito pelas preferências. As preferências são fi
 | v3.0 (MULTI-TENANT) | 2026-03-15 | Per-User: `gerar_resumo_para_usuario()`, cache de contexto, preferências do banco, tool `buscar_na_web` (Tivaly). |
 | v3.1 (UNIFICADO) | 2026-03-15 | Substituiu 3 personas por 1 chamada unificada (`PROMPT_RESUMO_UNIFICADO_V1`). Campo `secao` no `ClusterSelecionado`. Budget: 5 tools. Custo ~60% menor. |
 || v4.0 (MASTER V2) | 2026-03-16 | Chassis imutável + slots: `PROMPT_MASTER_V2`. Seções: foco_analista (condicional), distressed, estrategico, regulatorio, internacional. Sem "geral". Pydantic `Literal` estrito. Prefs: empresas_radar, teses_juridicas. Frontend estruturado. |
+|| v4.2 (FIXES) | 2026-03-17 | Fix fontes "Não identificada" via `_resolve_fontes_from_artigos` fallback. Filtro robusto em `formatar_whatsapp`. Fix artigos órfãos no agrupamento (clusters individuais). Fix cleanup FK `feedback_noticias`. |
 
 ### 15.4 Normalização de Fontes
 
@@ -410,12 +411,22 @@ Os nomes de fontes (jornais/portais) passam por `normalizar_fonte_display()` em 
 - Filtra lixo (usernames, valores tipo "ines249", "json_dump").
 - Whitelist de ~30 fontes conhecidas.
 
+**Fallback robusto (v4.2):** Quando o CRUD `get_clusters_for_feed_by_date` retorna fontes vazias ou "Fonte Desconhecida" (filtradas por `normalizar_fonte_display`), o agente usa `_resolve_fontes_from_artigos(db, cluster_id)` para buscar diretamente nos artigos:
+1. `artigo.jornal` → `normalizar_fonte_display`
+2. `metadados.fonte_original` ou `metadados.jornal`
+3. `metadados.arquivo_origem` (nome do PDF/JSON sem extensão)
+
+Na formatação WhatsApp, fontes inválidas contendo "obter_textos_brutos", "não identificada" ou instruções do LLM são filtradas e omitidas (sem exibir "Fontes: Não identificada").
+
 ### 15.5 Pendências conhecidas
 
 - [ ] Módulo de envio WhatsApp (provedor a definir).
 - [ ] Tabela `resumos_enviados_whatsapp` para idempotência global.
 - [ ] Extrair modelo Gemini para config/env.
 - [x] Telegram Listener: `TELEGRAM_LISTENER/` (Telethon, user account, sem bot). Ver `TELEGRAM_LISTENER/README.md`.
+- [x] Fix fontes "Não identificada": fallback `_resolve_fontes_from_artigos` + filtro robusto em `formatar_whatsapp` (v4.2, 2026-03-17).
+- [x] Fix artigos órfãos no agrupamento: clusters individuais para artigos não mencionados pelo LLM (v4.2, 2026-03-17).
+- [x] Fix cleanup FK: `cleanup_old_data` deleta `feedback_noticias` explicitamente antes de `artigos_brutos` (v4.2, 2026-03-17).
 
 ---
 

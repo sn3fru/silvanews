@@ -697,6 +697,7 @@ Se o FOCO CENTRAL E PRIMÁRIO do texto for:
 6. Previsão do tempo isolada.
 7. Licitações e editais municipais ou estaduais de baixo impacto (merenda escolar, uniformes, obras de prefeitura, pregões de bens/serviços comuns). Exceção: licitações de grande porte (União, estatais, dívida ativa, precatórios) são relevantes (is_lixo: false).
 8. Programação de TV, audiência de programas, estreias de auditório, Ibope de emissoras, quadros e atrações de canal. Notícias sobre "quem apresentou o quê" ou "rating do programa" são lixo.
+9. Classificados imobiliários, leilões judiciais de imóveis residenciais, editais de penhora/hasta pública de bens de pessoa física, anúncios de lotes/casas/apartamentos, inventários. Exceção: leilões de carteiras NPL bancárias, ativos de infraestrutura ou valores acima de R$ 50 milhões são relevantes (is_lixo: false).
 
 Atenção: A mera menção da palavra "empresa", "banco", ou valores em dinheiro NO MEIO de um texto sobre fofoca, desporto ou entretenimento NÃO o torna relevante. O FOCO CENTRAL tem de ser um evento corporativo, jurídico, político ou macroeconómico para passar (is_lixo: false).
 
@@ -1235,7 +1236,7 @@ LISTA DE REJEIÇÃO IMEDIATA (se o fato gerador for sobre isso, marque como IRRE
 - **Conteúdo Irrelevante:** Esportes, cultura, entretenimento, fofoca, crimes comuns, saúde pública geral.
 - **JURÍDICO SEM TESE FINANCEIRA DIRETA:** Rejeite decisões judiciais (mesmo do STF/STJ) sobre temas de Direito de Família, Penal, Social, Esportivo ou causas humanitárias. Se o impacto não for primariamente no balanço de empresas, é irrelevante.
 - **RUÍDO CORPORATIVO DE ROTINA:** Rejeite notícias sobre divulgação de resultados trimestrais (lucro, receita, etc.). A exceção é se o texto mencionar explicitamente gatilhos de distress, como "quebra de covenants", "risco de default", "impairment relevante" ou "pedido de Recuperação Judicial".
-- **(Manter o restante da lista de rejeição detalhada do PROMPT_EXTRACAO_GATEKEEPER_V13 aqui)**
+- **LEILÕES/CLASSIFICADOS DE BAIXO VALOR:** Rejeite leilões de imóveis residenciais, veículos, bens de pessoa física, editais de penhora/hasta pública de pequeno porte, classificados imobiliários. Só mantenha se envolver carteira NPL bancária, ativo de infraestrutura, empresa listada ou valor > R$ 50 milhões.
 
 **ETAPA 3: CLASSIFICAÇÃO DE PRIORIDADE E TAG (SE NÃO REJEITADO)**
 Se o evento for relevante, classifique-o usando os guias de prioridade (P1, P2, P3) e o guia de tags abaixo. Sua decisão deve se basear na visão consolidada de todas as notícias pertinentes que você identificou na Etapa 1.
@@ -1387,8 +1388,10 @@ Estes temas são LIXO para a mesa de Special Situations. Não selecione NUNCA, m
 - SAÚDE PÚBLICA GERAL: Vacinação, epidemias, SUS (exceto se afetar empresas de saúde listadas).
 - EDUCAÇÃO/CULTURA: Escolas, universidades, programas culturais.
 - PROGRAMAS SOCIAIS: Bolsa Família, auxílio emergencial (exceto mudanças fiscais massivas).
+- LEILÕES/CLASSIFICADOS DE BAIXO VALOR: Leilões de imóveis residenciais, veículos, bens de pessoa física, editais de penhora/hasta pública, classificados imobiliários, inventários de espólio. Só incluir leilões de infraestrutura, carteiras NPL bancárias, ativos de empresa listada ou valores acima de R$ 50 milhões.
 
 REGRA ANTI-ARMADILHA CRÍTICA: A mera menção de valores monetários (R$ milhões, US$ milhões) em contexto esportivo, criminal ou de entretenimento NÃO transforma o evento em oportunidade de Special Situations. O SUJEITO da ação deve ser uma empresa, banco, fundo ou entidade financeira — não um clube de futebol ou celebridade.
+REGRA ANTI-ARMADILHA LEILÕES: A palavra "leilão" em contexto de imóvel residencial ou bens de pessoa física NÃO indica oportunidade Distressed. Para Special Situations, leilão relevante envolve ativos corporativos, carteiras NPL, infraestrutura ou valores > R$ 50M.
 
 <<< CRITÉRIOS DE CURADORIA (O QUE É UMA OPORTUNIDADE?) >>>
 Selecione apenas eventos que afetem liquidez, solvência ou estrutura de capital de EMPRESAS, BANCOS ou FUNDOS.

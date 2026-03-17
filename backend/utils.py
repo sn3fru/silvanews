@@ -552,7 +552,10 @@ _FONTE_LIXO_PATTERNS = re.compile(
     r"|^fonte.?desconhecida$"
     r"|^n/?a$"
     r"|^sem.?fonte$"
-    r"|^unknown$",
+    r"|^unknown$"
+    r"|^dump.?crawlers"      # dump_crawlers_20260317 etc.
+    r"|^noticias_.+_paginated$"  # noticias_valor_paginated etc.
+    r"|^noticias_.+_ultimas",    # noticias_jota_ultimas_24h etc.
     re.IGNORECASE,
 )
 

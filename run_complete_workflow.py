@@ -656,15 +656,24 @@ def run_cleanup(days: int = 90):
             stats = _cleanup(db, days=days)
             total = sum(stats.values())
             if total > 0:
-                print(f"[CLEANUP] Removidos: {stats['artigos_deleted']} artigos, "
-                      f"{stats['clusters_deleted']} clusters, {stats['chat_deleted']} chats, "
-                      f"{stats.get('deps_deleted', 0)} dependencias (feedbacks, sinteses, etc)")
+                parts = []
+                if stats['artigos_deleted']:
+                    parts.append(f"{stats['artigos_deleted']} artigos")
+                if stats['clusters_deleted']:
+                    parts.append(f"{stats['clusters_deleted']} clusters")
+                if stats['chat_deleted']:
+                    parts.append(f"{stats['chat_deleted']} chats")
+                if stats.get('deps_deleted', 0):
+                    parts.append(f"{stats['deps_deleted']} dependencias (feedbacks, grafos, sinteses)")
+                print(f"[CLEANUP] Removidos: {', '.join(parts)}.")
             else:
                 print("[CLEANUP] Nenhum dado antigo para remover.")
         finally:
             db.close()
     except Exception as e:
+        import traceback
         print(f"[CLEANUP] Erro: {e}")
+        traceback.print_exc()
 
 
 def run_notify():
@@ -992,8 +1001,8 @@ def run_single_cycle(skip_load: bool = False):
     run_feedback_learning()
 
     # # ETAPA 0.5: Crawlers (roda ANTES do load para gerar dump.json na pasta pdfs)
-    if not skip_load:
-        run_crawlers()
+    # if not skip_load:
+    #     run_crawlers()
 
     # ETAPA 1: Carregamento de noticias (opcional - pode pular se nao tem PDFs novos)
     if not skip_load:
