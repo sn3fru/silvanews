@@ -2163,7 +2163,8 @@ def cleanup_old_data(db: Session, days: int = 90) -> Dict[str, int]:
     """
     Remove artigos brutos e clusters com mais de N dias.
     Deleta dependencias FK na ordem correta para evitar ForeignKeyViolation.
-    Usa uma unica transacao: se qualquer etapa falhar, nada e deletado.
+    Usa savepoints (begin_nested) para cada grupo de dependencias:
+    se uma falhar, o savepoint e revertido mas a transacao principal continua.
     Nao deleta: resumos_usuario, templates, preferencias, usuarios.
     """
     cutoff = datetime.utcnow() - timedelta(days=days)
@@ -2177,33 +2178,36 @@ def cleanup_old_data(db: Session, days: int = 90) -> Dict[str, int]:
 
     BATCH = 500
 
-    def _batch_delete(model_class, filter_col, ids) -> int:
-        """Deleta registros em lotes. Propaga exceções."""
-        deleted = 0
-        for i in range(0, len(ids), BATCH):
-            batch_ids = ids[i:i + BATCH]
-            deleted += db.query(model_class).filter(
-                filter_col.in_(batch_ids)
-            ).delete(synchronize_session=False)
-        return deleted
-
-    def _optional_delete(model_class_name: str, filter_attr: str, ids, label: str) -> int:
-        """Deleta se o modelo existir; silencia ImportError mas loga outros erros."""
+    def _safe_delete_with_savepoint(label: str, fn) -> int:
+        """
+        Executa fn() dentro de um SAVEPOINT.
+        Se falhar, reverte apenas o savepoint (nao a transacao inteira).
+        Retorna quantidade deletada ou 0 em caso de erro.
+        """
         try:
-            import importlib
-            mod = importlib.import_module("backend.database")
-            cls = getattr(mod, model_class_name, None)
-            if cls is None:
-                return 0
-            col = getattr(cls, filter_attr, None)
-            if col is None:
-                return 0
-            return _batch_delete(cls, col, ids)
-        except ImportError:
-            return 0
+            nested = db.begin_nested()
+            result = fn()
+            nested.commit()
+            return result
         except Exception as e:
-            print(f"  [CLEANUP] Aviso ao limpar {label}: {e}")
+            try:
+                nested.rollback()
+            except Exception:
+                pass
+            print(f"  [CLEANUP] Aviso ao limpar {label}: {type(e).__name__}: {str(e)[:200]}")
             return 0
+
+    def _batch_delete_fn(model_class, filter_col, ids):
+        """Retorna uma closure que deleta em lotes."""
+        def _do():
+            deleted = 0
+            for i in range(0, len(ids), BATCH):
+                batch_ids = ids[i:i + BATCH]
+                deleted += db.query(model_class).filter(
+                    filter_col.in_(batch_ids)
+                ).delete(synchronize_session=False)
+            return deleted
+        return _do
 
     try:
         deps = 0
@@ -2217,80 +2221,132 @@ def cleanup_old_data(db: Session, days: int = 90) -> Dict[str, int]:
 
         # --- 1. Dependencias de artigos_brutos (FK -> artigos_brutos.id) ---
         if old_artigo_ids:
-            # FeedbackNoticia é OBRIGATÓRIA — se falhar, rollback total
-            deps += _batch_delete(FeedbackNoticia, FeedbackNoticia.artigo_id, old_artigo_ids)
-            deps += _batch_delete(GraphEdge, GraphEdge.artigo_id, old_artigo_ids)
-            deps += _batch_delete(LogProcessamento, LogProcessamento.artigo_id, old_artigo_ids)
-
-            deps += _optional_delete("SemanticEmbedding", "artigo_id", old_artigo_ids, "semantic_embeddings")
+            deps += _safe_delete_with_savepoint(
+                "feedback_noticias",
+                _batch_delete_fn(FeedbackNoticia, FeedbackNoticia.artigo_id, old_artigo_ids),
+            )
+            deps += _safe_delete_with_savepoint(
+                "graph_edges",
+                _batch_delete_fn(GraphEdge, GraphEdge.artigo_id, old_artigo_ids),
+            )
+            deps += _safe_delete_with_savepoint(
+                "log_processamento (artigos)",
+                _batch_delete_fn(LogProcessamento, LogProcessamento.artigo_id, old_artigo_ids),
+            )
 
             try:
+                from backend.database import SemanticEmbedding
+                deps += _safe_delete_with_savepoint(
+                    "semantic_embeddings",
+                    _batch_delete_fn(SemanticEmbedding, SemanticEmbedding.artigo_id, old_artigo_ids),
+                )
+            except ImportError:
+                pass
+
+            def _delete_artigo_embeddings_raw():
                 from sqlalchemy import text as sa_text
                 for i in range(0, len(old_artigo_ids), BATCH):
                     batch_ids = old_artigo_ids[i:i + BATCH]
                     db.execute(sa_text("DELETE FROM artigo_embeddings WHERE artigo_id = ANY(:ids)"), {"ids": batch_ids})
-            except Exception:
-                pass
+                return 0
+            _safe_delete_with_savepoint("artigo_embeddings", _delete_artigo_embeddings_raw)
 
         # --- 2. Dependencias de clusters_eventos (FK -> clusters_eventos.id) ---
         if old_cluster_ids:
-            # SinteseExecutiva nao tem FK para cluster — limpa por data
-            deps += db.query(SinteseExecutiva).filter(
-                SinteseExecutiva.created_at < cutoff
-            ).delete(synchronize_session=False)
-            deps += _batch_delete(ClusterAlteracao, ClusterAlteracao.cluster_id, old_cluster_ids)
-            deps += _batch_delete(LogProcessamento, LogProcessamento.cluster_id, old_cluster_ids)
+            def _delete_sinteses():
+                return db.query(SinteseExecutiva).filter(
+                    SinteseExecutiva.created_at < cutoff
+                ).delete(synchronize_session=False)
+            deps += _safe_delete_with_savepoint("sinteses_executivas", _delete_sinteses)
 
-            deps += _optional_delete("DeepResearchJob", "cluster_id", old_cluster_ids, "deep_research")
-            deps += _optional_delete("SocialResearchJob", "cluster_id", old_cluster_ids, "social_research")
+            deps += _safe_delete_with_savepoint(
+                "cluster_alteracoes",
+                _batch_delete_fn(ClusterAlteracao, ClusterAlteracao.cluster_id, old_cluster_ids),
+            )
+            deps += _safe_delete_with_savepoint(
+                "log_processamento (clusters)",
+                _batch_delete_fn(LogProcessamento, LogProcessamento.cluster_id, old_cluster_ids),
+            )
 
-            # Chat: messages antes de sessions
-            old_session_ids = [
-                r[0] for r in db.query(ChatSession.id).filter(
-                    ChatSession.cluster_id.in_(old_cluster_ids)
-                ).all()
-            ]
-            if old_session_ids:
-                deps += _batch_delete(ChatMessage, ChatMessage.session_id, old_session_ids)
-                deps += _batch_delete(ChatSession, ChatSession.id, old_session_ids)
+            try:
+                from backend.database import DeepResearchJob, SocialResearchJob
+                deps += _safe_delete_with_savepoint(
+                    "deep_research",
+                    _batch_delete_fn(DeepResearchJob, DeepResearchJob.cluster_id, old_cluster_ids),
+                )
+                deps += _safe_delete_with_savepoint(
+                    "social_research",
+                    _batch_delete_fn(SocialResearchJob, SocialResearchJob.cluster_id, old_cluster_ids),
+                )
+            except ImportError:
+                pass
+
+            def _delete_chat_for_clusters():
+                old_session_ids = [
+                    r[0] for r in db.query(ChatSession.id).filter(
+                        ChatSession.cluster_id.in_(old_cluster_ids)
+                    ).all()
+                ]
+                deleted = 0
+                if old_session_ids:
+                    for i in range(0, len(old_session_ids), BATCH):
+                        batch_ids = old_session_ids[i:i + BATCH]
+                        deleted += db.query(ChatMessage).filter(
+                            ChatMessage.session_id.in_(batch_ids)
+                        ).delete(synchronize_session=False)
+                        deleted += db.query(ChatSession).filter(
+                            ChatSession.id.in_(batch_ids)
+                        ).delete(synchronize_session=False)
+                return deleted
+            deps += _safe_delete_with_savepoint("chat_sessions (clusters)", _delete_chat_for_clusters)
 
         stats["deps_deleted"] = deps
 
         # --- 3. Artigos e clusters (agora sem FK pendentes) ---
         if old_artigo_ids:
-            for i in range(0, len(old_artigo_ids), BATCH):
-                batch_ids = old_artigo_ids[i:i + BATCH]
-                stats["artigos_deleted"] += db.query(ArtigoBruto).filter(
-                    ArtigoBruto.id.in_(batch_ids)
-                ).delete(synchronize_session=False)
+            def _delete_artigos():
+                deleted = 0
+                for i in range(0, len(old_artigo_ids), BATCH):
+                    batch_ids = old_artigo_ids[i:i + BATCH]
+                    deleted += db.query(ArtigoBruto).filter(
+                        ArtigoBruto.id.in_(batch_ids)
+                    ).delete(synchronize_session=False)
+                return deleted
+            stats["artigos_deleted"] = _safe_delete_with_savepoint("artigos_brutos", _delete_artigos)
 
         if old_cluster_ids:
-            for i in range(0, len(old_cluster_ids), BATCH):
-                batch_ids = old_cluster_ids[i:i + BATCH]
-                stats["clusters_deleted"] += db.query(ClusterEvento).filter(
-                    ClusterEvento.id.in_(batch_ids)
-                ).delete(synchronize_session=False)
+            def _delete_clusters():
+                deleted = 0
+                for i in range(0, len(old_cluster_ids), BATCH):
+                    batch_ids = old_cluster_ids[i:i + BATCH]
+                    deleted += db.query(ClusterEvento).filter(
+                        ClusterEvento.id.in_(batch_ids)
+                    ).delete(synchronize_session=False)
+                return deleted
+            stats["clusters_deleted"] = _safe_delete_with_savepoint("clusters_eventos", _delete_clusters)
 
         # --- 4. Chat sessions antigas (sem FK para clusters/artigos) ---
-        try:
+        def _delete_old_chats():
             old_est_ids = [
                 r[0] for r in db.query(EstagiarioChatSession.id).filter(
                     EstagiarioChatSession.created_at < cutoff
                 ).all()
             ]
+            deleted = 0
             if old_est_ids:
-                db.query(EstagiarioChatMessage).filter(
-                    EstagiarioChatMessage.session_id.in_(old_est_ids)
-                ).delete(synchronize_session=False)
-            chat_del = db.query(ChatSession).filter(
+                for i in range(0, len(old_est_ids), BATCH):
+                    batch_ids = old_est_ids[i:i + BATCH]
+                    db.query(EstagiarioChatMessage).filter(
+                        EstagiarioChatMessage.session_id.in_(batch_ids)
+                    ).delete(synchronize_session=False)
+            deleted += db.query(ChatSession).filter(
                 ChatSession.created_at < cutoff
             ).delete(synchronize_session=False)
-            est_del = db.query(EstagiarioChatSession).filter(
+            deleted += db.query(EstagiarioChatSession).filter(
                 EstagiarioChatSession.created_at < cutoff
             ).delete(synchronize_session=False)
-            stats["chat_deleted"] = chat_del + est_del
-        except Exception:
-            pass
+            return deleted
+        stats["chat_deleted"] = _safe_delete_with_savepoint("chats antigos", _delete_old_chats)
 
         db.commit()
 

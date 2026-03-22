@@ -1001,8 +1001,12 @@ def run_single_cycle(skip_load: bool = False):
     run_feedback_learning()
 
     # # ETAPA 0.5: Crawlers (roda ANTES do load para gerar dump.json na pasta pdfs)
-    # if not skip_load:
-    #     run_crawlers()
+    if not skip_load:
+        # Só roda de segunda a sexta (0=segunda, 4=sexta)
+        if time.localtime().tm_wday < 5:
+            run_crawlers()
+        else:
+            print("[CRAWLERS] Fim de semana detectado. Pulando crawlers (etapa 0.5).")
 
     # ETAPA 1: Carregamento de noticias (opcional - pode pular se nao tem PDFs novos)
     if not skip_load:

@@ -1089,7 +1089,11 @@ def migrate_templates_resumo(
         return tpl_map
     print(f"  📦 Migrando {len(rows)} templates de resumo...")
     for t in rows:
-        dst_uid = user_id_map.get(t.criado_por_user_id) if t.criado_por_user_id else None
+        dst_uid = None
+        if t.criado_por_user_id is not None:
+            dst_uid = user_id_map.get(t.criado_por_user_id)
+            if not dst_uid:
+                continue
         existing = db_dst.query(TemplateResumoUsuario).filter(
             TemplateResumoUsuario.nome == t.nome,
             TemplateResumoUsuario.criado_por_user_id == dst_uid,
@@ -1134,9 +1138,11 @@ def migrate_resumos_usuario(
         return
     print(f"  📦 Migrando {len(rows)} resumos de usuário...")
     for r in rows:
-        dst_uid = user_id_map.get(r.user_id)
-        if not dst_uid:
-            continue
+        dst_uid = None
+        if r.user_id is not None:
+            dst_uid = user_id_map.get(r.user_id)
+            if not dst_uid:
+                continue
         dst_tpl = tpl_id_map.get(r.template_id) if r.template_id else None
         existing = db_dst.query(ResumoUsuario).filter(
             ResumoUsuario.user_id == dst_uid,

@@ -1,232 +1,731 @@
 {
   "ok": true,
-  "data": "2026-03-15",
+  "data": "2026-03-20",
   "contract_dict": {
-    "tldr_executivo": "O dia apresenta alta nas recuperações extrajudiciais e judiciais devido ao endividamento e juros altos. TJ-SP mantém suspensão de alvarás impactando a construção civil. PF investiga Banco Master por pagamentos ilícitos e influência.",
+    "tldr_executivo": "Destaques em distressed: Rossi em RJ e Alliança buscando proteção. M&A: CSN busca reduzir dívida com venda de ativos e Riachuelo conclui venda do Midway Mall. BC avalia opções para o BRB após crise Master.",
     "clusters_selecionados": [
       {
-        "cluster_id": 53331,
+        "cluster_id": 54317,
         "secao": "distressed",
-        "titulo_whatsapp": "💀 Alta nas Recuperações Judiciais",
-        "bullet_impacto": "Espera-se alta nas recuperações judiciais nos próximos dois anos devido ao alto endividamento das empresas e à taxa Selic elevada, mesmo com a possível queda.",
-        "fonte_principal": "O Estado de S.Paulo"
+        "titulo_whatsapp": "💀 Rossi Residencial — Abstenção de Opinião e RJ",
+        "bullet_impacto": "Rossi Residencial teve abstenção de opinião da auditoria em 2024 devido a irregularidades e incertezas na operação. Sujeita a execuções judiciais que restringem o acesso a recursos para o Plano de Recuperação Judicial.",
+        "fonte_principal": "Folha de S.Paulo"
       },
       {
-        "cluster_id": 53319,
+        "cluster_id": 54284,
         "secao": "distressed",
-        "titulo_whatsapp": "💀 Recuperação Extrajudicial em Alta",
-        "bullet_impacto": "Em 2025, a recuperação extrajudicial está em alta, enquanto a judicialização recua, refletindo um cenário de stress financeiro para empresas devido a juros elevados.",
-        "fonte_principal": "O Estado de S.Paulo"
+        "titulo_whatsapp": "💀 Alliança Saúde busca proteção cautelar",
+        "bullet_impacto": "Alliança Saúde pediu tutela de urgência cautelar contra credores, após rebaixamento da Fitch para CCC+(bra) e negociação de debêntures com deságio. Busca suspender débitos por 60 dias e evitar RJ.",
+        "fonte_principal": "Valor Econômico"
       },
       {
-        "cluster_id": 53306,
+        "cluster_id": 54187,
         "secao": "distressed",
-        "titulo_whatsapp": "💀 Crises Financeiras em Grandes Empresas",
-        "bullet_impacto": "Juros elevados, problemas de gestão e governança estão levando mais empresas à recuperação, como Raízen, Grupo Pão de Açúcar, entre outras.",
-        "fonte_principal": "O Estado de S.Paulo"
+        "titulo_whatsapp": "💀 BC avalia opções para BRB após crise Master",
+        "bullet_impacto": "BC endurece o tom com o BRB devido à falta de solução para o rombo de R$ 8 bilhões decorrente de operações com o Banco Master. Avalia 'todas as opções', incluindo intervenção, se não houver plano viável até 31 de março.",
+        "fonte_principal": "Valor Econômico"
       },
       {
-        "cluster_id": 53303,
+        "cluster_id": 54183,
         "secao": "distressed",
-        "titulo_whatsapp": "💀 Empresas Enfrentam Teste de Governança",
-        "bullet_impacto": "O aumento de recuperações judiciais expõe fragilidades na gestão de riscos financeiros e controle do endividamento das empresas.",
-        "fonte_principal": "O Estado de S.Paulo"
+        "titulo_whatsapp": "💀 Alliança Saúde pede proteção contra credores",
+        "bullet_impacto": "Alliança Saúde protocolou pedido de proteção judicial contra execuções de credores, buscando suspender débitos por 60 dias e evitar RJ. A dívida total é de R$ 1,3 bilhão.",
+        "fonte_principal": "Valor Econômico"
       },
       {
-        "cluster_id": 53346,
-        "secao": "regulatorio",
-        "titulo_whatsapp": "⚖️ Execução Fiscal e Falência",
-        "bullet_impacto": "Para o TJ-SP, execução fiscal e falência podem coexistir, desde que não haja pedido de constrição no juízo executivo, conforme entendimento do STJ no Tema 1.902.",
-        "fonte_principal": "Fonte não identificada"
-      },
-      {
-        "cluster_id": 53304,
-        "secao": "regulatorio",
-        "titulo_whatsapp": "⚖️ Combate ao Mercado Ilegal de Combustíveis",
-        "bullet_impacto": "A Lei Complementar 225/2026 estabelece critérios para diferenciar o inadimplente eventual do contumaz no mercado de combustíveis.",
-        "fonte_principal": "O Estado de S.Paulo"
-      },
-      {
-        "cluster_id": 53307,
-        "secao": "regulatorio",
-        "titulo_whatsapp": "⚖️ TJ-SP Mantém Suspensão de Alvarás",
-        "bullet_impacto": "O Tribunal de Justiça de São Paulo (TJ-SP) manteve a suspensão de novas autorizações para construções e demolições na capital paulista, negando recurso da Prefeitura. Impacto no setor da construção civil.",
-        "fonte_principal": "O Estado de S.Paulo"
-      },
-      {
-        "cluster_id": 53310,
+        "cluster_id": 54210,
         "secao": "estrategico",
-        "titulo_whatsapp": "🏛️ Banco Master: Pagamento a 'Sicário'",
-        "bullet_impacto": "A Polícia Federal investiga o pagamento de R$ 24 milhões por Daniel Vorcaro, do Banco Master, a Luiz Phillipi Machado Moraes Mourão, conhecido como “Sicário”, por serviços ilícitos.",
+        "titulo_whatsapp": "🏛️ CSN busca reduzir dívida com venda de ativos",
+        "bullet_impacto": "CSN busca reduzir sua dívida líquida de R$ 41,2 bilhões através da venda de ativos, incluindo a cimenteira e participações nas holdings de infraestrutura. Busca alienar entre R$ 15 bilhões e R$ 18 bilhões.",
         "fonte_principal": "O Estado de S.Paulo"
+      },
+      {
+        "cluster_id": 54192,
+        "secao": "estrategico",
+        "titulo_whatsapp": "🏛️ Riachuelo vende Midway Mall",
+        "bullet_impacto": "Lojas Riachuelo S.A. concluiu a venda das quotas da Midway Shopping Center Ltda. para a Capitânia Capital S.A. e co-investidores por R$ 1.587.000. Ganho líquido de R$ 904.820.",
+        "fonte_principal": "Valor Econômico"
+      },
+      {
+        "cluster_id": 54283,
+        "secao": "estrategico",
+        "titulo_whatsapp": "🏛️ Botafogo e Lyon: Operações Financeiras Detalhadas",
+        "bullet_impacto": "Documentos revelam operações financeiras complexas entre Botafogo e Lyon, lideradas por John Textor, envolvendo negociação de jogadores e antecipação de recursos. Botafogo transferiu 146 milhões de euros ao Lyon.",
+        "fonte_principal": "O Globo"
       }
     ]
   },
   "clusters_avaliados_ids": [
-    53310,
-    53307,
-    53347,
-    53346,
-    53345,
-    53344,
-    53343,
-    53341,
-    53340,
-    53339,
-    53338,
-    53337,
-    53336,
-    53335,
-    53334,
-    53332,
-    53331,
-    53330,
-    53329,
-    53327,
-    53326,
-    53324,
-    53323,
-    53322,
-    53321,
-    53320,
-    53319,
-    53317,
-    53316,
-    53314,
-    53312,
-    53311,
-    53309,
-    53306,
-    53305,
-    53304,
-    53303,
-    53302,
-    53300,
-    53299,
-    53295,
-    53294,
-    53293
+    54317,
+    54284,
+    54283,
+    54210,
+    54192,
+    54187,
+    54183,
+    54350,
+    54348,
+    54347,
+    54346,
+    54345,
+    54344,
+    54343,
+    54342,
+    54341,
+    54340,
+    54339,
+    54338,
+    54337,
+    54336,
+    54335,
+    54334,
+    54333,
+    54332,
+    54331,
+    54330,
+    54329,
+    54328,
+    54327,
+    54326,
+    54325,
+    54324,
+    54323,
+    54322,
+    54321,
+    54320,
+    54319,
+    54315,
+    54314,
+    54313,
+    54312,
+    54311,
+    54310,
+    54308,
+    54307,
+    54306,
+    54305,
+    54304,
+    54303,
+    54302,
+    54301,
+    54300,
+    54299,
+    54298,
+    54297,
+    54296,
+    54295,
+    54294,
+    54292,
+    54290,
+    54289,
+    54288,
+    54286,
+    54285,
+    54282,
+    54281,
+    54280,
+    54279,
+    54278,
+    54277,
+    54276,
+    54275,
+    54274,
+    54273,
+    54272,
+    54271,
+    54270,
+    54269,
+    54268,
+    54267,
+    54266,
+    54265,
+    54264,
+    54263,
+    54262,
+    54261,
+    54260,
+    54259,
+    54257,
+    54255,
+    54254,
+    54253,
+    54252,
+    54251,
+    54250,
+    54249,
+    54248,
+    54247,
+    54244,
+    54243,
+    54242,
+    54241,
+    54240,
+    54239,
+    54238,
+    54237,
+    54236,
+    54235,
+    54234,
+    54233,
+    54232,
+    54231,
+    54230,
+    54229,
+    54228,
+    54227,
+    54226,
+    54224,
+    54223,
+    54222,
+    54221,
+    54220,
+    54218,
+    54217,
+    54216,
+    54215,
+    54214,
+    54213,
+    54212,
+    54211,
+    54208,
+    54207,
+    54206,
+    54205,
+    54204,
+    54203,
+    54202,
+    54200,
+    54199,
+    54198,
+    54197,
+    54195,
+    54193,
+    54191,
+    54190,
+    54186,
+    54185,
+    54184,
+    54182,
+    54180,
+    54179,
+    54178,
+    54177,
+    54174,
+    54173,
+    54172,
+    54171,
+    54170,
+    54169
   ],
   "todos_clusters_escolhidos_ids": [
-    53303,
-    53304,
-    53306,
-    53307,
-    53310,
-    53319,
-    53331,
-    53346
+    54183,
+    54187,
+    54192,
+    54210,
+    54283,
+    54284,
+    54317
   ],
   "fontes_map": {
-    "53310": [
+    "54317": [
+      "Folha de S.Paulo"
+    ],
+    "54284": [
+      "Valor Econômico"
+    ],
+    "54283": [
+      "O Globo"
+    ],
+    "54210": [
       "O Estado de S.Paulo"
     ],
-    "53307": [
+    "54192": [
+      "Valor Econômico"
+    ],
+    "54187": [
+      "Valor Econômico",
+      "O Estado de S.Paulo",
+      "O Globo",
+      "Folha de S.Paulo"
+    ],
+    "54183": [
+      "Valor Econômico",
       "O Estado de S.Paulo"
     ],
-    "53347": [],
-    "53346": [],
-    "53345": [],
-    "53344": [
+    "54350": [
       "Valor Econômico"
     ],
-    "53343": [
+    "54348": [
+      "O Globo"
+    ],
+    "54347": [
       "Valor Econômico"
     ],
-    "53341": [],
-    "53340": [],
-    "53339": [],
-    "53338": [],
-    "53337": [],
-    "53336": [],
-    "53335": [],
-    "53334": [
+    "54346": [
+      "Folha de S.Paulo"
+    ],
+    "54345": [
       "Valor Econômico"
     ],
-    "53332": [
+    "54344": [
+      "O Estado de S.Paulo"
+    ],
+    "54343": [
+      "Valor Econômico"
+    ],
+    "54342": [
+      "O Estado de S.Paulo"
+    ],
+    "54341": [
+      "Folha de S.Paulo"
+    ],
+    "54340": [
+      "O Estado de S.Paulo",
+      "Folha de S.Paulo"
+    ],
+    "54339": [
+      "Valor Econômico"
+    ],
+    "54338": [
+      "Folha de S.Paulo"
+    ],
+    "54337": [
+      "Folha de S.Paulo"
+    ],
+    "54336": [
+      "Folha de S.Paulo"
+    ],
+    "54335": [
+      "Valor Econômico"
+    ],
+    "54334": [
+      "O Globo"
+    ],
+    "54333": [
+      "Folha de S.Paulo"
+    ],
+    "54332": [
+      "Valor Econômico"
+    ],
+    "54331": [
+      "Folha de S.Paulo"
+    ],
+    "54330": [
+      "Valor Econômico"
+    ],
+    "54329": [
+      "Valor Econômico"
+    ],
+    "54328": [
+      "Folha de S.Paulo"
+    ],
+    "54327": [
+      "Folha de S.Paulo"
+    ],
+    "54326": [
+      "Folha de S.Paulo"
+    ],
+    "54325": [
+      "O Estado de S.Paulo"
+    ],
+    "54324": [
+      "Folha de S.Paulo"
+    ],
+    "54323": [
+      "Folha de S.Paulo"
+    ],
+    "54322": [
+      "Folha de S.Paulo"
+    ],
+    "54321": [
+      "O Estado de S.Paulo"
+    ],
+    "54320": [
+      "Folha de S.Paulo"
+    ],
+    "54319": [
+      "O Globo",
+      "O Estado de S.Paulo"
+    ],
+    "54315": [
+      "Folha de S.Paulo"
+    ],
+    "54314": [
+      "Valor Econômico"
+    ],
+    "54313": [
+      "Valor Econômico"
+    ],
+    "54312": [
+      "Valor Econômico"
+    ],
+    "54311": [
+      "Valor Econômico"
+    ],
+    "54310": [
+      "Valor Econômico"
+    ],
+    "54308": [
+      "Folha de S.Paulo"
+    ],
+    "54307": [
+      "O Globo"
+    ],
+    "54306": [
+      "Folha de S.Paulo"
+    ],
+    "54305": [
+      "Folha de S.Paulo"
+    ],
+    "54304": [
+      "Folha de S.Paulo"
+    ],
+    "54303": [
+      "Valor Econômico"
+    ],
+    "54302": [
+      "Valor Econômico"
+    ],
+    "54301": [
+      "O Globo"
+    ],
+    "54300": [
+      "Folha de S.Paulo"
+    ],
+    "54299": [
+      "Valor Econômico"
+    ],
+    "54298": [
+      "Valor Econômico"
+    ],
+    "54297": [
+      "O Estado de S.Paulo"
+    ],
+    "54296": [
+      "Valor Econômico"
+    ],
+    "54295": [
+      "O Estado de S.Paulo"
+    ],
+    "54294": [
+      "Valor Econômico"
+    ],
+    "54292": [
+      "O Globo"
+    ],
+    "54290": [
+      "Folha de S.Paulo"
+    ],
+    "54289": [
+      "O Estado de S.Paulo"
+    ],
+    "54288": [
+      "O Globo"
+    ],
+    "54286": [
+      "O Globo"
+    ],
+    "54285": [
+      "Valor Econômico"
+    ],
+    "54282": [
+      "Valor Econômico"
+    ],
+    "54281": [
+      "O Globo"
+    ],
+    "54280": [
+      "Valor Econômico"
+    ],
+    "54279": [
+      "O Globo"
+    ],
+    "54278": [
+      "Folha de S.Paulo"
+    ],
+    "54277": [
+      "Folha de S.Paulo"
+    ],
+    "54276": [
+      "Valor Econômico"
+    ],
+    "54275": [
+      "O Estado de S.Paulo"
+    ],
+    "54274": [
+      "Folha de S.Paulo"
+    ],
+    "54273": [
+      "Valor Econômico"
+    ],
+    "54272": [
+      "O Globo"
+    ],
+    "54271": [
+      "O Globo"
+    ],
+    "54270": [
+      "O Estado de S.Paulo"
+    ],
+    "54269": [
+      "O Globo"
+    ],
+    "54268": [
+      "Folha de S.Paulo"
+    ],
+    "54267": [
+      "O Estado de S.Paulo"
+    ],
+    "54266": [
+      "O Estado de S.Paulo"
+    ],
+    "54265": [
+      "O Estado de S.Paulo"
+    ],
+    "54264": [
+      "O Estado de S.Paulo"
+    ],
+    "54263": [
+      "Valor Econômico"
+    ],
+    "54262": [
+      "O Globo"
+    ],
+    "54261": [
+      "O Globo",
+      "O Estado de S.Paulo",
+      "Folha de S.Paulo"
+    ],
+    "54260": [
+      "O Estado de S.Paulo",
+      "Folha de S.Paulo"
+    ],
+    "54259": [
+      "Folha de S.Paulo",
+      "Valor Econômico",
+      "O Globo"
+    ],
+    "54257": [
+      "O Estado de S.Paulo"
+    ],
+    "54255": [
+      "O Estado de S.Paulo"
+    ],
+    "54254": [
+      "O Estado de S.Paulo"
+    ],
+    "54253": [
+      "O Estado de S.Paulo"
+    ],
+    "54252": [
+      "Folha de S.Paulo"
+    ],
+    "54251": [
+      "Valor Econômico"
+    ],
+    "54250": [
+      "Valor Econômico"
+    ],
+    "54249": [
+      "Valor Econômico"
+    ],
+    "54248": [
+      "Folha de S.Paulo"
+    ],
+    "54247": [
+      "Valor Econômico"
+    ],
+    "54244": [
+      "Folha de S.Paulo",
+      "O Globo",
+      "Valor Econômico"
+    ],
+    "54243": [
+      "O Estado de S.Paulo"
+    ],
+    "54242": [
+      "O Estado de S.Paulo"
+    ],
+    "54241": [
+      "Valor Econômico"
+    ],
+    "54240": [
+      "Valor Econômico"
+    ],
+    "54239": [
+      "O Globo"
+    ],
+    "54238": [
+      "Valor Econômico"
+    ],
+    "54237": [
+      "Valor Econômico",
+      "O Estado de S.Paulo"
+    ],
+    "54236": [
+      "O Estado de S.Paulo"
+    ],
+    "54235": [
+      "Valor Econômico"
+    ],
+    "54234": [
+      "Folha de S.Paulo",
       "O Estado de S.Paulo",
       "Valor Econômico"
     ],
-    "53331": [
+    "54233": [
+      "Folha de S.Paulo"
+    ],
+    "54232": [
+      "Valor Econômico"
+    ],
+    "54231": [
+      "Folha de S.Paulo"
+    ],
+    "54230": [
       "O Estado de S.Paulo"
     ],
-    "53330": [
+    "54229": [
+      "Valor Econômico"
+    ],
+    "54228": [
+      "Folha de S.Paulo"
+    ],
+    "54227": [
       "O Estado de S.Paulo"
     ],
-    "53329": [
+    "54226": [
+      "Folha de S.Paulo"
+    ],
+    "54224": [
+      "Valor Econômico"
+    ],
+    "54223": [
       "O Estado de S.Paulo"
     ],
-    "53327": [
+    "54222": [
+      "Folha de S.Paulo",
+      "Valor Econômico",
+      "O Globo",
       "O Estado de S.Paulo"
     ],
-    "53326": [
+    "54221": [
       "O Estado de S.Paulo"
     ],
-    "53324": [
+    "54220": [
       "O Estado de S.Paulo"
     ],
-    "53323": [
+    "54218": [
+      "Valor Econômico"
+    ],
+    "54217": [
+      "Valor Econômico"
+    ],
+    "54216": [
+      "Folha de S.Paulo",
+      "O Globo"
+    ],
+    "54215": [
+      "Folha de S.Paulo"
+    ],
+    "54214": [
+      "O Globo"
+    ],
+    "54213": [
+      "Folha de S.Paulo"
+    ],
+    "54212": [
+      "Folha de S.Paulo"
+    ],
+    "54211": [
+      "Folha de S.Paulo"
+    ],
+    "54208": [
+      "Valor Econômico"
+    ],
+    "54207": [
+      "Folha de S.Paulo"
+    ],
+    "54206": [
       "O Estado de S.Paulo"
     ],
-    "53322": [
+    "54205": [
       "O Estado de S.Paulo"
     ],
-    "53321": [
+    "54204": [
+      "Valor Econômico"
+    ],
+    "54203": [
+      "Folha de S.Paulo"
+    ],
+    "54202": [
       "O Estado de S.Paulo"
     ],
-    "53320": [
+    "54200": [
+      "Valor Econômico"
+    ],
+    "54199": [
+      "Folha de S.Paulo"
+    ],
+    "54198": [
       "O Estado de S.Paulo"
     ],
-    "53319": [
+    "54197": [
+      "Valor Econômico"
+    ],
+    "54195": [
+      "Valor Econômico"
+    ],
+    "54193": [
       "O Estado de S.Paulo"
     ],
-    "53317": [
+    "54191": [
+      "O Globo"
+    ],
+    "54190": [
+      "Valor Econômico"
+    ],
+    "54186": [
+      "Valor Econômico"
+    ],
+    "54185": [
+      "O Globo"
+    ],
+    "54184": [
       "O Estado de S.Paulo"
     ],
-    "53316": [
+    "54182": [
+      "O Globo"
+    ],
+    "54180": [
+      "Valor Econômico"
+    ],
+    "54179": [
       "O Estado de S.Paulo"
     ],
-    "53314": [
+    "54178": [
       "O Estado de S.Paulo"
     ],
-    "53312": [
+    "54177": [
       "O Estado de S.Paulo"
     ],
-    "53311": [
-      "O Estado de S.Paulo"
+    "54174": [
+      "O Globo"
     ],
-    "53309": [
-      "O Estado de S.Paulo"
+    "54173": [
+      "Folha de S.Paulo"
     ],
-    "53306": [
-      "O Estado de S.Paulo"
+    "54172": [
+      "Folha de S.Paulo"
     ],
-    "53305": [
-      "O Estado de S.Paulo"
+    "54171": [
+      "Folha de S.Paulo"
     ],
-    "53304": [
-      "O Estado de S.Paulo"
+    "54170": [
+      "Folha de S.Paulo"
     ],
-    "53303": [
-      "O Estado de S.Paulo"
-    ],
-    "53302": [
-      "O Estado de S.Paulo"
-    ],
-    "53300": [
-      "O Estado de S.Paulo"
-    ],
-    "53299": [
-      "O Estado de S.Paulo"
-    ],
-    "53295": [
-      "O Estado de S.Paulo"
-    ],
-    "53294": [
-      "O Estado de S.Paulo"
-    ],
-    "53293": [
-      "O Estado de S.Paulo"
+    "54169": [
+      "Folha de S.Paulo"
     ]
   },
   "prompt_version": "UNIFICADO_V3"
