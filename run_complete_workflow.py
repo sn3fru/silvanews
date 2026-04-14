@@ -815,35 +815,70 @@ def run_resumo_diario():
                 try:
                     prefs = get_preferencias_usuario(db, user.id)
                     if user_has_custom_prefs(prefs):
-                        custom_users.append(user)
+                        custom_users.append((user, prefs))
                 except Exception:
                     pass
             db.close()
 
             if custom_users:
                 print(f"\n  Gerando resumos personalizados para {len(custom_users)} usuario(s) com preferencias customizadas...")
-                for user in custom_users:
+                for user, prefs in custom_users:
                     try:
-                        res_user = gerar_resumo_para_usuario(user_id=user.id, target_date=target_date)
-                        if res_user.get("ok"):
-                            texto_wpp = formatar_whatsapp(res_user)
-                            texto_full = "\n\n---\n\n".join(texto_wpp) if texto_wpp else None
-                            db2 = SessionLocal()
-                            try:
-                                create_resumo_usuario(
-                                    db2, user.id, target_date, template_id=None,
-                                    clusters_avaliados=res_user.get("clusters_avaliados_ids", []),
-                                    clusters_escolhidos=res_user.get("todos_clusters_escolhidos_ids", []),
-                                    texto=texto_full, texto_whatsapp=texto_full,
-                                    prompt_version=res_user.get("prompt_version"),
-                                    metadados=res_user.get("contract_dict", {}),
-                                )
-                            finally:
-                                db2.close()
-                            n = len(res_user.get("todos_clusters_escolhidos_ids", []))
-                            print(f"    [OK] {user.nome or user.email}: {n} itens salvos")
+                        perfil = (prefs.config_extra or {}).get("perfil", "")
+
+                        if perfil == "barretti":
+                            from agents.resumo_diario.agent import gerar_resumo_barretti, formatar_barretti
+                            res_user = gerar_resumo_barretti(target_date=target_date)
+                            if res_user.get("ok"):
+                                texto_full = formatar_barretti(res_user)
+                                print(f"\n{'=' * 60}")
+                                print(f"  RESUMO DO DIA — BARRETTI (Capital Solutions)")
+                                print(f"{'=' * 60}")
+                                print(texto_full)
+                                print()
+                                db2 = SessionLocal()
+                                try:
+                                    create_resumo_usuario(
+                                        db2, user.id, target_date, template_id=None,
+                                        clusters_avaliados=res_user.get("clusters_avaliados_ids", []),
+                                        clusters_escolhidos=res_user.get("todos_clusters_escolhidos_ids", []),
+                                        texto=texto_full, texto_whatsapp=texto_full,
+                                        prompt_version=res_user.get("prompt_version"),
+                                        metadados=res_user.get("contract_dict", {}),
+                                    )
+                                finally:
+                                    db2.close()
+                                n = len(res_user.get("todos_clusters_escolhidos_ids", []))
+                                print(f"    [OK] {user.nome or user.email} (barretti): {n} noticias salvas")
+                            else:
+                                print(f"    [AVISO] {user.nome or user.email} (barretti): {res_user.get('error', '?')}")
                         else:
-                            print(f"    [AVISO] {user.nome or user.email}: {res_user.get('error', '?')}")
+                            res_user = gerar_resumo_para_usuario(user_id=user.id, target_date=target_date)
+                            if res_user.get("ok"):
+                                texto_wpp = formatar_whatsapp(res_user)
+                                texto_full = "\n\n---\n\n".join(texto_wpp) if texto_wpp else None
+                                print(f"\n{'=' * 60}")
+                                print(f"  RESUMO DO DIA — {user.nome or user.email}")
+                                print(f"{'=' * 60}")
+                                for msg in (texto_wpp or []):
+                                    print(msg)
+                                    print()
+                                db2 = SessionLocal()
+                                try:
+                                    create_resumo_usuario(
+                                        db2, user.id, target_date, template_id=None,
+                                        clusters_avaliados=res_user.get("clusters_avaliados_ids", []),
+                                        clusters_escolhidos=res_user.get("todos_clusters_escolhidos_ids", []),
+                                        texto=texto_full, texto_whatsapp=texto_full,
+                                        prompt_version=res_user.get("prompt_version"),
+                                        metadados=res_user.get("contract_dict", {}),
+                                    )
+                                finally:
+                                    db2.close()
+                                n = len(res_user.get("todos_clusters_escolhidos_ids", []))
+                                print(f"    [OK] {user.nome or user.email}: {n} itens salvos")
+                            else:
+                                print(f"    [AVISO] {user.nome or user.email}: {res_user.get('error', '?')}")
                     except Exception as e:
                         print(f"    [ERRO] {user.nome or user.email}: {e}")
             else:

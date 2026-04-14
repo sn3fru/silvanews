@@ -23,7 +23,7 @@ class EstagiarioExecutor:
             api_key = getenv("GEMINI_API_KEY")
             if api_key:
                 genai.configure(api_key=api_key)
-                self.model = genai.GenerativeModel('gemini-3.1-flash-lite-preview')
+                self.model = genai.GenerativeModel('gemini-3-flash-preview')
 
     def run(
         self,

@@ -1857,3 +1857,6 @@ Cluster 53940: ignorados=[66189] | justificativa=Artigo 66189 é redundante.
 Cluster 53923: ignorados=[66266, 66268] | justificativa=Artigos 66266 e 66268 não são pertinentes ao tema principal.
 Cluster 54008: ignorados=[66387, 66414, 66473, 66476] | justificativa=Artigos 66476, 66414, 66387 e 66473 foram ignorados por tratarem de ruído político, depoimentos e opiniões sem tese financeira direta.
 Cluster 54369: ignorados=[67180] | justificativa=Artigo 67180 foi ignorado por tratar de política geral e não ter impacto financeiro direto.
+Cluster 54707: ignorados=[67820] | justificativa=O artigo 67820 foi ignorado por tratar principalmente da história da Igreja Lagoinha, com apenas uma menção tangencial ao Banco Master, não sendo central para o fato gerador principal.
+Cluster 57788: ignorados=[73401] | justificativa=Artigo 73401 foi ignorado por ser um artigo de opinião sobre investimentos, tangencialmente relacionado ao caso Master, mas sem impacto direto na avaliação da conduta de Campos Neto.
+Cluster 58201: ignorados=[73935] | justificativa=O artigo 73935 foi ignorado por tratar de disputas internas no STF, sem impacto financeiro direto relevante para a tese.

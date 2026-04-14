@@ -3,6 +3,7 @@ Definições de Tools e Contratos Pydantic para o Agente de Resumo Diário (What
 
 Contém:
 - Modelos Pydantic (ClusterSelecionado, ResumoDiarioContract) para validação do JSON de saída do LLM.
+- Modelos Pydantic Barretti (BarrettiNoticiaContract, ResumoBarrettiContract) para output rico Capital Solutions.
 - Schema Gemini Function Calling para tools: obter_textos_brutos_cluster, buscar_na_web (Tivaly).
 - Funções de execução (wrappers READ-ONLY com hard-limits).
 """
@@ -31,13 +32,13 @@ class ClusterSelecionado(BaseModel):
     )
     titulo_whatsapp: str = Field(
         ...,
-        max_length=100,
-        description="Título curto com emoji. Máximo 100 caracteres."
+        max_length=120,
+        description="Título curto com emoji. Máximo 120 caracteres."
     )
     bullet_impacto: str = Field(
         ...,
-        max_length=280,
-        description="Frase única, concisa, direto ao impacto financeiro/legal."
+        max_length=400,
+        description="Análise descritiva com dados factuais: QUEM, O QUÊ, QUANTO e POR QUE IMPORTA para SS."
     )
     fonte_principal: str = Field(..., max_length=80)
 
@@ -45,12 +46,72 @@ class ClusterSelecionado(BaseModel):
 class ResumoDiarioContract(BaseModel):
     tldr_executivo: Optional[str] = Field(
         None,
-        max_length=500,
-        description="2-3 frases, panorama geral do dia."
+        max_length=600,
+        description="2-3 frases, panorama geral do dia com dados concretos."
     )
     clusters_selecionados: conlist(ClusterSelecionado, min_length=1, max_length=15) = Field(
         ...,
         description="Lista de oportunidades, 1 a 15 itens."
+    )
+
+
+# ==============================================================================
+# MODELOS PYDANTIC — Contrato Barretti (Capital Solutions / Special Situations)
+# ==============================================================================
+
+class BarrettiNoticiaContract(BaseModel):
+    """Analise concisa de uma noticia no formato Capital Solutions."""
+    cluster_id: int
+    titulo: str = Field(..., max_length=200)
+    jornal: str = Field(..., max_length=100)
+    secao: str = Field("", max_length=100)
+    prioridade: Literal["Alta", "Media", "Baixa"]
+    tags: List[str] = Field(..., min_length=1, max_length=6)
+    resumo_executivo: str = Field(
+        ..., max_length=800,
+        description="QUEM, O QUE, QUANTO, QUANDO, PROXIMOS PASSOS. Conciso e factual.",
+    )
+    impacto_ss: str = Field(
+        ..., max_length=500,
+        description="Por que importa para Special Situations + oportunidade/risco concreto. UMA secao unica.",
+    )
+    acionabilidade: Literal["Acao imediata", "Monitorar de perto", "Apenas contextual"]
+    acionabilidade_justificativa: str = Field(..., max_length=150)
+    follow_ups: List[str] = Field(
+        ..., min_length=2, max_length=4,
+        description="Perguntas de follow-up para investigacao interna.",
+    )
+    fonte_principal: str = Field(..., max_length=100)
+
+
+class ResumoBarrettiContract(BaseModel):
+    """Briefing executivo conciso — Capital Solutions / Special Situations."""
+    top_5_temas: List[str] = Field(
+        ..., min_length=3, max_length=5,
+        description="5 temas curtos (3-8 palavras cada), por ordem de importancia.",
+    )
+    noticias: conlist(BarrettiNoticiaContract, min_length=5, max_length=15) = Field(
+        ..., description="Apenas noticias com impacto material para SS. Qualidade > quantidade.",
+    )
+    radar_oportunidades: List[str] = Field(
+        ..., min_length=2,
+        description="Desalavancagem, ativos mal precificados, distress incipiente.",
+    )
+    radar_riscos: List[str] = Field(
+        ..., min_length=2,
+        description="Piora regulatoria, deterioracao setorial, risco politico.",
+    )
+    watchlist: List[str] = Field(
+        ..., min_length=2,
+        description="Empresas, executivos, bancos, temas para acompanhar.",
+    )
+    action_items: List[str] = Field(
+        ..., min_length=2,
+        description="Acoes praticas: aprofundar caso, discutir com time.",
+    )
+    perguntas_estrategicas: List[str] = Field(
+        ..., min_length=3,
+        description="Perguntas importantes que ficaram em aberto.",
     )
 
 

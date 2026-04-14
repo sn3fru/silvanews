@@ -40,6 +40,7 @@
 |------|--------|-----------|
 | **Default (v4.1)** | `gerar_resumo_diario(date)` | **1 chamada LLM** unificada. Resultado salvo com `user_id=NULL` no banco. Todos os usuários sem prefs customizadas veem este resumo. Custo: 1 chamada + até 5 tool calls. |
 | **Per-User (v3.0)** | `gerar_resumo_para_usuario(user_id, date)` | **Apenas** para usuários com preferências customizadas (`empresas_radar`, `teses_juridicas`, `instrucoes_resumo`, ou `tags_interesse`). Custo: 1 chamada por usuário + até 8 tool calls. |
+| **Barretti (Capital Solutions)** | `gerar_resumo_barretti(date)` | Prompt dedicado (`PROMPT_BARRETTI_V1`) com contrato rico (`ResumoBarrettiContract`). 16384 max_output_tokens, 10 tool calls. Formatação via `formatar_barretti()`. Detectado por `config_extra.perfil == "barretti"`. |
 
 **Resumo Default (v4.1):**
 - `run_resumo_diario()` gera 1 resumo unificado via `gerar_resumo_diario()` e salva com `user_id=NULL`.
@@ -229,11 +230,33 @@ O prompt explicita o que o agente deve procurar:
 - **Prioridade:** P1 > P2 > P3, mas um P3 pode entrar se for claramente oportunidade.
 - **Cobertura por fonte:** Equilíbrio entre as três fontes quando houver conteúdo relevante.
 
-### 8.2 Limites flexíveis
+### 8.2 Limites flexíveis (v4.3)
 
-- **Até 12** itens no resumo final. **Não há mínimo.**
-- Se o dia for fraco e apenas 3 factos atenderem aos critérios, retornar apenas 3.
+- **Até 15** itens no resumo final. Mínimo: 5 itens (quando há 10+ clusters).
+- Bullets de impacto podem ter **até 400 caracteres** (antes 280) para permitir descrições mais ricas.
 - Proibido preencher espaço com notícias irrelevantes.
+
+### 8.3 Rejeição de Macro e Estatais (v4.3)
+
+O agente REJEITA conteúdo que NÃO gera trade acionável para Special Situations:
+- **Macro genérico:** PIB, inflação, déficit da previdência, Selic (salvo crash ou default soberano).
+- **Investimentos puramente estatais:** Butantan, obras públicas, fundações governamentais — exceto se houver ângulo de privatização/M&A/concessão.
+- **Política fiscal em fase de discussão:** Sem votação marcada ou texto final.
+
+### 8.4 Regra de Novidade (Anti-Repetição — v4.3)
+
+O agente recebe contexto dos **clusters selecionados no resumo do dia anterior** (`resumos_usuario` com `user_id=NULL`).
+
+| Cenário | Ação |
+|---------|------|
+| Notícia já coberta ontem, SEM novo fato | **EXCLUIR** ou mencionar apenas como "contexto" em outro bullet |
+| Notícia já coberta ontem, COM novo desdobramento | **INCLUIR**, mas focar no QUE MUDOU, não repetir o headline |
+| Notícia totalmente nova | **INCLUIR** normalmente |
+
+**Exemplo concreto:**
+- Ontem: "Guerra no Irã: Tensões se intensificam"
+- Hoje (sem novidade): **EXCLUIR** — o analista já sabe.
+- Hoje (com novidade): "🌍 Irã — Sanções ampliadas atingem setor petroquímico" (foco na mudança).
 
 ---
 
@@ -307,8 +330,8 @@ O LLM devolve um JSON validado por Pydantic. Esquema atual:
 
 ```python
 class ResumoDiarioContract(BaseModel):
-    tldr_executivo: Optional[str] = Field(None, max_length=300)
-    clusters_selecionados: conlist(ClusterSelecionado, min_length=1, max_length=12)
+    tldr_executivo: Optional[str] = Field(None, max_length=600)
+    clusters_selecionados: conlist(ClusterSelecionado, min_length=1, max_length=15)
 ```
 
 ### ClusterSelecionado
@@ -317,19 +340,56 @@ class ResumoDiarioContract(BaseModel):
 class ClusterSelecionado(BaseModel):
     cluster_id: int
     secao: Literal["foco_analista", "distressed", "estrategico", "regulatorio", "internacional"] = "distressed"
-    titulo_whatsapp: str = Field(..., max_length=100)
-    bullet_impacto: str = Field(..., max_length=280)
+    titulo_whatsapp: str = Field(..., max_length=120)
+    bullet_impacto: str = Field(..., max_length=400)
     fonte_principal: str = Field(..., max_length=80)
 ```
 
-| Campo | Restrição |
-|-------|-----------|
-| `tldr_executivo` | Opcional; max 300 caracteres |
-| `clusters_selecionados` | 1 a 12 itens |
-| `secao` | `Literal["foco_analista", "distressed", "estrategico", "regulatorio", "internacional"]` |
-| `titulo_whatsapp` | Max 100 caracteres |
-| `bullet_impacto` | Max 280 caracteres |
-| `fonte_principal` | Max 80 caracteres |
+| Campo | Restrição | Mudança v4.3 |
+|-------|-----------|--------------|
+| `tldr_executivo` | Opcional; max 600 caracteres | Ampliado de 300→600 |
+| `clusters_selecionados` | 1 a 15 itens | Ampliado de 12→15 |
+| `secao` | `Literal["foco_analista", "distressed", "estrategico", "regulatorio", "internacional"]` | — |
+| `titulo_whatsapp` | Max 120 caracteres | Ampliado de 100→120 |
+| `bullet_impacto` | Max 400 caracteres | Ampliado de 280→400 |
+| `fonte_principal` | Max 80 caracteres | — |
+
+### ResumoBarrettiContract (Perfil Capital Solutions)
+
+```python
+class BarrettiNoticiaContract(BaseModel):
+    cluster_id: int
+    titulo: str  # max 200
+    jornal: str  # max 100
+    secao: str  # max 100
+    prioridade: Literal["Alta", "Media", "Baixa"]
+    tags: List[str]  # 1-6 tags
+    resumo_executivo: str  # max 2000
+    por_que_importa: str  # max 800
+    avaliacao_impacto: str  # max 800
+    acionabilidade: Literal["Acao imediata", "Monitorar de perto", "Apenas contextual"]
+    acionabilidade_justificativa: str  # max 200
+    follow_ups: List[str]  # 2-5 perguntas
+    leitura_estrategica: str  # max 400
+    fonte_principal: str  # max 100
+
+class ResumoBarrettiContract(BaseModel):
+    top_5_temas: List[str]  # 3-5 temas
+    noticias: List[BarrettiNoticiaContract]  # min 5, max 25
+    radar_oportunidades: List[str]
+    radar_riscos: List[str]
+    watchlist: List[str]
+    action_items: List[str]
+    perguntas_estrategicas: List[str]
+```
+
+| Diferença | Default | Barretti |
+|-----------|---------|----------|
+| Itens por notícia | 4 campos | 13 campos |
+| max_output_tokens | 8192 | 16384 |
+| tool_budget | 5 | 10 |
+| Blocos finais | Nenhum | 5 (radar, watchlist, actions, perguntas) |
+| Menções obrigatórias | Não | BTG Pactual, Banco Master, Daniel Vorcaro, INSS, Credcesta |
 
 ---
 
@@ -352,12 +412,15 @@ class ClusterSelecionado(BaseModel):
 
 | Função | Responsabilidade |
 |--------|------------------|
-| `_build_context_block(db, date)` | Map-Reduce: recolhe todos os clusters do dia UMA VEZ. Retorna `(contexto_str, avaliados_ids, fontes_map)`. |
+| `_build_context_block(db, date)` | Map-Reduce: recolhe todos os clusters do dia UMA VEZ + clusters selecionados ontem (anti-repetição). Retorna `(contexto_str, avaliados_ids, fontes_map)`. |
 | `_run_llm_with_tools(db, prompt, persona_name, budget)` | Gemini Function Calling com `obter_textos_brutos_cluster` e `buscar_na_web`. Se budget=0, chama sem tools. |
 | `_validate_and_fix(raw_json_str, persona_name)` | Pydantic + fallback com `PROMPT_CORRECAO_PYDANTIC_V1`. |
 | `gerar_resumo_diario(date, prompt_template)` | **1 chamada LLM unificada** com `PROMPT_RESUMO_UNIFICADO_V1`. Budget: 5 tool calls. |
 | `gerar_resumo_para_usuario(user_id, date)` | Modo Per-User: contexto em cache + prompt personalizado + 1 chamada LLM. Budget: 8 tool calls. |
 | `formatar_whatsapp(resultado)` | Mensagem agrupada por seção temática (💀 → ⚖️ → 🏛️ → 📋), split se > 4096 chars. |
+| `gerar_resumo_barretti(date)` | Prompt dedicado `PROMPT_BARRETTI_V1` + contrato `ResumoBarrettiContract`. 16384 tokens, 10 tools. |
+| `_validate_and_fix_barretti(raw_json_str)` | Validação Pydantic com `ResumoBarrettiContract` + fallback LLM. |
+| `formatar_barretti(resultado)` | Formatação rica: briefing executivo com 7 blocos/notícia + 5 seções finais (radar, watchlist, actions, perguntas). |
 
 ### 15.2 Seções temáticas (PROMPT_MASTER_V2)
 
@@ -403,6 +466,8 @@ O chassis **nunca** é sobrescrito pelas preferências. As preferências são fi
 | v3.1 (UNIFICADO) | 2026-03-15 | Substituiu 3 personas por 1 chamada unificada (`PROMPT_RESUMO_UNIFICADO_V1`). Campo `secao` no `ClusterSelecionado`. Budget: 5 tools. Custo ~60% menor. |
 || v4.0 (MASTER V2) | 2026-03-16 | Chassis imutável + slots: `PROMPT_MASTER_V2`. Seções: foco_analista (condicional), distressed, estrategico, regulatorio, internacional. Sem "geral". Pydantic `Literal` estrito. Prefs: empresas_radar, teses_juridicas. Frontend estruturado. |
 || v4.2 (FIXES) | 2026-03-17 | Fix fontes "Não identificada" via `_resolve_fontes_from_artigos` fallback. Filtro robusto em `formatar_whatsapp`. Fix artigos órfãos no agrupamento (clusters individuais). Fix cleanup FK `feedback_noticias`. |
+|| v4.3 (QUALITY) | 2026-02-10 | Regra Anti-Repetição: contexto do dia anterior injetado. Rejeição explícita de macro/estatais. Bullets ampliados (280→400 chars). Foco cirúrgico em SS: "Gera trade?" como teste mental. Limites Pydantic ampliados (max_items 12→15). |
+|| v5.0 (BARRETTI) | 2026-04-14 | Perfil dedicado Capital Solutions: `PROMPT_BARRETTI_V1` (texto do Gabriel), `ResumoBarrettiContract` (13 campos/notícia + 5 blocos finais), `gerar_resumo_barretti()`, `formatar_barretti()`. 16384 tokens, 10 tools. Detecção por `config_extra.perfil`. Seed: gabriel.barretti@btgpactual.com. |
 
 ### 15.4 Normalização de Fontes
 

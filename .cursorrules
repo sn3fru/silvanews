@@ -79,11 +79,23 @@
 #      Tools: list_cluster_titles, query_clusters, get_cluster_details, update_cluster_priority, semantic_search
 #      UI: input inline -> side-panel (400px)
 #   3. Resumo Diario: agents/resumo_diario/ — PROMPT_MASTER_V2 (chassis imutavel + slots personalizaveis)
-#      Chassis: Rejeicao de ruido, tools, JSON, secoes (foco_analista, distressed, estrategico, regulatorio, internacional)
+#      Chassis: Rejeicao de ruido, rejeicao macro/estatais, regra de novidade (anti-repeticao), tools, JSON,
+#               secoes (foco_analista, distressed, estrategico, regulatorio, internacional)
 #      Slots: TAGS_FOCO, TAGS_IGNORADAS, EMPRESAS_RADAR, TESES_JURIDICAS, INSTRUCAO_LIVRE_USUARIO
 #      Tools: obter_textos_brutos_cluster, buscar_na_web (Tivaly)
 #      Entry points: gerar_resumo_diario() (unificado), gerar_resumo_para_usuario() (per-user com PROMPT_MASTER_V2)
 #      Resumo Default: user_id=NULL no banco. Todos veem o default salvo. Per-user só para quem tem prefs customizadas.
+#      Anti-Repeticao: _build_context_block() carrega resumo do dia anterior e injeta titulos como "CONTEXTO DE ONTEM"
+#      Pydantic v4.3: bullet_impacto max 400, titulo_whatsapp max 120, tldr max 600, max 15 itens
+#
+#   4. Perfil Barretti (Capital Solutions / Special Situations):
+#      Prompt dedicado: PROMPT_BARRETTI_V1 (texto do Gabriel + chassis anti-lixo + tools)
+#      Contrato: ResumoBarrettiContract (13 campos/noticia + 5 blocos finais: radar, watchlist, actions, perguntas)
+#      Funcoes: gerar_resumo_barretti(), formatar_barretti(), _validate_and_fix_barretti()
+#      Deteccao: config_extra.perfil == "barretti" em preferencias_usuario
+#      Seed: gabriel.barretti@btgpactual.com (senha: BARRETTI_PASSWORD env ou "barretti")
+#      max_output_tokens: 16384, tool_budget: 10
+#      Mencoes obrigatorias: BTG Pactual, Banco Master, Daniel Vorcaro, INSS, Credcesta
 #
 # Nova feature de AUTENTICACAO:
 #   1. JWT auth: POST /api/auth/login, GET /api/auth/me, POST /api/auth/register
@@ -124,7 +136,8 @@
 #   DATABASE_URL, GEMINI_API_KEY, JWT_SECRET (default: fallback sha256)
 # ENV VARS OPCIONAIS:
 #   TIVALY_API_KEY (web search), TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID,
-#   V2_SHADOW_MODE (default: 1), ADMIN_INITIAL_PASSWORD (default: admin)
+#   V2_SHADOW_MODE (default: 1), ADMIN_INITIAL_PASSWORD (default: admin),
+#   BARRETTI_PASSWORD (default: barretti)
 
 # REGRAS DE CODIGO
 # - Type hints estrito. Pydantic para validacao.

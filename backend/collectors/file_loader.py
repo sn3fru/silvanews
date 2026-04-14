@@ -582,13 +582,13 @@ class FileLoader:
             response = None
             if hasattr(self.client, 'models') and hasattr(self.client.models, 'generate_content'):
                 response = self.client.models.generate_content(
-                    model='gemini-3.1-flash-lite-preview',
+                    model='gemini-3-flash-preview',
                     contents=[uploaded_file, self.extraction_prompt],
                     config=self.generation_config_decision
                 )
             elif hasattr(self.client, 'generate_content'):
                 response = self.client.generate_content(
-                    model='models/gemini-3.1-flash-lite-preview',
+                    model='models/gemini-3-flash-preview',
                     contents=[uploaded_file, self.extraction_prompt],
                     generation_config=self.generation_config_decision
                 )

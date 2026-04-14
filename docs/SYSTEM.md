@@ -275,7 +275,7 @@ btg_alphafeed/
 
 ### Constantes Globais
 - `BATCH_SIZE_AGRUPAMENTO = 200`, `MAX_OUTPUT_TOKENS_STAGE2 = 32768`, `MAX_TRECHO_CHARS_STAGE2 = 120`
-- Gemini model: `gemini-3.1-flash-lite-preview` (configurado via `GEMINI_API_KEY`)
+- Gemini model: `gemini-3-flash-preview` (configurado via `GEMINI_API_KEY`)
 
 ### Fluxo do `main()` (flags: `--stage`, `--modo`, `--limite`)
 
@@ -388,6 +388,7 @@ Global M&A | Global Legal and Regulatory | Sovereign Debt and Credit | Global Di
 | `PROMPT_TELEGRAM_BRIEFING_V1` | Briefing | Daily Briefing HTML para Telegram (Morning Call) |
 | `PROMPT_MASTER_V2` | Resumo per-user (v4.0) | Chassis imutavel + slots personalizaveis. Secoes: foco_analista, distressed, estrategico, regulatorio, internacional |
 | `PROMPT_RESUMO_UNIFICADO_V1` | Resumo unificado (batch) | 1 chamada LLM, 3 secoes fixas (distressed, regulatorio, estrategico, geral) |
+| `PROMPT_BARRETTI_V1` | Resumo Barretti (Capital Solutions) | Texto do Gabriel + chassis anti-lixo + tools. Saida: ResumoBarrettiContract (7 campos/noticia + 5 blocos finais) |
 
 **NOTA**: `PROMPT_EXTRACAO_PERMISSIVO_V8`, `PROMPT_EXTRACAO_JSON_V1` e `PROMPT_RESUMO_FINAL_V3` sao ALIASES de `PROMPT_ANALISE_E_SINTESE_CLUSTER_V1`.
 
@@ -574,7 +575,7 @@ POST /api/estagiario/send
 
 | Camada | Responsabilidade | Editavel pelo usuario? |
 |---|---|---|
-| **Chassis (imutavel)** | Rejeicao de ruido (`_REJEICAO_MACRO_PERSONAS`), tools, formato JSON, secoes obrigatorias, regra de volume | Nunca |
+| **Chassis (imutavel)** | Rejeicao de ruido (`_REJEICAO_MACRO_PERSONAS`), rejeicao macro/estatais, regra de novidade (anti-repeticao), tools, formato JSON, secoes obrigatorias, regra de volume | Nunca |
 | **Slots (personalizaveis)** | Tags foco, empresas no radar, teses juridicas, instrucao livre, tamanho | Sim, via modal de preferencias |
 
 ### Dois Modos de Operacao
@@ -598,9 +599,10 @@ POST /api/estagiario/send
 
 ### Contexto Compartilhado
 
-- `_build_context_block()`: Recolhe TODOS os clusters do dia UMA VEZ.
+- `_build_context_block()`: Recolhe TODOS os clusters do dia UMA VEZ + clusters selecionados no dia anterior (anti-repetição).
 - Cache: invalidado por `max(updated_at)` dos clusters do dia.
 - O contexto e **compartilhado** entre todos os usuarios — nunca duplicado. Economia de tokens.
+- **Anti-Repetição (v4.3):** Carrega o resumo default do dia anterior (`resumos_usuario` com `user_id=NULL`) e injeta os títulos dos clusters selecionados como "CONTEXTO DE ONTEM" no prompt. O LLM só inclui temas recorrentes se houver novo desdobramento concreto.
 
 ### Tools (`tools/definitions.py`)
 
@@ -609,7 +611,9 @@ POST /api/estagiario/send
 | `obter_textos_brutos_cluster` | cluster_id | Retorna amostra (ate 3000 chars) dos textos originais do cluster | - |
 | `buscar_na_web` | query | Busca na web via Tivaly API | `TIVALY_API_KEY` |
 
-**Contratos Pydantic**: `ClusterSelecionado` (secao: `Literal` estrito), `ResumoDiarioContract` — validacao do JSON de saida do LLM.
+**Contratos Pydantic (v4.3)**: `ClusterSelecionado` (secao: `Literal` estrito, `bullet_impacto` max 400 chars, `titulo_whatsapp` max 120 chars), `ResumoDiarioContract` (`tldr_executivo` max 600 chars, max 15 itens) — validacao do JSON de saida do LLM.
+
+**Contrato Pydantic Barretti**: `BarrettiNoticiaContract` (7 campos por noticia: titulo, resumo_executivo max 2000, por_que_importa, avaliacao_impacto, acionabilidade, follow_ups, leitura_estrategica), `ResumoBarrettiContract` (top_5_temas, min 5 noticias, radar_oportunidades, radar_riscos, watchlist, action_items, perguntas_estrategicas).
 
 ### Fluxo Per-User (v4.0)
 
@@ -619,6 +623,20 @@ POST /api/estagiario/send
 4. Usa contexto compartilhado (`_build_context_block`)
 5. Uma chamada LLM por usuario
 6. Pre-sanitiza secoes invalidas → Pydantic valida → persiste em `resumos_usuario`
+
+### Fluxo Barretti (Capital Solutions / Special Situations)
+
+Perfil dedicado para analise de Special Situations com prompt completo e contrato Pydantic rico.
+
+| Modo | Funcao | Prompt | Contrato | max_output_tokens | tool_budget |
+|------|--------|--------|----------|-------------------|-------------|
+| **Barretti** | `gerar_resumo_barretti(date)` | `PROMPT_BARRETTI_V1` | `ResumoBarrettiContract` | 16384 | 10 |
+
+**Deteccao**: `config_extra.perfil == "barretti"` em `preferencias_usuario`. Detectado em `run_resumo_diario()` (Fase 2).
+
+**Diferencial vs Default**: Output 10x mais rico (7 campos por noticia, 5 blocos finais). Mencoes obrigatorias (BTG Pactual, Banco Master, Daniel Vorcaro, INSS, Credcesta) com profundidade maxima. Formatacao via `formatar_barretti()` (texto longo estruturado).
+
+**Usuario seed**: `gabriel.barretti@btgpactual.com` (role=user, perfil=barretti).
 
 ### Modelo de Custo (v4.1 — Resumo Default)
 

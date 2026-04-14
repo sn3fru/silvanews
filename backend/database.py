@@ -782,6 +782,49 @@ def init_database():
             db.rollback()
             print(f"⚠️ Seed admin falhou (login vai auto-criar): {e}")
 
+        # Seed usuario barretti (Capital Solutions / Special Situations)
+        try:
+            barretti_exists = db.query(Usuario).filter(
+                Usuario.email == "gabriel.barretti@btgpactual.com"
+            ).first()
+            if not barretti_exists:
+                import hashlib, secrets
+                _bpwd = os.getenv("BARRETTI_PASSWORD", "barretti")
+                _bsalt = secrets.token_hex(16)
+                bsenha = f"{_bsalt}${hashlib.sha256((_bsalt + _bpwd).encode()).hexdigest()}"
+                barretti_user = Usuario(
+                    nome="Gabriel Barretti",
+                    email="gabriel.barretti@btgpactual.com",
+                    senha_hash=bsenha,
+                    role="user",
+                    ativo=True,
+                )
+                db.add(barretti_user)
+                db.flush()
+
+                barretti_prefs = PreferenciaUsuario(
+                    user_id=barretti_user.id,
+                    tags_interesse=[],
+                    tags_ignoradas=[],
+                    tamanho_resumo="longo",
+                    config_extra={
+                        "empresas_radar": "BTG Pactual, Banco Master, Daniel Vorcaro, INSS, Credcesta",
+                        "teses_juridicas": (
+                            "DIP financing, reestruturacao, RJ, enforcement, "
+                            "securitizacao divida ativa, good-bank/bad-bank, "
+                            "liability management, preferred equity, mezzanine, rescue financing"
+                        ),
+                        "instrucoes_resumo": "BARRETTI_PROFILE",
+                        "perfil": "barretti",
+                    },
+                )
+                db.add(barretti_prefs)
+                db.commit()
+                print("✅ Usuario barretti criado (gabriel.barretti@btgpactual.com)")
+        except Exception as e:
+            db.rollback()
+            print(f"⚠️ Seed barretti falhou: {e}")
+
         if existing_configs == 0:
             print("📝 Criando configurações iniciais de coleta...")
             

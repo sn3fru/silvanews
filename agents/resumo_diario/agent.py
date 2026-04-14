@@ -27,6 +27,7 @@ try:
         get_clusters_for_feed_by_date,
         get_preferencias_usuario,
         get_template_resumo,
+        get_resumo_default,
     )
     from backend.utils import get_date_brasil
     from backend.prompts import (
@@ -38,20 +39,25 @@ except Exception:
     get_clusters_for_feed_by_date = None  # type: ignore
     get_preferencias_usuario = None  # type: ignore
     get_template_resumo = None  # type: ignore
+    get_resumo_default = None  # type: ignore
     get_date_brasil = None  # type: ignore
     PROMPT_CORRECAO_PYDANTIC_V1 = ""  # type: ignore
 
 from agents.resumo_diario.tools.definitions import (
     ResumoDiarioContract,
+    ResumoBarrettiContract,
     TOOL_OBTER_TEXTOS_BRUTOS_SCHEMA,
     TOOL_BUSCAR_NA_WEB_SCHEMA,
     execute_obter_textos_brutos,
     execute_buscar_na_web,
 )
 
-_MAX_TOOL_CALLS = 5       # chamada unificada: permite aprofundamento seletivo
-_MAX_TOOL_CALLS_USER = 8  # per-user: triagem + deep-dive em P1/P2 selecionados
+_MAX_TOOL_CALLS = 5        # chamada unificada: permite aprofundamento seletivo
+_MAX_TOOL_CALLS_USER = 8   # per-user: triagem + deep-dive em P1/P2 selecionados
+_MAX_TOOL_CALLS_BARRETTI = 10  # barretti: min 7 noticias, cada uma pode precisar de aprofundamento
 _MAX_ITERATIONS = 10      # acomoda tool-calling loop
+# Teto de saida para todos os resumos (nao implica uso total; evita truncar JSON grande)
+_MAX_OUTPUT_TOKENS_RESUMO = 16384
 
 # Cache de contexto com invalidacao por updated_at de clusters_eventos
 _CONTEXT_CACHE: Dict[str, Any] = {}
@@ -81,6 +87,58 @@ def _truncate_resumo_p3(resumo: Optional[str], max_chars: int = 120) -> str:
 # --------------------------------------------------------------------------- #
 # ETAPA 1: MAP-REDUCE — Montar contexto do dia (executado UMA VEZ)
 # --------------------------------------------------------------------------- #
+
+def _load_yesterday_context(db, target_date: datetime.date) -> str:
+    """
+    Carrega os clusters selecionados no resumo default do dia anterior.
+    Retorna um bloco de texto para injeção no prompt, ou string vazia se não houver.
+    """
+    if get_resumo_default is None:
+        return ""
+    try:
+        yesterday = target_date - datetime.timedelta(days=1)
+        resumo_ontem = get_resumo_default(db, yesterday)
+        if not resumo_ontem:
+            return ""
+
+        escolhidos = resumo_ontem.clusters_escolhidos_ids or []
+        if not escolhidos:
+            return ""
+
+        texto = resumo_ontem.texto_gerado or ""
+        titulos_ontem: List[str] = []
+
+        # metadados IS the contract_dict (saved directly by create_resumo_usuario)
+        contract = resumo_ontem.metadados or {}
+        if not contract.get("clusters_selecionados") and texto:
+            try:
+                contract = json.loads(texto) if texto.strip().startswith("{") else {}
+            except Exception:
+                contract = {}
+
+        for cs in contract.get("clusters_selecionados", []):
+            titulo = cs.get("titulo_whatsapp", "")
+            if titulo:
+                titulos_ontem.append(titulo)
+
+        if not titulos_ontem:
+            return ""
+
+        linhas = [f"  - {t}" for t in titulos_ontem]
+        bloco = (
+            f"\n--- CONTEXTO DE ONTEM ({yesterday.strftime('%d/%m')}) ---\n"
+            f"Estes temas JÁ FORAM cobertos no resumo de ontem:\n"
+            + "\n".join(linhas)
+            + "\n\nSe algum destes temas REAPARECER hoje SEM fato novo concreto, NÃO o inclua.\n"
+            f"Se houver desdobramento novo, foque exclusivamente no QUE MUDOU.\n"
+            f"--- FIM CONTEXTO DE ONTEM ---\n"
+        )
+        print(f"[ResumoDiario] Contexto de ontem carregado: {len(titulos_ontem)} títulos")
+        return bloco
+    except Exception as e:
+        print(f"[ResumoDiario] Falha ao carregar contexto de ontem: {e}")
+        return ""
+
 
 def _build_tipo_fonte_map(db, target_date: datetime.date) -> Dict[int, str]:
     """Busca tipo_fonte diretamente do ORM (campo não exposto pelo CRUD feed)."""
@@ -272,7 +330,9 @@ def _build_context_block(db, target_date: datetime.date) -> Tuple[str, List[int]
         f"--- FIM CONTEXTO ---\n\n"
     )
 
-    contexto = header_temperatura + "\n".join(linhas)
+    yesterday_ctx = _load_yesterday_context(db, target_date)
+
+    contexto = header_temperatura + yesterday_ctx + "\n".join(linhas)
     print(f"[ResumoDiario] Contexto montado: {len(contexto)} chars, {len(avaliados_ids)} clusters, temperatura={temperatura}")
     return contexto, avaliados_ids, fontes_map
 
@@ -304,6 +364,7 @@ def _run_llm_with_tools(
     prompt_text: str,
     persona_name: str = "",
     tool_call_budget: int = _MAX_TOOL_CALLS,
+    max_output_tokens: int = _MAX_OUTPUT_TOKENS_RESUMO,
 ) -> Optional[str]:
     """
     Chama Gemini com o prompt e a tool `obter_textos_brutos_cluster`.
@@ -361,7 +422,7 @@ def _run_llm_with_tools(
 
     response = model.generate_content(
         prompt_text,
-        generation_config={"temperature": 0.2, "max_output_tokens": 8192},
+        generation_config={"temperature": 0.2, "max_output_tokens": max_output_tokens},
     )
 
     tool_calls_used = 0
@@ -454,7 +515,7 @@ def _run_llm_with_tools(
                 candidate.content,
                 genai.protos.Content(role="function", parts=function_responses),
             ],
-            generation_config={"temperature": 0.2, "max_output_tokens": 8192},
+            generation_config={"temperature": 0.2, "max_output_tokens": max_output_tokens},
         )
 
     print(f"{tag} Limite de iteracoes atingido ({_MAX_ITERATIONS}).")
@@ -848,6 +909,271 @@ def gerar_resumo_para_usuario(
         "fontes_map": fontes_map,
         "prompt_version": "MASTER_V2_PERSONALIZED",
     }
+
+
+# --------------------------------------------------------------------------- #
+# PERFIL BARRETTI — Capital Solutions / Special Situations (prompt dedicado)
+# --------------------------------------------------------------------------- #
+
+def _validate_and_fix_barretti(raw_json_str: str) -> ResumoBarrettiContract:
+    """Valida JSON do LLM com ResumoBarrettiContract. Fallback via LLM se falhar."""
+    from pydantic import ValidationError
+
+    tag = "[Barretti]"
+    data = _extract_json_from_text(raw_json_str)
+    if data is None:
+        raise ValueError(f"{tag} Impossível extrair JSON: {raw_json_str[:500]}")
+
+    _PRIORIDADES_VALIDAS = {"Alta", "Media", "Baixa"}
+    _ACIONABILIDADE_VALIDA = {"Acao imediata", "Monitorar de perto", "Apenas contextual"}
+    for n in data.get("noticias", []):
+        if isinstance(n, dict):
+            if n.get("secao") is None:
+                n["secao"] = ""
+            if n.get("prioridade") not in _PRIORIDADES_VALIDAS:
+                n["prioridade"] = "Media"
+            if n.get("acionabilidade") not in _ACIONABILIDADE_VALIDA:
+                n["acionabilidade"] = "Monitorar de perto"
+            if not n.get("follow_ups"):
+                n["follow_ups"] = ["Acompanhar desdobramentos", "Verificar impacto no setor"]
+            if not n.get("tags"):
+                n["tags"] = ["Geral"]
+            for str_field in ("titulo", "jornal", "resumo_executivo", "impacto_ss",
+                              "acionabilidade_justificativa", "fonte_principal"):
+                if n.get(str_field) is None:
+                    n[str_field] = ""
+
+    _BLOCOS_MINIMOS = {
+        "radar_oportunidades": 2,
+        "radar_riscos": 2,
+        "watchlist": 2,
+        "action_items": 2,
+        "perguntas_estrategicas": 3,
+    }
+    for bloco, minimo in _BLOCOS_MINIMOS.items():
+        items = data.get(bloco)
+        if not items or not isinstance(items, list):
+            data[bloco] = [f"(Pendente de análise — {bloco.replace('_', ' ')})"] * minimo
+        elif len(items) < minimo:
+            while len(items) < minimo:
+                items.append(f"(Item complementar — {bloco.replace('_', ' ')})")
+
+    temas = data.get("top_5_temas")
+    if isinstance(temas, list):
+        data["top_5_temas"] = [t[:80] if isinstance(t, str) else str(t) for t in temas[:5]]
+
+    try:
+        return ResumoBarrettiContract(**data)
+    except ValidationError as e:
+        erro_str = str(e)
+        print(f"{tag} Pydantic ValidationError (tentando fallback): {erro_str[:400]}")
+
+        prompt_correcao = PROMPT_CORRECAO_PYDANTIC_V1.format(
+            ERRO_PYDANTIC=erro_str,
+            JSON_FALHADO=json.dumps(data, ensure_ascii=False, default=str),
+        )
+
+        import google.generativeai as genai  # type: ignore
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise RuntimeError("GEMINI_API_KEY ausente para fallback Pydantic.")
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel("gemini-2.0-flash")
+        resp = model.generate_content(
+            prompt_correcao,
+            generation_config={"temperature": 0.1, "max_output_tokens": _MAX_OUTPUT_TOKENS_RESUMO},
+        )
+        fixed_text = (resp.text or "").strip()
+        print(f"{tag} Fallback Pydantic recebido ({len(fixed_text)} chars)")
+
+        fixed_data = _extract_json_from_text(fixed_text)
+        if fixed_data is None:
+            raise ValueError(f"{tag} Fallback falhou: {fixed_text[:500]}")
+
+        return ResumoBarrettiContract(**fixed_data)
+
+
+def gerar_resumo_barretti(
+    target_date: Optional[datetime.date] = None,
+) -> Dict[str, Any]:
+    """
+    Gera resumo no formato completo Capital Solutions / Special Situations.
+
+    Usa PROMPT_BARRETTI_V1 (texto do Gabriel) com contrato Pydantic dedicado
+    (ResumoBarrettiContract). Reaproveita o contexto compartilhado.
+    """
+    if target_date is None:
+        target_date = get_date_brasil()
+
+    try:
+        from backend.prompts import PROMPT_BARRETTI_V1
+    except ImportError:
+        return {"ok": False, "data": target_date.isoformat(), "error": "PROMPT_BARRETTI_V1 não encontrado."}
+
+    print(f"\n[Barretti] {target_date.isoformat()} — Construindo contexto...")
+
+    db_ctx = _open_db()
+    fontes_map: Dict[int, List[str]] = {}
+    try:
+        from sqlalchemy import func as sqla_func
+        max_updated = db_ctx.query(sqla_func.max(ClusterEvento.updated_at)).filter(
+            sqla_func.date(ClusterEvento.created_at) == target_date,
+            ClusterEvento.status == 'ativo',
+        ).scalar()
+        cache_key = f"{target_date.isoformat()}_{max_updated.isoformat() if max_updated else 'empty'}"
+
+        cached = _CONTEXT_CACHE.get(cache_key)
+        if cached:
+            print(f"[Barretti] Cache HIT ({cache_key})")
+            contexto, avaliados_ids, fontes_map = cached
+        else:
+            contexto, avaliados_ids, fontes_map = _build_context_block(db_ctx, target_date)
+            _CONTEXT_CACHE.clear()
+            _CONTEXT_CACHE[cache_key] = (contexto, avaliados_ids, fontes_map)
+    finally:
+        try:
+            db_ctx.close()
+        except Exception:
+            pass
+
+    if not avaliados_ids:
+        return {"ok": False, "data": target_date.isoformat(), "error": "Nenhum cluster encontrado."}
+
+    print(f"[Barretti] {len(avaliados_ids)} clusters, {len(contexto)} chars de contexto")
+
+    prompt_final = PROMPT_BARRETTI_V1.format(
+        CONTEXTO_CLUSTERS_DIA=contexto,
+        MAX_TOOL_CALLS=_MAX_TOOL_CALLS_BARRETTI,
+    )
+
+    db_llm = _open_db()
+    try:
+        raw_response = _run_llm_with_tools(
+            db_llm, prompt_final,
+            persona_name="barretti",
+            tool_call_budget=_MAX_TOOL_CALLS_BARRETTI,
+            max_output_tokens=_MAX_OUTPUT_TOKENS_RESUMO,
+        )
+    finally:
+        try:
+            db_llm.close()
+        except Exception:
+            pass
+
+    if not raw_response:
+        return {"ok": False, "data": target_date.isoformat(), "error": "LLM não retornou resposta."}
+
+    try:
+        contract = _validate_and_fix_barretti(raw_response)
+    except Exception as e:
+        return {"ok": False, "data": target_date.isoformat(), "error": f"Validação Pydantic falhou: {e}"}
+
+    escolhidos = [n.cluster_id for n in contract.noticias]
+
+    print(f"\n{'='*60}")
+    print(f"[Barretti] RESULTADO — {len(contract.noticias)} noticias de {len(avaliados_ids)} clusters")
+    print(f"{'='*60}")
+    print(f"  Top 5: {', '.join(contract.top_5_temas[:5])}")
+    for i, n in enumerate(contract.noticias, 1):
+        print(f"  {i}. [{n.prioridade}] {n.titulo[:80]}")
+    print(f"{'='*60}")
+
+    return {
+        "ok": True,
+        "data": target_date.isoformat(),
+        "contract_dict": contract.model_dump(),
+        "clusters_avaliados_ids": avaliados_ids,
+        "todos_clusters_escolhidos_ids": sorted(set(escolhidos)),
+        "fontes_map": fontes_map,
+        "prompt_version": "BARRETTI_V1",
+    }
+
+
+def formatar_barretti(resultado: Dict[str, Any]) -> str:
+    """
+    Formata o resultado do ResumoBarrettiContract em texto rico para terminal/WhatsApp.
+    """
+    data_str = resultado.get("data", "")
+    contract_dict = resultado.get("contract_dict", {})
+
+    if not contract_dict:
+        return f"Resumo Barretti — {data_str}\n\n(Nenhum evento relevante identificado hoje.)"
+
+    date_label = data_str
+    if data_str and "-" in data_str:
+        parts = data_str.split("-")
+        if len(parts) == 3:
+            date_label = f"{parts[2]}/{parts[1]}/{parts[0]}"
+
+    lines: List[str] = []
+    sep = "=" * 60
+    sep2 = "-" * 60
+
+    lines.append(sep)
+    lines.append("BRIEFING EXECUTIVO — CAPITAL SOLUTIONS / SPECIAL SITUATIONS")
+    lines.append(f"Data: {date_label}")
+    lines.append(sep)
+
+    top5 = contract_dict.get("top_5_temas", [])
+    if top5:
+        lines.append("")
+        lines.append("TOP 5 TEMAS DO DIA:")
+        for i, tema in enumerate(top5, 1):
+            lines.append(f"  {i}. {tema}")
+
+    noticias = contract_dict.get("noticias", [])
+    for i, n in enumerate(noticias, 1):
+        lines.append("")
+        lines.append(sep2)
+        prioridade = n.get("prioridade", "Media")
+        titulo = n.get("titulo", "")
+        jornal = n.get("jornal", "")
+        secao = n.get("secao", "")
+        secao_str = f" / {secao}" if secao else ""
+
+        lines.append(f"{i}. {titulo} / {jornal}{secao_str}")
+        lines.append(f"Prioridade: {prioridade}")
+
+        tags = n.get("tags", [])
+        if tags:
+            lines.append(f"Tags: {', '.join(tags)}")
+
+        lines.append(n.get("resumo_executivo", ""))
+
+        impacto = n.get("impacto_ss", "")
+        if impacto:
+            lines.append(f"→ {impacto}")
+
+        acion = n.get("acionabilidade", "Monitorar de perto")
+        acion_just = n.get("acionabilidade_justificativa", "")
+        lines.append(f"[{acion}] {acion_just}")
+
+        follow_ups = n.get("follow_ups", [])
+        if follow_ups:
+            lines.append("  " + " | ".join(follow_ups))
+
+    def _format_block(title: str, items: List, prefix: str = "•"):
+        if not items:
+            return
+        lines.append("")
+        lines.append(sep)
+        lines.append(title)
+        lines.append(sep)
+        for item in items:
+            lines.append(f"  {prefix} {item}")
+
+    _format_block("RADAR DE OPORTUNIDADES", contract_dict.get("radar_oportunidades", []))
+    _format_block("RADAR DE RISCOS", contract_dict.get("radar_riscos", []))
+    _format_block("WATCHLIST EXECUTIVA", contract_dict.get("watchlist", []))
+    _format_block("ACTION ITEMS SUGERIDOS", contract_dict.get("action_items", []))
+    _format_block("PERGUNTAS ESTRATÉGICAS ABERTAS", contract_dict.get("perguntas_estrategicas", []))
+
+    lines.append("")
+    lines.append(sep)
+    lines.append("Gerado pelo AlphaFeed — Perfil Capital Solutions / Special Situations")
+    lines.append(sep)
+
+    return "\n".join(lines)
 
 
 # --------------------------------------------------------------------------- #
