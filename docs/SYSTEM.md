@@ -528,44 +528,42 @@ DOMContentLoaded -> setupEventListeners() -> carregarContadoresSimples() -> carr
 
 ---
 
-## 10. Agente Estagiario v2 (`agents/estagiario/`)
+## 10. Agente Estagiario v3 (`agents/estagiario/`)
 
-### Fluxo Principal (ReAct — `executor.py`)
+### Fluxo Principal (Gemini Function Calling — `executor.py`)
 ```
 POST /api/estagiario/send
   -> EstagiarioAgent.answer_with_context(question, chat_history, date_str)
      -> answer(question, date_str, history_lines)
         -> EstagiarioExecutor.run(user_input, chat_history, data_referencia)
            |
-           Loop ReAct (max 10 iteracoes):
-             1. Monta prompt com REACT_PROMPT_TEMPLATE + scratchpad
-             2. LLM gera Thought + Action (JSON)
-             3. Parse JSON (com retry de parsing, max 2 tentativas)
-             4. Se "Final Answer" -> retorna resposta Markdown
-             5. Se tool -> executa via ToolExecutor -> append observation ao scratchpad
-             6. Se parsing falhou -> append erro -> tenta novamente
+           1. Monta prompt com ESTAGIARIO_SYSTEM_PROMPT_V3
+           2. Gemini Function Calling loop (max 15 iteracoes, budget 10 tools)
+              - generate_content() com tools declaradas via genai.protos.Tool
+              - Dispatch: list_cluster_titles, query_clusters, get_cluster_details,
+                query_clusters_range, obter_textos_brutos_cluster, buscar_na_web
+              - FunctionResponse -> continua loop
+              - Texto final (sem function_call) -> resposta Markdown
+           3. Self-critique loop (max 2 retries)
+              - Avalia nota 1-5 (especifico? dados concretos? fontes?)
+              - Se nota < 4 -> re-prompta com feedback
 ```
-
-### Protocolo de Execucao (Prompt)
-1. **PLANEJE**: Na primeira iteracao, listar tools a usar. Comecar SEMPRE por `list_cluster_titles`.
-2. **APROFUNDE**: Usar `get_cluster_details` nos clusters relevantes.
-3. **BUSCA SEMANTICA**: Para perguntas abertas, usar `semantic_search`.
-4. **RESPONDA**: "Final Answer" com Markdown formatado, sem mencionar tools/clusters/IDs.
 
 ### Ferramentas (`tools/definitions.py`)
 
 | Ferramenta | Input | O que faz |
 |---|---|---|
-| `list_cluster_titles` | data? | Lista TODOS os clusters (id, titulo, tags, prioridade, fontes) — leve, para planejamento |
+| `list_cluster_titles` | data? | Lista TODOS os clusters (id, titulo, tags, prioridade, fontes) |
 | `query_clusters` | data, prioridade, palavras_chave, limite | Busca clusters com filtros |
 | `get_cluster_details` | cluster_id | Detalhes completos (artigos, resumo, fontes) |
-| `update_cluster_priority` | cluster_id, nova_prioridade | Altera prioridade (unitario) |
-| `semantic_search` | consulta, limite | Busca semantica por embeddings |
+| `query_clusters_range` | data_inicio, data_fim, palavras_chave, limite | Busca multi-dia (max 7 dias) |
+| `obter_textos_brutos_cluster` | cluster_id | Textos originais dos artigos (reuso do Resumo) |
+| `buscar_na_web` | query | Busca web em tempo real via Tivaly (reuso do Resumo) |
 
-### UI: Input Inline + Side Panel
-- Card compacto com 1 linha: input placeholder + botao "Enviar"
-- Ao enviar ou clicar no card: abre side-panel (400px) a direita com chat completo
-- Side-panel: header navy, thread de mensagens, input na base
+### UI: Input no Header + Side Panel
+- Input de pesquisa no header bar (barra de data/metricas)
+- Ao enviar: abre side-panel (400px) a direita com chat completo
+- Side-panel: header, thread de mensagens, input na base
 
 ---
 

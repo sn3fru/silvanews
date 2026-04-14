@@ -3412,62 +3412,42 @@ loadingStyle.textContent = `
 `;
 document.head.appendChild(loadingStyle);
 
-function inserirCardEstagiario() {
-    if (!feedContainer) return;
-    const card = document.createElement('article');
-    card.className = 'card-cluster estagiario-card';
-    card.innerHTML = `
-        <div class="estagiario-inline">
-            <input type="text" id="estagiario-input" placeholder="Pergunte sobre as notícias do dia para o estagiário..." />
-            <button class="btn" id="estagiario-send">Enviar</button>
-        </div>
-        <div id="estagiario-thread" style="display:none;"></div>
-    `;
-    feedContainer.prepend(card);
-
-    // sessão por dia
+// =======================================
+// ESTAGIÁRIO v3 — Header input + side panel
+// =======================================
+(function initEstagiario() {
     let estagiarioSessionId = null;
+
     async function ensureSession() {
-        console.log('ensureSession chamada, sessionId atual:', estagiarioSessionId);
         if (estagiarioSessionId) return estagiarioSessionId;
-        console.log('Criando nova sessão para data:', currentDate);
         try {
             const resp = await fetch('/api/estagiario/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: currentDate }) });
             const data = await resp.json();
-            console.log('Resposta da API start:', data);
             estagiarioSessionId = data.session_id;
             return estagiarioSessionId;
         } catch (error) {
-            console.error('Erro ao criar sessão:', error);
+            console.error('Erro ao criar sessão estagiário:', error);
             throw error;
         }
     }
-    // Renderização simples de Markdown (títulos, negrito, itálico, listas, links, TABELAS)
+
     function renderMarkdown(mdRaw) {
         let md = (mdRaw || '').toString();
-        // Converte tabelas Markdown (| a | b |) em <table>
         (function convertTables(){
             const lines = md.split('\n');
             let out = [];
             for (let i = 0; i < lines.length; i++) {
                 const line = lines[i];
                 if (/^\|.*\|\s*$/.test(line)) {
-                    // possível início de tabela: precisa ter separador na próxima linha
                     const sep = lines[i+1] || '';
                     if (/^\|[\s:\-\|]+\|\s*$/.test(sep)) {
-                        // coleta bloco da tabela
-                        const tblLines = [];
-                        tblLines.push(line);
-                        tblLines.push(sep);
+                        const tblLines = [line, sep];
                         let j = i + 2;
                         while (j < lines.length && /^\|.*\|\s*$/.test(lines[j])) { tblLines.push(lines[j]); j++; }
-                        i = j - 1; // avança o índice externo
+                        i = j - 1;
                         const headerCells = tblLines[0].trim().replace(/^\||\|$/g, '').split('|').map(s => s.trim());
-                        const bodyLines = tblLines.slice(2);
-                        const bodyRows = bodyLines.map(r => r.trim().replace(/^\||\|$/g, '').split('|').map(s => s.trim()));
-                        let tableHtml = '<table class="md-table"><thead><tr>';
-                        for (const h of headerCells) tableHtml += `<th>${h}<\/th>`;
-                        tableHtml += '<\/tr><\/thead><tbody>';
+                        const bodyRows = tblLines.slice(2).map(r => r.trim().replace(/^\||\|$/g, '').split('|').map(s => s.trim()));
+                        let tableHtml = '<table class="md-table"><thead><tr>' + headerCells.map(h => `<th>${h}<\/th>`).join('') + '<\/tr><\/thead><tbody>';
                         for (const row of bodyRows) {
                             if (row.length === 1 && row[0] === '') continue;
                             tableHtml += '<tr>' + row.map(c => `<td>${c}<\/td>`).join('') + '<\/tr>';
@@ -3481,186 +3461,100 @@ function inserirCardEstagiario() {
             }
             md = out.join('\n');
         })();
-
-        let html = md;
-        // Títulos
-        html = html
+        let html = md
             .replace(/^###\s+(.*)$/gim, '<h3>$1<\/h3>')
             .replace(/^##\s+(.*)$/gim, '<h2>$1<\/h2>')
-            .replace(/^#\s+(.*)$/gim, '<h1>$1<\/h1>');
-        // Negrito e itálico
-        html = html
+            .replace(/^#\s+(.*)$/gim, '<h1>$1<\/h1>')
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1<\/strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1<\/em>');
-        // Links [texto](url)
-        html = html.replace(/\[(.*?)\]\((https?:\/\/[^\s)]+)\)/gim, '<a href="$2" target="_blank" rel="noopener noreferrer">$1<\/a>');
-        // Listas com "- "
+            .replace(/\*(.*?)\*/g, '<em>$1<\/em>')
+            .replace(/\[(.*?)\]\((https?:\/\/[^\s)]+)\)/gim, '<a href="$2" target="_blank" rel="noopener noreferrer">$1<\/a>');
         html = html.replace(/^(\-\s+.*(?:\n\-\s+.*)*)/gim, (m) => {
-            const items = m.split(/\n/g).map(l => l.replace(/^\-\s+/, '')).map(t => `<li>${t}<\/li>`).join('');
-            return `<ul>${items}<\/ul>`;
+            return '<ul>' + m.split(/\n/g).map(l => `<li>${l.replace(/^\-\s+/, '')}<\/li>`).join('') + '<\/ul>';
         });
-        // Listas numeradas 1. 2. 3.
         html = html.replace(/^(\d+\.\s+.*(?:\n\d+\.\s+.*)*)/gim, (m) => {
-            const items = m.split(/\n/g).map(l => l.replace(/^\d+\.\s+/, '')).map(t => `<li>${t}<\/li>`).join('');
-            return `<ol>${items}<\/ol>`;
+            return '<ol>' + m.split(/\n/g).map(l => `<li>${l.replace(/^\d+\.\s+/, '')}<\/li>`).join('') + '<\/ol>';
         });
-        // Quebras de parágrafo: cuidado para não quebrar a <table>
-        // Remove quebras dentro de <table> para não inserir <br/>
         html = html.replace(/<table[\s\S]*?<\/table>/g, (tbl) => tbl.replace(/\n/g, ''));
-        html = html
-            .replace(/\n{2,}/g, '<br/><br/>')
-            .replace(/\n/g, '<br/>' );
+        html = html.replace(/\n{2,}/g, '<br/><br/>').replace(/\n/g, '<br/>');
         return html;
     }
 
     async function sendMessage(msg, fromModal=false) {
-        console.log('sendMessage chamada:', { msg, fromModal });
-        
-        // abre modal de status
         const modal = document.getElementById('modal-estagiario');
         const statusText = document.getElementById('estagiario-status-text');
-        const steps = document.getElementById('estagiario-steps');
-        if (modal && statusText && steps) {
+        const stepsEl = document.getElementById('estagiario-steps');
+        if (modal && statusText && stepsEl) {
             modal.classList.remove('oculto');
-            statusText.textContent = 'Entendendo pergunta...';
-            steps.innerHTML = '';
+            statusText.textContent = 'Consultando notícias...';
+            stepsEl.innerHTML = '';
         }
-        
+        const thread = document.getElementById('estagiario-thread-modal');
         try {
             const sid = await ensureSession();
-            console.log('Session ID obtido:', sid);
-            const thread = fromModal ? document.getElementById('estagiario-thread-modal') : document.getElementById('estagiario-thread');
-            console.log('Thread encontrado:', !!thread);
-            const userDiv = document.createElement('div');
-            userDiv.className = 'estagiario-msg user';
-            userDiv.textContent = msg;
-            thread.appendChild(userDiv);
-            
-            // Etapa 1: Entendendo
-            if (steps) steps.innerHTML = '<div>✓ Entendendo</div>';
-            await new Promise(r => setTimeout(r, 200));
-            
-            // Etapa 2: Planejamento
-            if (statusText) statusText.textContent = 'Planejando passos...';
-            if (steps) steps.innerHTML += '<div>✓ Planejamento</div>';
-            await new Promise(r => setTimeout(r, 200));
-            
-            // Etapa 3: Consulta ao DB (antes do await para mostrar progresso)
-            if (statusText) statusText.textContent = 'Consultando banco de dados...';
+            if (thread) {
+                const userDiv = document.createElement('div');
+                userDiv.className = 'estagiario-msg user';
+                userDiv.textContent = msg;
+                thread.appendChild(userDiv);
+            }
+            if (statusText) statusText.textContent = 'Pesquisando e analisando...';
             const resp = await fetch('/api/estagiario/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sid, message: msg }) });
-            if (steps) steps.innerHTML += '<div>✓ Consulta ao DB</div>';
-            await new Promise(r => setTimeout(r, 150));
-            
-            // Etapa 4: Síntese
-            if (statusText) statusText.textContent = 'Sintetizando resposta...';
             const data = await resp.json();
-            const asDiv = document.createElement('div');
-            asDiv.className = 'estagiario-msg assistant';
-            asDiv.innerHTML = renderMarkdown(data.response || '');
-            thread.appendChild(asDiv);
-            thread.scrollTop = thread.scrollHeight;
-            
-            // Atualiza select de histórico com a pergunta enviada
-            const hist = document.getElementById('estagiario-history-select');
-            if (hist) {
-                const opt = document.createElement('option');
-                opt.value = Date.now().toString();
-                opt.textContent = msg.slice(0, 120);
-                hist.appendChild(opt);
-                hist.value = opt.value;
+            if (thread) {
+                const asDiv = document.createElement('div');
+                asDiv.className = 'estagiario-msg assistant';
+                asDiv.innerHTML = renderMarkdown(data.response || '');
+                thread.appendChild(asDiv);
+                thread.scrollTop = thread.scrollHeight;
             }
         } catch (e) {
-            console.error('Erro em sendMessage:', e);
-            const errDiv = document.createElement('div');
-            errDiv.className = 'estagiario-msg assistant';
-            errDiv.textContent = `Erro ao processar: ${e.message}`;
-            thread.appendChild(errDiv);
+            console.error('Erro estagiário:', e);
+            if (thread) {
+                const errDiv = document.createElement('div');
+                errDiv.className = 'estagiario-msg assistant';
+                errDiv.textContent = `Erro: ${e.message}`;
+                thread.appendChild(errDiv);
+            }
         } finally {
             if (modal) modal.classList.add('oculto');
             const sidePanel = document.getElementById('modal-estagiario-chat');
-            if (sidePanel) {
-                sidePanel.classList.remove('oculto');
-                if (!fromModal) {
-                    const modalThread = document.getElementById('estagiario-thread-modal');
-                    const cardThread = document.getElementById('estagiario-thread');
-                    if (modalThread && cardThread) modalThread.innerHTML = cardThread.innerHTML;
-                }
-                const copyBtn = document.getElementById('btn-estagiario-copiar');
-                if (copyBtn && !copyBtn.dataset.bound) {
-                    copyBtn.dataset.bound = '1';
-                    copyBtn.addEventListener('click', async () => {
-                        const msgs = document.querySelectorAll('#estagiario-thread-modal .estagiario-msg.assistant');
-                        const last = msgs.length ? msgs[msgs.length - 1] : null;
-                        if (!last) return;
-                        try { await navigator.clipboard.writeText(last.textContent || ''); } catch(_) {}
-                        copyBtn.textContent = 'Copiado!';
-                        setTimeout(() => copyBtn.textContent = 'Copiar', 1200);
-                    });
-                }
+            if (sidePanel) sidePanel.classList.remove('oculto');
+            const copyBtn = document.getElementById('btn-estagiario-copiar');
+            if (copyBtn && !copyBtn.dataset.bound) {
+                copyBtn.dataset.bound = '1';
+                copyBtn.addEventListener('click', async () => {
+                    const msgs = document.querySelectorAll('#estagiario-thread-modal .estagiario-msg.assistant');
+                    const last = msgs.length ? msgs[msgs.length - 1] : null;
+                    if (!last) return;
+                    try { await navigator.clipboard.writeText(last.textContent || ''); } catch(_) {}
+                    copyBtn.textContent = 'Copiado!';
+                    setTimeout(() => copyBtn.textContent = 'Copiar', 1200);
+                });
             }
-        }
-    } // Fechamento da função sendMessage
-    const input = card.querySelector('#estagiario-input');
-    const btn = card.querySelector('#estagiario-send');
-    btn.addEventListener('click', async () => {
-        const v = (input.value || '').trim();
-        if (!v) return;
-        input.value = '';
-        await sendMessage(v);
-    });
-    input.addEventListener('keypress', async (e) => {
-        if (e.key === 'Enter') {
-            const v = (input.value || '').trim();
-            if (!v) return;
-            input.value = '';
-            await sendMessage(v);
-        }
-    });
-
-    function openSidePanel() {
-        const sidePanel = document.getElementById('modal-estagiario-chat');
-        if (!sidePanel) return;
-        sidePanel.classList.remove('oculto');
-        const modalThread = document.getElementById('estagiario-thread-modal');
-        const cardThread = document.getElementById('estagiario-thread');
-        if (modalThread && cardThread) modalThread.innerHTML = cardThread.innerHTML;
-        const inputModal = document.getElementById('estagiario-input-modal');
-        if (inputModal) inputModal.focus();
-
-        const sendModal = document.getElementById('estagiario-send-modal');
-        if (sendModal && inputModal && !sendModal.dataset.bound) {
-            sendModal.dataset.bound = '1';
-            sendModal.addEventListener('click', async () => {
-                const v = (inputModal.value || '').trim();
-                if (!v) return;
-                inputModal.value = '';
-                await sendMessage(v, true);
-            });
-            inputModal.addEventListener('keypress', async (ev) => {
-                if (ev.key === 'Enter') {
-                    const v = (inputModal.value || '').trim();
-                    if (!v) return;
-                    inputModal.value = '';
-                    await sendMessage(v, true);
-                }
-            });
         }
     }
 
-    card.addEventListener('click', (e) => {
-        if (e.target && (e.target.id === 'estagiario-send' || e.target.id === 'estagiario-input')) return;
-        openSidePanel();
-    });
-}
+    function bindInput(inputEl, btnEl, fromModal) {
+        if (!inputEl || !btnEl) return;
+        btnEl.addEventListener('click', async () => {
+            const v = (inputEl.value || '').trim();
+            if (!v) return;
+            inputEl.value = '';
+            await sendMessage(v, fromModal);
+        });
+        inputEl.addEventListener('keypress', async (e) => {
+            if (e.key === 'Enter') {
+                const v = (inputEl.value || '').trim();
+                if (!v) return;
+                inputEl.value = '';
+                await sendMessage(v, fromModal);
+            }
+        });
+    }
 
-// Hook no fluxo de renderização
-const _origRenderizarClusters = renderizarClusters;
-renderizarClusters = function() {
-    _origRenderizarClusters();
-    inserirCardEstagiario();
-};
-
-// Side-panel events are bound inside inserirCardEstagiario > openSidePanel
+    bindInput(document.getElementById('estagiario-input'), document.getElementById('estagiario-send'), false);
+    bindInput(document.getElementById('estagiario-input-modal'), document.getElementById('estagiario-send-modal'), true);
+})()
 
 // =======================================
 // FUNÇÃO PARA VER ARTIGOS BRUTOS

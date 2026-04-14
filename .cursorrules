@@ -75,9 +75,9 @@
 #
 # Nova feature de AGENTE/CHAT:
 #   1. Chat por cluster: endpoints /api/chat/* em main.py
-#   2. Estagiario v2: agents/estagiario/ — ReAct agent (EstagiarioExecutor, max 10 iteracoes, planejamento)
-#      Tools: list_cluster_titles, query_clusters, get_cluster_details, update_cluster_priority, semantic_search
-#      UI: input inline -> side-panel (400px)
+#   2. Estagiario v3: agents/estagiario/ — Gemini Function Calling nativo + self-critique
+#      Tools: list_cluster_titles, query_clusters, get_cluster_details, query_clusters_range, obter_textos_brutos, buscar_na_web
+#      UI: input no header bar -> side-panel (400px)
 #   3. Resumo Diario: agents/resumo_diario/ — PROMPT_MASTER_V2 (chassis imutavel + slots personalizaveis)
 #      Chassis: Rejeicao de ruido, rejeicao macro/estatais, regra de novidade (anti-repeticao), tools, JSON,
 #               secoes (foco_analista, distressed, estrategico, regulatorio, internacional)

@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 """
-Agente 'Estagiário' v2 — Consulta inteligente sobre notícias do dia via ReAct
+Agente 'Estagiário' v3 — Pesquisa inteligente sobre notícias via Gemini Function Calling.
 
-Toda lógica de roteamento é delegada ao EstagiarioExecutor (ReAct loop com
-até 10 iterações, planejamento, retry e ferramentas de consulta ao banco).
+Delega ao EstagiarioExecutor (function calling loop + self-critique).
+Interface pública: answer(), answer_with_context().
 """
 
 from dataclasses import dataclass
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Callable
 from datetime import datetime
 
 try:
@@ -26,16 +26,17 @@ class AgentAnswer:
 
 
 class EstagiarioAgent:
-    """Agente de consulta sobre as notícias do dia — delega ao executor ReAct."""
+    """Agente de pesquisa sobre notícias — delega ao executor v3."""
 
     def __init__(self) -> None:
-        print("[Estagiario] v2 inicializado")
+        print("[Estagiario] v3 inicializado")
 
     def answer_with_context(
         self,
         question: str,
         chat_history: List[Dict[str, Any]],
         date_str: Optional[str] = None,
+        on_step: Optional[Callable[[str], None]] = None,
     ) -> AgentAnswer:
         """Responde perguntas mantendo o contexto da conversa anterior."""
         history_lines: List[str] = []
@@ -45,16 +46,17 @@ class EstagiarioAgent:
                 content = (msg.get("content", "") or "")[:500]
                 history_lines.append(f"{role}: {content}")
 
-        return self.answer(question, date_str, history_lines=history_lines)
+        return self.answer(question, date_str, history_lines=history_lines, on_step=on_step)
 
     def answer(
         self,
         question: str,
         date_str: Optional[str] = None,
-        history_lines: List[str] = None,
+        history_lines: List[str] | None = None,
+        on_step: Optional[Callable[[str], None]] = None,
     ) -> AgentAnswer:
-        """Responde perguntas via executor ReAct (v2)."""
-        print(f"[Estagiario] === ANSWER v2 === Pergunta: {question}")
+        """Responde perguntas via executor v3 (Gemini function calling + self-critique)."""
+        print(f"[Estagiario] === ANSWER v3 === Pergunta: {question}")
 
         target_date = None
         if date_str:
@@ -73,13 +75,14 @@ class EstagiarioAgent:
                 user_input=question,
                 chat_history=history_lines or [],
                 data_referencia=target_date.isoformat(),
+                on_step=on_step,
             )
             final = out.get("final") or "Não foi possível gerar uma resposta."
             trace = out.get("trace") or []
-            print(f"[Estagiario] ReAct concluído: {len(trace)} iterações")
+            print(f"[Estagiario] v3 concluído: {len(trace)} steps")
             return AgentAnswer(True, final, {"react_trace": trace})
         except Exception as e:
-            print(f"[Estagiario] Falha executor ReAct: {e}")
+            print(f"[Estagiario] Falha executor v3: {e}")
             import traceback
             traceback.print_exc()
             return AgentAnswer(False, f"Erro interno do estagiário: {e}")
