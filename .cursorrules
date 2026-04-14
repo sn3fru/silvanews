@@ -39,7 +39,7 @@
 # 2. Nacional e Internacional NUNCA se misturam no mesmo cluster (campo tipo_fonte)
 # 3. texto_bruto e somente leitura (campo IMUTAVEL em artigos_brutos)
 # 4. v2 roda em shadow mode (V2_SHADOW_MODE=1) sem afetar v1
-# 5. Prioridade P1/P2/P3 e GLOBAL — o resumo do usuario e uma VIEW, nunca muta prioridade no banco
+# 5. Prioridade P1/P2/P3 e GLOBAL. Pos-resumo: promover_clusters_pos_resumo() promove P3→P2 para clusters selecionados em resumos (resumo_boost).
 # 6. Cache de _build_context_block() invalidado por max(updated_at) de clusters_eventos
 # 7. Prompts editaveis via banco (get_prompt() com fallback para constantes locais)
 # 8. Cada usuario = UMA chamada LLM no resumo. Contexto compartilhado, prompt personalizado.

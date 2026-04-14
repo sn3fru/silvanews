@@ -757,11 +757,14 @@ def run_resumo_diario():
         print("  ETAPA 3: RESUMO DO DIA")
         print(f"{'=' * 60}")
 
-        from agents.resumo_diario.agent import gerar_resumo_diario, gerar_resumo_para_usuario, formatar_whatsapp
+        from agents.resumo_diario.agent import gerar_resumo_diario, gerar_resumo_para_usuario, formatar_whatsapp, promover_clusters_pos_resumo
         from backend.utils import get_date_brasil
 
         target_date = get_date_brasil()
         print(f"  Data: {target_date.isoformat()}")
+
+        # Acumula cluster_ids de todos os resumos para boost pós-resumo
+        todos_ids_resumos: set = set()
 
         # --- Fase 1: Resumo DEFAULT (salvo com user_id=None) ---
         resultado = gerar_resumo_diario(target_date=target_date)
@@ -775,7 +778,9 @@ def run_resumo_diario():
             for msg in mensagens:
                 print(msg)
                 print()
-            total = len(resultado.get("todos_clusters_escolhidos_ids", []))
+            ids_default = resultado.get("todos_clusters_escolhidos_ids", [])
+            todos_ids_resumos.update(ids_default)
+            total = len(ids_default)
             avaliados = len(resultado.get("clusters_avaliados_ids", []))
             print(f"  [OK] Resumo default: {total} clusters de {avaliados} avaliados.")
 
@@ -848,7 +853,9 @@ def run_resumo_diario():
                                     )
                                 finally:
                                     db2.close()
-                                n = len(res_user.get("todos_clusters_escolhidos_ids", []))
+                                ids_barretti = res_user.get("todos_clusters_escolhidos_ids", [])
+                                todos_ids_resumos.update(ids_barretti)
+                                n = len(ids_barretti)
                                 print(f"    [OK] {user.nome or user.email} (barretti): {n} noticias salvas")
                             else:
                                 print(f"    [AVISO] {user.nome or user.email} (barretti): {res_user.get('error', '?')}")
@@ -875,7 +882,9 @@ def run_resumo_diario():
                                     )
                                 finally:
                                     db2.close()
-                                n = len(res_user.get("todos_clusters_escolhidos_ids", []))
+                                ids_user = res_user.get("todos_clusters_escolhidos_ids", [])
+                                todos_ids_resumos.update(ids_user)
+                                n = len(ids_user)
                                 print(f"    [OK] {user.nome or user.email}: {n} itens salvos")
                             else:
                                 print(f"    [AVISO] {user.nome or user.email}: {res_user.get('error', '?')}")
@@ -886,6 +895,20 @@ def run_resumo_diario():
                 print(f"  [OK] {n_total} usuario(s) ativo(s), todos usam resumo default (0 chamadas LLM extras).")
         except Exception as e:
             print(f"  [AVISO] Fase per-user falhou: {e}")
+
+        # --- Fase 3: Boost de prioridade para clusters selecionados ---
+        if todos_ids_resumos:
+            print(f"\n  --- Fase 3: Boost de prioridade (P3→P2) ---")
+            print(f"  {len(todos_ids_resumos)} cluster(s) selecionados em resumos.")
+            try:
+                boost_result = promover_clusters_pos_resumo(target_date, todos_ids_resumos)
+                print(f"  [OK] Boost: {boost_result['promovidos']} promovidos, "
+                      f"{boost_result['ja_p1_p2']} já P1/P2, "
+                      f"{boost_result['nao_encontrados']} não encontrados.")
+            except Exception as e:
+                print(f"  [AVISO] Boost falhou: {e}")
+        else:
+            print(f"\n  [INFO] Nenhum cluster selecionado em resumos — boost dispensado.")
 
         return True
 

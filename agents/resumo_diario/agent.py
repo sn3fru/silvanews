@@ -10,7 +10,8 @@ Arquitetura v3.0:
   4. VALIDAÇÃO: JSON → Pydantic → fallback.
   5. FORMATAÇÃO: WhatsApp / terminal, agrupada por seção temática.
 
-READ-ONLY — não altera banco. Prioridade P1/P2/P3 é GLOBAL, nunca mutada.
+READ-ONLY durante geração de resumo. Prioridade P1/P2/P3 é GLOBAL.
+Pós-resumo: promover_clusters_pos_resumo() promove P3→P2 para clusters selecionados.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ import json
 import os
 import re
 import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 try:
     from backend.database import SessionLocal, ClusterEvento
@@ -28,6 +29,7 @@ try:
         get_preferencias_usuario,
         get_template_resumo,
         get_resumo_default,
+        update_cluster_priority,
     )
     from backend.utils import get_date_brasil
     from backend.prompts import (
@@ -40,6 +42,7 @@ except Exception:
     get_preferencias_usuario = None  # type: ignore
     get_template_resumo = None  # type: ignore
     get_resumo_default = None  # type: ignore
+    update_cluster_priority = None  # type: ignore
     get_date_brasil = None  # type: ignore
     PROMPT_CORRECAO_PYDANTIC_V1 = ""  # type: ignore
 
@@ -1312,3 +1315,77 @@ def formatar_whatsapp(
     msgs.append(current.strip())
 
     return msgs
+
+
+# ═══════════════════════════════════════════════════════════════════════ #
+#  PÓS-RESUMO: BOOST DE PRIORIDADE                                      #
+# ═══════════════════════════════════════════════════════════════════════ #
+
+_BOOST_TAG = "[ResumoBoost]"
+
+def promover_clusters_pos_resumo(
+    target_date: datetime.date,
+    clusters_selecionados_ids: Set[int],
+) -> Dict[str, Any]:
+    """
+    Pós-resumo: clusters que apareceram em qualquer resumo de usuario
+    e ainda são P3 são promovidos a P2_ESTRATEGICO.
+
+    Cria ClusterAlteracao com motivo 'resumo_boost' para rastreabilidade.
+
+    Returns dict com contadores: {"total_candidatos", "promovidos", "ja_p1_p2", "nao_encontrados"}.
+    """
+    if not clusters_selecionados_ids:
+        print(f"{_BOOST_TAG} Nenhum cluster_id recebido — skip.")
+        return {"total_candidatos": 0, "promovidos": 0, "ja_p1_p2": 0, "nao_encontrados": 0}
+
+    if SessionLocal is None or update_cluster_priority is None:
+        print(f"{_BOOST_TAG} Imports indisponíveis — skip.")
+        return {"total_candidatos": len(clusters_selecionados_ids), "promovidos": 0, "ja_p1_p2": 0, "nao_encontrados": 0}
+
+    valid_ids = {cid for cid in clusters_selecionados_ids if isinstance(cid, int) and cid > 0}
+    if not valid_ids:
+        print(f"{_BOOST_TAG} Nenhum cluster_id válido após filtragem — skip.")
+        return {"total_candidatos": len(clusters_selecionados_ids), "promovidos": 0, "ja_p1_p2": 0, "nao_encontrados": 0}
+
+    db = SessionLocal()
+    promovidos = 0
+    ja_p1_p2 = 0
+    nao_encontrados = 0
+
+    try:
+        for cluster_id in valid_ids:
+            cluster = db.query(ClusterEvento).filter(ClusterEvento.id == cluster_id).first()
+            if not cluster:
+                nao_encontrados += 1
+                continue
+
+            if cluster.prioridade in ("P1_CRITICO", "P2_ESTRATEGICO"):
+                ja_p1_p2 += 1
+                continue
+
+            ok = update_cluster_priority(
+                db, cluster_id, "P2_ESTRATEGICO",
+                motivo="resumo_boost: selecionado em resumo diário",
+            )
+            if ok:
+                promovidos += 1
+
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        print(f"{_BOOST_TAG} Erro ao promover clusters: {exc}")
+    finally:
+        db.close()
+
+    print(
+        f"{_BOOST_TAG} Resultado: {len(valid_ids)} candidatos, "
+        f"{promovidos} promovidos P3→P2, {ja_p1_p2} já P1/P2, "
+        f"{nao_encontrados} não encontrados."
+    )
+    return {
+        "total_candidatos": len(valid_ids),
+        "promovidos": promovidos,
+        "ja_p1_p2": ja_p1_p2,
+        "nao_encontrados": nao_encontrados,
+    }

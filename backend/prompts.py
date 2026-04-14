@@ -334,7 +334,10 @@ P2_ITENS = [
     "Grandes disputas societárias (briga de sócios) em empresas relevantes.",
     "M&A Estratégico em Tech/Energia/Saúde (mesmo abaixo de R$ 100mi se for estratégico).",
     "Ativismo Acionário agressivo (pedido de destituição, carta aberta crítica).",
-    "Rebaixamento de Rating (Downgrade) de empresas ou risco soberano."
+    "Rebaixamento de Rating (Downgrade) de empresas ou risco soberano.",
+    "Notícias com impacto material em crédito, funding ou liquidez de empresas relevantes.",
+    "Eventos judiciais/regulatórios que afetem diretamente Special Situations (distressed, reestruturação).",
+    "Fatos novos sobre entidades monitoradas (Banco Master, BTG, INSS, Credcesta, etc) com materialidade concreta.",
 ]
 
 P3_ITENS = [
@@ -1253,6 +1256,9 @@ Identifique a 'centelha' da notícia: qual é a oportunidade de negócio ou o ri
 
 **PRIORIDADE P3 (MONITORAMENTO / CONTEXTO — PADRÃO):**
 {P3_BULLETS}
+
+**REGRA DE DESEMPATE P2 vs P3:**
+Na dúvida entre P2 e P3, prefira P2 se houver fato novo concreto (não apenas opinião, contexto macro genérico ou rotina). Se a notícia traz um dado específico (valor, nome, data, decisão) que um analista de Special Situations usaria para tomar uma decisão ou iniciar uma conversa, ela merece P2.
 
 --- GUIA DE TAGS E CATEGORIAS ---
 {GUIA_TAGS_FORMATADO}

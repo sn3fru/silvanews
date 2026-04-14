@@ -643,7 +643,27 @@ Perfil dedicado para analise de Special Situations com prompt completo e contrat
 - **Per-User**: APENAS para quem tem `empresas_radar`, `teses_juridicas`, `instrucoes_resumo` ou `tags_interesse` preenchidos.
 - **100 usuarios (todos default)** = 1 chamada LLM total (antes eram 100).
 - `user_has_custom_prefs()` em `backend/crud.py` determina quem precisa de resumo personalizado.
-- READ-ONLY: nao altera clusters, prioridades ou tags.
+- READ-ONLY durante geracao de resumo.
+
+### Pos-Resumo: Boost de Prioridade (P3→P2)
+
+Apos gerar TODOS os resumos (default + per-user), `run_resumo_diario()` coleta os `cluster_id` de cada noticia selecionada por qualquer resumo e chama `promover_clusters_pos_resumo()`.
+
+```
+Fase 1: Resumo Default         → coleta cluster_ids selecionados
+Fase 2: Resumos Per-User        → coleta cluster_ids selecionados (barretti, generico)
+Fase 3: promover_clusters_pos_resumo(target_date, todos_ids)
+         → Para cada cluster_id ainda P3 → UPDATE para P2_ESTRATEGICO
+         → Registra ClusterAlteracao com motivo='resumo_boost'
+```
+
+**Logica**: se o LLM considerou um cluster importante o suficiente para incluir no resumo de qualquer usuario, ele merece pelo menos P2 no feed global. Isso alinha a classificacao global com a curadoria feita pelos agentes de resumo.
+
+**Guardrails**:
+- Apenas P3 → P2. Nunca mexe em P1 ou P2 existentes.
+- IDs validados (int > 0) antes do update.
+- Rastreavel via `ClusterAlteracao` (campo `motivo = 'resumo_boost'`).
+- Funcao: `promover_clusters_pos_resumo()` em `agents/resumo_diario/agent.py`.
 
 ---
 
