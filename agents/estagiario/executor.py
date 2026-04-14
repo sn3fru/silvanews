@@ -26,7 +26,12 @@ try:
 except Exception:
     SessionLocal = None  # type: ignore
 
-from .tools.definitions import build_tool_declarations, dispatch_tool
+try:
+    from .tools.definitions import build_tool_declarations, dispatch_tool
+except Exception:
+    build_tool_declarations = None  # type: ignore
+    dispatch_tool = None  # type: ignore
+
 from .prompts import ESTAGIARIO_SYSTEM_PROMPT_V3, PROMPT_CRITIQUE_V1
 
 _MAX_ITERATIONS = 15
@@ -78,6 +83,9 @@ class EstagiarioExecutor:
         chat_history = chat_history or []
         trace: List[Dict[str, Any]] = []
         t0 = time.time()
+
+        if build_tool_declarations is None or dispatch_tool is None:
+            return {"final": "Erro: tools do estagiário não carregaram. Verifique os logs do servidor.", "trace": trace}
 
         try:
             _genai = _init_genai()

@@ -25,10 +25,14 @@ except Exception:
     get_cluster_details_by_id = None  # type: ignore
     get_date_brasil = None  # type: ignore
 
-from agents.resumo_diario.tools.definitions import (
-    execute_obter_textos_brutos,
-    execute_buscar_na_web,
-)
+try:
+    from agents.resumo_diario.tools.definitions import (
+        execute_obter_textos_brutos,
+        execute_buscar_na_web,
+    )
+except Exception:
+    execute_obter_textos_brutos = None  # type: ignore
+    execute_buscar_na_web = None  # type: ignore
 
 
 def _open_db():
@@ -287,9 +291,13 @@ def dispatch_tool(db, tool_name: str, args: dict) -> Any:
         )
 
     if tool_name == "obter_textos_brutos_cluster":
+        if execute_obter_textos_brutos is None:
+            return {"error": "obter_textos_brutos indisponível (import falhou)."}
         return execute_obter_textos_brutos(db, cluster_id=int(args.get("cluster_id", 0)))
 
     if tool_name == "buscar_na_web":
+        if execute_buscar_na_web is None:
+            return {"error": "buscar_na_web indisponível (import falhou)."}
         return execute_buscar_na_web(query=str(args.get("query", "")))
 
     return {"error": f"Tool '{tool_name}' não reconhecida."}
