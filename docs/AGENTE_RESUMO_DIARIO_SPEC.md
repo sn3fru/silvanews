@@ -418,7 +418,7 @@ class ResumoBarrettiContract(BaseModel):
 | `gerar_resumo_diario(date, prompt_template)` | **1 chamada LLM unificada** com `PROMPT_RESUMO_UNIFICADO_V1`. Budget: 5 tool calls. |
 | `gerar_resumo_para_usuario(user_id, date)` | Modo Per-User: contexto em cache + prompt personalizado + 1 chamada LLM. Budget: 8 tool calls. |
 | `formatar_whatsapp(resultado)` | Mensagem agrupada por seção temática (💀 → ⚖️ → 🏛️ → 📋), split se > 4096 chars. |
-| `gerar_resumo_barretti(date)` | Prompt dedicado `PROMPT_BARRETTI_V1` + contrato `ResumoBarrettiContract`. 16384 tokens, 10 tools. |
+| `gerar_resumo_barretti(date)` | Prompt dedicado `PROMPT_BARRETTI_V1` + contrato `ResumoBarrettiContract`. 16384 tokens, 10 tools. Pós-processamento: dedup via `_dedup_barretti_noticias()`. |
 | `_validate_and_fix_barretti(raw_json_str)` | Validação Pydantic com `ResumoBarrettiContract` + fallback LLM. |
 | `formatar_barretti(resultado)` | Formatação rica: briefing executivo com 7 blocos/notícia + 5 seções finais (radar, watchlist, actions, perguntas). |
 
@@ -467,6 +467,7 @@ O chassis **nunca** é sobrescrito pelas preferências. As preferências são fi
 || v4.0 (MASTER V2) | 2026-03-16 | Chassis imutável + slots: `PROMPT_MASTER_V2`. Seções: foco_analista (condicional), distressed, estrategico, regulatorio, internacional. Sem "geral". Pydantic `Literal` estrito. Prefs: empresas_radar, teses_juridicas. Frontend estruturado. |
 || v4.2 (FIXES) | 2026-03-17 | Fix fontes "Não identificada" via `_resolve_fontes_from_artigos` fallback. Filtro robusto em `formatar_whatsapp`. Fix artigos órfãos no agrupamento (clusters individuais). Fix cleanup FK `feedback_noticias`. |
 || v4.3 (QUALITY) | 2026-02-10 | Regra Anti-Repetição: contexto do dia anterior injetado. Rejeição explícita de macro/estatais. Bullets ampliados (280→400 chars). Foco cirúrgico em SS: "Gera trade?" como teste mental. Limites Pydantic ampliados (max_items 12→15). |
+|| v5.1 (BARRETTI DEDUP) | 2026-05-13 | Deduplicação pós-LLM no Barretti: `_dedup_barretti_noticias()` detecta noticias com títulos similares (Jaccard >= 0.5) e consolida em entrada única com fontes combinadas. Prompt reforçado com regra anti-duplicata explícita. Fix `cleanup_old_data`: verifica existência de `artigo_embeddings` antes de deletar. |
 || v5.0 (BARRETTI) | 2026-04-14 | Perfil dedicado Capital Solutions: `PROMPT_BARRETTI_V1` (texto do Gabriel), `ResumoBarrettiContract` (13 campos/notícia + 5 blocos finais), `gerar_resumo_barretti()`, `formatar_barretti()`. 16384 tokens, 10 tools. Detecção por `config_extra.perfil`. Seed: gabriel.barretti@btgpactual.com. |
 
 ### 15.4 Normalização de Fontes

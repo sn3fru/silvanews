@@ -91,7 +91,7 @@
 #   4. Perfil Barretti (Capital Solutions / Special Situations):
 #      Prompt dedicado: PROMPT_BARRETTI_V1 (texto do Gabriel + chassis anti-lixo + tools)
 #      Contrato: ResumoBarrettiContract (13 campos/noticia + 5 blocos finais: radar, watchlist, actions, perguntas)
-#      Funcoes: gerar_resumo_barretti(), formatar_barretti(), _validate_and_fix_barretti()
+#      Funcoes: gerar_resumo_barretti(), formatar_barretti(), _validate_and_fix_barretti(), _dedup_barretti_noticias()
 #      Deteccao: config_extra.perfil == "barretti" em preferencias_usuario
 #      Seed: gabriel.barretti@btgpactual.com (senha: BARRETTI_PASSWORD env ou "barretti")
 #      max_output_tokens: 16384, tool_budget: 10

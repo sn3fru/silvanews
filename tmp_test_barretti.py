@@ -72,11 +72,9 @@ def main():
         radars_opp = cb.get("radar_oportunidades", [])
         radars_risk = cb.get("radar_riscos", [])
         watchlist = cb.get("watchlist", [])
-        actions = cb.get("action_items", [])
-        perguntas = cb.get("perguntas_estrategicas", [])
         print(f"  {n_b} noticias, {len(top5)} temas, "
               f"{len(radars_opp)} oportunidades, {len(radars_risk)} riscos, "
-              f"{len(watchlist)} watchlist, {len(actions)} actions, {len(perguntas)} perguntas")
+              f"{len(watchlist)} watchlist")
 
         mencoes = {"btg pactual", "banco master", "daniel vorcaro", "inss", "credcesta"}
         found = set()
@@ -84,7 +82,6 @@ def main():
             all_text = " ".join([
                 nt.get("titulo", ""),
                 nt.get("resumo_executivo", ""),
-                nt.get("impacto_ss", ""),
             ]).lower()
             for m in mencoes:
                 if m in all_text:

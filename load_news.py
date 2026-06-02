@@ -85,9 +85,13 @@ e as carrega como artigos brutos.
             
             api_key = os.getenv("GEMINI_API_KEY")
             if api_key and NEW_GENAI_AVAILABLE:
-                # Inicializa o novo cliente (google-genai) com File API e models (como no poc_silva.py)
-                client = genai_new.Client(api_key=api_key)
-                print("[OK] Cliente Gemini (novo SDK) configurado com sucesso.")
+                http_opts = {}
+                try:
+                    http_opts = genai_types.HttpOptions(timeout=300_000)
+                except Exception:
+                    http_opts = {'timeout': 300_000}
+                client = genai_new.Client(api_key=api_key, http_options=http_opts)
+                print("[OK] Cliente Gemini (novo SDK) configurado com sucesso (timeout=300s).")
             elif api_key and not NEW_GENAI_AVAILABLE:
                 print("[AVISO] SDK novo (google-genai) não está instalado. Instale com: pip install google-genai")
                 print("   PDFs usarão extração de texto simples até a instalação do novo SDK.")

@@ -2244,7 +2244,12 @@ def cleanup_old_data(db: Session, days: int = 90) -> Dict[str, int]:
                 pass
 
             def _delete_artigo_embeddings_raw():
-                from sqlalchemy import text as sa_text
+                from sqlalchemy import text as sa_text, inspect as sa_inspect
+                try:
+                    if not sa_inspect(db.get_bind()).has_table("artigo_embeddings"):
+                        return 0
+                except Exception:
+                    return 0
                 for i in range(0, len(old_artigo_ids), BATCH):
                     batch_ids = old_artigo_ids[i:i + BATCH]
                     db.execute(sa_text("DELETE FROM artigo_embeddings WHERE artigo_id = ANY(:ids)"), {"ids": batch_ids})

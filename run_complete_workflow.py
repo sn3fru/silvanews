@@ -464,15 +464,61 @@ def run_load_news():
         if len(arquivos) > 5:
             print(f"    ... +{len(arquivos) - 5} arquivos")
 
-        result = subprocess.run([
-            sys.executable, "load_news.py", "--dir", str(pdfs_dir), "--direct", "--yes"
-        ], cwd=Path(__file__).parent, capture_output=True, text=True, encoding='utf-8', errors='replace', env=_subprocess_env())
+        TIMEOUT_INGESTAO = 2400  # 40 min max
+        process = subprocess.Popen(
+            [sys.executable, "-u", "load_news.py", "--dir", str(pdfs_dir), "--direct", "--yes"],
+            cwd=Path(__file__).parent,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True, encoding='utf-8', errors='replace',
+            env=_subprocess_env()
+        )
 
-        filtered = _filter_subprocess_output(result.stdout, result.stderr if result.returncode != 0 else "")
-        if filtered.strip():
-            print(filtered)
+        _SKIP_VERBOSE = [
+            "Enviando artigo", "salvo no banco", "SUCESSO: Artigo criado",
+            "Enviando '", "para extração via Gemini",
+            "notícias candidatas extraídas", "Fallback: extração simples",
+            "Amostra da resposta", "prompts.py:", "Módulos para processamento",
+            "Cliente Gemini", "Modo de envio", "DEBUG:",
+            "Processando diretório completo", "Iniciando processamento",
+            "Próximo passo", "Processando arquivo:",
+        ]
 
-        if result.returncode == 0:
+        import threading
+        _stdout_lines = []
+
+        def _stream_reader():
+            try:
+                for line in process.stdout:
+                    stripped = line.rstrip('\n\r')
+                    if not stripped.strip():
+                        continue
+                    _stdout_lines.append(stripped)
+                    if any(skip in stripped for skip in _SKIP_VERBOSE):
+                        continue
+                    print(f"  {stripped}", flush=True)
+            except Exception:
+                pass
+
+        reader = threading.Thread(target=_stream_reader, daemon=True)
+        reader.start()
+
+        try:
+            process.wait(timeout=TIMEOUT_INGESTAO)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            print(f"  [ERRO] Timeout na ingestao ({TIMEOUT_INGESTAO}s). Processo encerrado.")
+            return False
+
+        reader.join(timeout=10)
+
+        if process.returncode != 0:
+            stderr_lines = [l for l in _stdout_lines if 'ERRO' in l or 'Error' in l or 'Traceback' in l]
+            if stderr_lines:
+                for sl in stderr_lines[-5:]:
+                    print(f"  [stderr] {sl}")
+
+        if process.returncode == 0:
             # Move arquivos processados para subpasta (evita re-processamento)
             processados_dir = pdfs_dir / "processados"
             processados_dir.mkdir(exist_ok=True)

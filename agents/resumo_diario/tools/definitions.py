@@ -60,7 +60,7 @@ class ResumoDiarioContract(BaseModel):
 # ==============================================================================
 
 class BarrettiNoticiaContract(BaseModel):
-    """Analise concisa de uma noticia no formato Capital Solutions."""
+    """Noticia analisada no formato Capital Solutions (v2 simplificado)."""
     cluster_id: int
     titulo: str = Field(..., max_length=200)
     jornal: str = Field(..., max_length=100)
@@ -68,30 +68,20 @@ class BarrettiNoticiaContract(BaseModel):
     prioridade: Literal["Alta", "Media", "Baixa"]
     tags: List[str] = Field(..., min_length=1, max_length=6)
     resumo_executivo: str = Field(
-        ..., max_length=800,
-        description="QUEM, O QUE, QUANTO, QUANDO, PROXIMOS PASSOS. Conciso e factual.",
-    )
-    impacto_ss: str = Field(
-        ..., max_length=500,
-        description="Por que importa para Special Situations + oportunidade/risco concreto. UMA secao unica.",
-    )
-    acionabilidade: Literal["Acao imediata", "Monitorar de perto", "Apenas contextual"]
-    acionabilidade_justificativa: str = Field(..., max_length=150)
-    follow_ups: List[str] = Field(
-        ..., min_length=2, max_length=4,
-        description="Perguntas de follow-up para investigacao interna.",
+        ..., max_length=600,
+        description="Resumo analitico denso: QUEM, O QUE, QUANTO, contexto, implicacoes para SS, proximos passos.",
     )
     fonte_principal: str = Field(..., max_length=100)
 
 
 class ResumoBarrettiContract(BaseModel):
-    """Briefing executivo conciso — Capital Solutions / Special Situations."""
+    """Briefing executivo — Capital Solutions / Special Situations (v2 simplificado)."""
     top_5_temas: List[str] = Field(
-        ..., min_length=3, max_length=5,
-        description="5 temas curtos (3-8 palavras cada), por ordem de importancia.",
+        ..., min_length=2, max_length=5,
+        description="Temas curtos (3-8 palavras cada), por ordem de importancia.",
     )
-    noticias: conlist(BarrettiNoticiaContract, min_length=5, max_length=15) = Field(
-        ..., description="Apenas noticias com impacto material para SS. Qualidade > quantidade.",
+    noticias: conlist(BarrettiNoticiaContract, min_length=3, max_length=20) = Field(
+        ..., description="Noticias com impacto material para SS.",
     )
     radar_oportunidades: List[str] = Field(
         ..., min_length=2,
@@ -104,14 +94,6 @@ class ResumoBarrettiContract(BaseModel):
     watchlist: List[str] = Field(
         ..., min_length=2,
         description="Empresas, executivos, bancos, temas para acompanhar.",
-    )
-    action_items: List[str] = Field(
-        ..., min_length=2,
-        description="Acoes praticas: aprofundar caso, discutir com time.",
-    )
-    perguntas_estrategicas: List[str] = Field(
-        ..., min_length=3,
-        description="Perguntas importantes que ficaram em aberto.",
     )
 
 

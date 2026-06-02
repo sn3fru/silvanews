@@ -928,21 +928,15 @@ def _validate_and_fix_barretti(raw_json_str: str) -> ResumoBarrettiContract:
         raise ValueError(f"{tag} Impossível extrair JSON: {raw_json_str[:500]}")
 
     _PRIORIDADES_VALIDAS = {"Alta", "Media", "Baixa"}
-    _ACIONABILIDADE_VALIDA = {"Acao imediata", "Monitorar de perto", "Apenas contextual"}
     for n in data.get("noticias", []):
         if isinstance(n, dict):
             if n.get("secao") is None:
                 n["secao"] = ""
             if n.get("prioridade") not in _PRIORIDADES_VALIDAS:
                 n["prioridade"] = "Media"
-            if n.get("acionabilidade") not in _ACIONABILIDADE_VALIDA:
-                n["acionabilidade"] = "Monitorar de perto"
-            if not n.get("follow_ups"):
-                n["follow_ups"] = ["Acompanhar desdobramentos", "Verificar impacto no setor"]
             if not n.get("tags"):
                 n["tags"] = ["Geral"]
-            for str_field in ("titulo", "jornal", "resumo_executivo", "impacto_ss",
-                              "acionabilidade_justificativa", "fonte_principal"):
+            for str_field in ("titulo", "jornal", "resumo_executivo", "fonte_principal"):
                 if n.get(str_field) is None:
                     n[str_field] = ""
 
@@ -950,8 +944,6 @@ def _validate_and_fix_barretti(raw_json_str: str) -> ResumoBarrettiContract:
         "radar_oportunidades": 2,
         "radar_riscos": 2,
         "watchlist": 2,
-        "action_items": 2,
-        "perguntas_estrategicas": 3,
     }
     for bloco, minimo in _BLOCOS_MINIMOS.items():
         items = data.get(bloco)
@@ -994,6 +986,109 @@ def _validate_and_fix_barretti(raw_json_str: str) -> ResumoBarrettiContract:
             raise ValueError(f"{tag} Fallback falhou: {fixed_text[:500]}")
 
         return ResumoBarrettiContract(**fixed_data)
+
+
+def _dedup_barretti_noticias(
+    noticias: List[Dict[str, Any]],
+    fontes_map: Dict[int, List[str]],
+) -> Tuple[List[Dict[str, Any]], Dict[int, List[str]]]:
+    """
+    Detecta noticias sobre o mesmo tema (fontes diferentes) e consolida
+    em uma unica entrada com todas as fontes listadas.
+    Usa similaridade Jaccard sobre titulos normalizados (threshold=0.5).
+    """
+    if len(noticias) <= 1:
+        return noticias, fontes_map
+
+    _STOP = {
+        "a", "o", "e", "de", "do", "da", "em", "no", "na", "para", "por",
+        "com", "que", "os", "as", "um", "uma", "ao", "dos", "das", "nos",
+        "nas", "se", "é", "ser", "mais", "sobre", "já", "mas", "não",
+    }
+
+    def _words(title: str) -> set:
+        return set(re.sub(r"[^\w\s]", "", title.lower()).split()) - _STOP
+
+    def _similarity(t1: str, t2: str) -> float:
+        w1, w2 = _words(t1), _words(t2)
+        if not w1 or not w2:
+            return 0.0
+        inter = w1 & w2
+        union = w1 | w2
+        return len(inter) / len(union) if union else 0.0
+
+    _THRESHOLD = 0.50
+
+    parent = list(range(len(noticias)))
+
+    def _find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def _union(x: int, y: int) -> None:
+        px, py = _find(x), _find(y)
+        if px != py:
+            parent[px] = py
+
+    for i in range(len(noticias)):
+        for j in range(i + 1, len(noticias)):
+            if _similarity(noticias[i].get("titulo", ""), noticias[j].get("titulo", "")) >= _THRESHOLD:
+                _union(i, j)
+
+    groups: Dict[int, List[int]] = {}
+    for i in range(len(noticias)):
+        groups.setdefault(_find(i), []).append(i)
+
+    _PRIO = {"Alta": 0, "Media": 1, "Baixa": 2}
+    deduped: List[Dict[str, Any]] = []
+    updated_fontes = dict(fontes_map)
+
+    for indices in groups.values():
+        if len(indices) == 1:
+            deduped.append(noticias[indices[0]])
+            continue
+
+        ranked = sorted(
+            indices,
+            key=lambda i: (_PRIO.get(noticias[i].get("prioridade", "Media"), 1),
+                           -len(noticias[i].get("resumo_executivo", ""))),
+        )
+
+        best = dict(noticias[ranked[0]])
+        best_cid = best.get("cluster_id")
+
+        all_jornais: List[str] = []
+        merged_fontes: List[str] = []
+        seen_j: set = set()
+        seen_f: set = set()
+        for idx in ranked:
+            n = noticias[idx]
+            cid = n.get("cluster_id")
+            jornal = (n.get("jornal") or "").strip()
+            if jornal and jornal.lower() not in seen_j:
+                seen_j.add(jornal.lower())
+                all_jornais.append(jornal)
+            for f in fontes_map.get(cid, []):
+                if f.lower() not in seen_f:
+                    seen_f.add(f.lower())
+                    merged_fontes.append(f)
+
+        if len(all_jornais) > 1:
+            best["jornal"] = ", ".join(all_jornais)
+        if merged_fontes:
+            best["fonte_principal"] = ", ".join(merged_fontes[:4])
+        if best_cid and merged_fontes:
+            updated_fontes[best_cid] = merged_fontes
+
+        print(f"  [Barretti Dedup] {len(ranked)} noticias consolidadas → \"{best.get('titulo', '')[:60]}\"")
+        deduped.append(best)
+
+    if len(deduped) < len(noticias):
+        print(f"  [Barretti Dedup] {len(noticias)} → {len(deduped)} noticias apos deduplicacao")
+
+    return deduped, updated_fontes
 
 
 def gerar_resumo_barretti(
@@ -1071,20 +1166,25 @@ def gerar_resumo_barretti(
     except Exception as e:
         return {"ok": False, "data": target_date.isoformat(), "error": f"Validação Pydantic falhou: {e}"}
 
-    escolhidos = [n.cluster_id for n in contract.noticias]
+    contract_dict = contract.model_dump()
+    noticias_raw = contract_dict.get("noticias", [])
+    noticias_dedup, fontes_map = _dedup_barretti_noticias(noticias_raw, fontes_map)
+    contract_dict["noticias"] = noticias_dedup
+
+    escolhidos = [n.get("cluster_id") for n in noticias_dedup if n.get("cluster_id")]
 
     print(f"\n{'='*60}")
-    print(f"[Barretti] RESULTADO — {len(contract.noticias)} noticias de {len(avaliados_ids)} clusters")
+    print(f"[Barretti] RESULTADO — {len(noticias_dedup)} noticias de {len(avaliados_ids)} clusters")
     print(f"{'='*60}")
     print(f"  Top 5: {', '.join(contract.top_5_temas[:5])}")
-    for i, n in enumerate(contract.noticias, 1):
-        print(f"  {i}. [{n.prioridade}] {n.titulo[:80]}")
+    for i, n in enumerate(noticias_dedup, 1):
+        print(f"  {i}. [{n.get('prioridade', '?')}] {n.get('titulo', '')[:80]}")
     print(f"{'='*60}")
 
     return {
         "ok": True,
         "data": target_date.isoformat(),
-        "contract_dict": contract.model_dump(),
+        "contract_dict": contract_dict,
         "clusters_avaliados_ids": avaliados_ids,
         "todos_clusters_escolhidos_ids": sorted(set(escolhidos)),
         "fontes_map": fontes_map,
@@ -1094,87 +1194,87 @@ def gerar_resumo_barretti(
 
 def formatar_barretti(resultado: Dict[str, Any]) -> str:
     """
-    Formata o resultado do ResumoBarrettiContract em texto rico para terminal/WhatsApp.
+    Formata o resultado do ResumoBarrettiContract em texto rico para WhatsApp/terminal.
+    Usa formatação WhatsApp: *bold*, _italic_, • bullets.
     """
     data_str = resultado.get("data", "")
+    fontes_map = resultado.get("fontes_map", {})
     contract_dict = resultado.get("contract_dict", {})
 
     if not contract_dict:
-        return f"Resumo Barretti — {data_str}\n\n(Nenhum evento relevante identificado hoje.)"
+        return f"*Briefing Capital Solutions — {data_str}*\n\n_(Nenhum evento relevante identificado hoje.)_"
 
     date_label = data_str
     if data_str and "-" in data_str:
         parts = data_str.split("-")
         if len(parts) == 3:
-            date_label = f"{parts[2]}/{parts[1]}/{parts[0]}"
+            date_label = f"{parts[2]}/{parts[1]}"
 
     lines: List[str] = []
-    sep = "=" * 60
-    sep2 = "-" * 60
 
-    lines.append(sep)
-    lines.append("BRIEFING EXECUTIVO — CAPITAL SOLUTIONS / SPECIAL SITUATIONS")
-    lines.append(f"Data: {date_label}")
-    lines.append(sep)
+    lines.append(f"*Briefing Capital Solutions / Special Situations — {date_label}*")
+    lines.append("")
 
     top5 = contract_dict.get("top_5_temas", [])
     if top5:
-        lines.append("")
-        lines.append("TOP 5 TEMAS DO DIA:")
+        lines.append("🎯 *TEMAS DO DIA*")
         for i, tema in enumerate(top5, 1):
             lines.append(f"  {i}. {tema}")
+        lines.append("")
+
+    _PRIO_EMOJI = {"Alta": "🔴", "Media": "🟡", "Baixa": "🔵"}
 
     noticias = contract_dict.get("noticias", [])
     for i, n in enumerate(noticias, 1):
-        lines.append("")
-        lines.append(sep2)
         prioridade = n.get("prioridade", "Media")
+        emoji = _PRIO_EMOJI.get(prioridade, "⚪")
         titulo = n.get("titulo", "")
+
+        lines.append(f"{emoji} *{titulo}*")
+
         jornal = n.get("jornal", "")
         secao = n.get("secao", "")
         secao_str = f" / {secao}" if secao else ""
-
-        lines.append(f"{i}. {titulo} / {jornal}{secao_str}")
-        lines.append(f"Prioridade: {prioridade}")
+        fonte_label = f"{jornal}{secao_str}" if jornal else ""
 
         tags = n.get("tags", [])
+        meta_parts = []
+        if fonte_label:
+            meta_parts.append(fonte_label)
         if tags:
-            lines.append(f"Tags: {', '.join(tags)}")
+            meta_parts.append(", ".join(tags))
+        if meta_parts:
+            lines.append(f"_{' — '.join(meta_parts)}_")
 
-        lines.append(n.get("resumo_executivo", ""))
+        resumo = n.get("resumo_executivo", "")
+        if resumo:
+            lines.append(f"• {resumo}")
 
-        impacto = n.get("impacto_ss", "")
-        if impacto:
-            lines.append(f"→ {impacto}")
+        cid = n.get("cluster_id")
+        real_fontes = fontes_map.get(cid, []) if cid else []
+        fontes_str = _format_fontes_label(real_fontes)
+        if not fontes_str:
+            fp = n.get("fonte_principal", "") or ""
+            if fp.strip() and fp.lower() not in ("", "n/a", "desconhecida", "fonte não identificada"):
+                fontes_str = fp.strip()
+        if fontes_str:
+            lines.append(f"_Fontes: {fontes_str}_")
 
-        acion = n.get("acionabilidade", "Monitorar de perto")
-        acion_just = n.get("acionabilidade_justificativa", "")
-        lines.append(f"[{acion}] {acion_just}")
+        lines.append("")
 
-        follow_ups = n.get("follow_ups", [])
-        if follow_ups:
-            lines.append("  " + " | ".join(follow_ups))
-
-    def _format_block(title: str, items: List, prefix: str = "•"):
+    def _format_block(emoji: str, title: str, items: List):
         if not items:
             return
-        lines.append("")
-        lines.append(sep)
-        lines.append(title)
-        lines.append(sep)
+        lines.append(f"{emoji} *{title}*")
         for item in items:
-            lines.append(f"  {prefix} {item}")
+            lines.append(f"• {item}")
+        lines.append("")
 
-    _format_block("RADAR DE OPORTUNIDADES", contract_dict.get("radar_oportunidades", []))
-    _format_block("RADAR DE RISCOS", contract_dict.get("radar_riscos", []))
-    _format_block("WATCHLIST EXECUTIVA", contract_dict.get("watchlist", []))
-    _format_block("ACTION ITEMS SUGERIDOS", contract_dict.get("action_items", []))
-    _format_block("PERGUNTAS ESTRATÉGICAS ABERTAS", contract_dict.get("perguntas_estrategicas", []))
+    _format_block("📈", "RADAR DE OPORTUNIDADES", contract_dict.get("radar_oportunidades", []))
+    _format_block("⚠️", "RADAR DE RISCOS", contract_dict.get("radar_riscos", []))
+    _format_block("👁️", "WATCHLIST", contract_dict.get("watchlist", []))
 
-    lines.append("")
-    lines.append(sep)
-    lines.append("Gerado pelo AlphaFeed — Perfil Capital Solutions / Special Situations")
-    lines.append(sep)
+    lines.append("_Gerado pelo AlphaFeed — Capital Solutions / Special Situations_")
 
     return "\n".join(lines)
 

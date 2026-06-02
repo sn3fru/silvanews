@@ -553,48 +553,84 @@ class FileLoader:
             print("  ⚠️ Nenhum JSON válido foi extraído desta resposta.")
         return artigos_extraidos
 
+    # Timeout para espera de processamento de arquivo na File API (segundos)
+    FILE_API_TIMEOUT = 120
+    # Timeout para generate_content (segundos)
+    GENERATE_TIMEOUT = 300
+
     def _processar_chunk_pdf_com_ia(self, pdf_path: Path, nome_arquivo_original: str, numero_pagina: int | None = None) -> List[Dict[str, Any]]:
         """
         Método central que envia um arquivo PDF (completo ou um chunk)
         para a API do Gemini e processa a resposta.
         """
         artigos_formatados = []
+        _page_label = f"p.{numero_pagina}" if numero_pagina else "chunk"
         try:
-            # Envio silencioso para Gemini File API
-            # Compatibilidade com diferentes clientes (google.genai vs google.generativeai wrappers)
+            print(f"  [{nome_arquivo_original} {_page_label}] Enviando para Gemini...", flush=True)
+            t0 = time.time()
+
             uploaded_file = None
             try:
-                # API mais recente (google.genai)
                 uploaded_file = self.client.files.upload(file=str(pdf_path))
             except TypeError:
-                # Fallback: algumas versões aceitam 'path='
                 uploaded_file = self.client.files.upload(path=str(pdf_path))
 
-            # Aguarda processamento do arquivo na File API
+            _waited = 0.0
             while getattr(uploaded_file, "state", None) and getattr(uploaded_file.state, "name", None) == "PROCESSING":
-                time.sleep(0.2)
+                time.sleep(1)
+                _waited += 1
+                if _waited >= self.FILE_API_TIMEOUT:
+                    print(f"  [{nome_arquivo_original} {_page_label}] ⏰ Timeout ({self.FILE_API_TIMEOUT}s) esperando File API processar. Pulando.", flush=True)
+                    try:
+                        self.client.files.delete(name=uploaded_file.name)
+                    except Exception:
+                        pass
+                    return artigos_formatados
                 uploaded_file = self.client.files.get(name=uploaded_file.name)
 
-            if uploaded_file.state.name != "ACTIVE":
-                raise Exception(f"Falha no processamento do arquivo na API: {uploaded_file.state.name}")
-            
-            # Geração de conteúdo: tenta a interface nova .models.generate_content, com fallback seguro
+            state_name = getattr(getattr(uploaded_file, 'state', None), 'name', 'UNKNOWN')
+            if state_name != "ACTIVE":
+                print(f"  [{nome_arquivo_original} {_page_label}] ❌ File API estado inesperado: {state_name}. Pulando.", flush=True)
+                try:
+                    self.client.files.delete(name=uploaded_file.name)
+                except Exception:
+                    pass
+                return artigos_formatados
+
+            print(f"  [{nome_arquivo_original} {_page_label}] Gerando conteúdo...", flush=True)
+
             response = None
-            if hasattr(self.client, 'models') and hasattr(self.client.models, 'generate_content'):
-                response = self.client.models.generate_content(
-                    model='gemini-3-flash-preview',
-                    contents=[uploaded_file, self.extraction_prompt],
-                    config=self.generation_config_decision
-                )
-            elif hasattr(self.client, 'generate_content'):
-                response = self.client.generate_content(
-                    model='models/gemini-3-flash-preview',
-                    contents=[uploaded_file, self.extraction_prompt],
-                    generation_config=self.generation_config_decision
-                )
-            else:
-                raise AttributeError("Cliente Gemini não possui método generate_content compatível")
-            self.client.files.delete(name=uploaded_file.name)  # Limpeza
+            try:
+                if hasattr(self.client, 'models') and hasattr(self.client.models, 'generate_content'):
+                    response = self.client.models.generate_content(
+                        model='gemini-3.1-flash-lite',
+                        contents=[uploaded_file, self.extraction_prompt],
+                        config=self.generation_config_decision
+                    )
+                elif hasattr(self.client, 'generate_content'):
+                    response = self.client.generate_content(
+                        model='models/gemini-3.1-flash-lite',
+                        contents=[uploaded_file, self.extraction_prompt],
+                        generation_config=self.generation_config_decision
+                    )
+                else:
+                    raise AttributeError("Cliente Gemini não possui método generate_content compatível")
+            except Exception as api_err:
+                elapsed = time.time() - t0
+                print(f"  [{nome_arquivo_original} {_page_label}] ❌ Erro na API ({elapsed:.0f}s): {api_err}", flush=True)
+                try:
+                    self.client.files.delete(name=uploaded_file.name)
+                except Exception:
+                    pass
+                return artigos_formatados
+
+            elapsed = time.time() - t0
+            print(f"  [{nome_arquivo_original} {_page_label}] ✅ Resposta recebida ({elapsed:.0f}s)", flush=True)
+
+            try:
+                self.client.files.delete(name=uploaded_file.name)
+            except Exception:
+                pass
 
             # Tratamento de resposta
             def _get_response_text(resp: Any) -> Optional[str]:
@@ -789,12 +825,12 @@ class FileLoader:
             return artigos_simples
 
         # Fluxo principal com IA: página a página EM PARALELO para performance
-        print(f"🚀 Iniciando extração com IA (página a página) para: {file_path.name}")
+        print(f"🚀 Iniciando extração com IA (página a página) para: {file_path.name}", flush=True)
         artigos_finais: List[Dict[str, Any]] = []
         try:
             with fitz.open(file_path) as doc:
                 num_paginas = len(doc)
-                print(f"  📄 Total de páginas: {num_paginas}")
+                print(f"  📄 Total de páginas: {num_paginas}", flush=True)
 
                 # Pre-filtro: padroes de paginas que NAO sao noticias (balancos, DRE, etc)
                 # Detectados via texto extraido por PyMuPDF ANTES de enviar ao Gemini
@@ -857,21 +893,31 @@ class FileLoader:
                             except Exception:
                                 pass
 
-                max_workers = min(8, num_paginas)
+                max_workers = min(4, num_paginas)
+                PAGE_TIMEOUT = 300  # 5 min por página
                 try:
                     import concurrent.futures
                     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                        resultados = list(executor.map(processar_pagina, range(num_paginas)))
-                    for lista in resultados:
-                        if lista:
-                            artigos_finais.extend(lista)
+                        futures = {executor.submit(processar_pagina, idx): idx for idx in range(num_paginas)}
+                        for future in concurrent.futures.as_completed(futures, timeout=num_paginas * PAGE_TIMEOUT):
+                            idx = futures[future]
+                            try:
+                                resultado = future.result(timeout=PAGE_TIMEOUT)
+                                if resultado:
+                                    artigos_finais.extend(resultado)
+                            except concurrent.futures.TimeoutError:
+                                print(f"  ⏰ Timeout ao processar página {idx + 1} de '{file_path.name}'", flush=True)
+                            except Exception as page_err:
+                                print(f"  ❌ Erro na página {idx + 1}: {page_err}", flush=True)
+                except concurrent.futures.TimeoutError:
+                    print(f"  ⏰ Timeout global no processamento paralelo de '{file_path.name}'", flush=True)
                 except Exception as e:
-                    print(f"  ⚠️ Falha no paralelismo, executando sequencialmente: {e}")
+                    print(f"  ⚠️ Falha no paralelismo, executando sequencialmente: {e}", flush=True)
                     for idx in range(num_paginas):
                         artigos_finais.extend(processar_pagina(idx))
 
                 skipped_info = f", {_pages_skipped[0]} ignoradas (balanco/DRE)" if _pages_skipped[0] else ""
-                print(f"  📊 {num_paginas} paginas processadas{skipped_info} → {len(artigos_finais)} artigos extraidos")
+                print(f"  📊 {num_paginas} paginas processadas{skipped_info} → {len(artigos_finais)} artigos extraidos", flush=True)
         except Exception as e:
             print(f"❌ Erro crítico ao orquestrar processamento do PDF '{file_path.name}': {e}")
 
