@@ -91,10 +91,10 @@ if not api_key:
 
 genai.configure(api_key=api_key)
 # Etapa 1 (extração) e Etapa 3 (resumos): modelo mais barato
-client = genai.GenerativeModel('gemini-2.0-flash')
+client = genai.GenerativeModel('gemini-3-flash-preview')
 # Etapa 2 (agrupamento): modelo com mais capacidade de raciocínio para regras estritas
-client_agrupamento = genai.GenerativeModel('gemini-2.5-flash')
-print("SUCESSO: Gemini configurado (2.0 Flash para extração/resumos; 2.5 Flash para agrupamento).")
+client_agrupamento = genai.GenerativeModel('gemini-3.5-flash')
+print("SUCESSO: Gemini configurado (3-flash-preview para extração/resumos; 3.5-flash para agrupamento).")
 
 # Funções auxiliares para escolher tags/prompts baseado no tipo_fonte
 def get_tags_for_tipo_fonte(tipo_fonte: str) -> dict:
@@ -123,10 +123,13 @@ def extrair_json_da_resposta(resposta: str):
         m = _re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', texto, _re.DOTALL)
         if m:
             return m.group(1).strip()
-        start_pos = texto.find('[')
-        if start_pos == -1:
-            start_pos = texto.find('{')
-        return texto[start_pos:].strip() if start_pos != -1 else ""
+        pos_bracket = texto.find('[')
+        pos_brace = texto.find('{')
+        candidates = [p for p in (pos_bracket, pos_brace) if p != -1]
+        if not candidates:
+            return ""
+        start_pos = min(candidates)
+        return texto[start_pos:].strip()
 
     def _sanitizar_json_like_local(json_like: str) -> str:
         s = json_like.replace('```', '')
@@ -172,67 +175,8 @@ def extrair_json_da_resposta(resposta: str):
     return ('FALHA_PARSING_TOTAL', None)
 
 def extrair_json_da_resposta_com_status(resposta: str):
-    """
-    Extrai e repara JSON, retornando (status, dados).
-    Status possíveis: SUCESSO, SUCESSO_REPARO, SUCESSO_TRUNCAMENTO,
-    RESPOSTA_VAZIA, FALHA_SEM_JSON, FALHA_PARSING_TOTAL.
-    """
-    import json as _json
-    import re as _re
-
-    def _extrair_bloco_json_local(texto: str) -> str:
-        m = _re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', texto, _re.DOTALL)
-        if m:
-            return m.group(1).strip()
-        start_pos = texto.find('[')
-        if start_pos == -1:
-            start_pos = texto.find('{')
-        return texto[start_pos:].strip() if start_pos != -1 else ""
-
-    def _sanitizar_json_like_local(json_like: str) -> str:
-        s = json_like.replace('```', '')
-        s = _re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', s)
-        # remove vírgulas finais
-        s = _re.sub(r',\s*([}\]])', r'\1', s)
-        # balanceia colchetes/chaves
-        def _bal(tx, a, f):
-            dif = tx.count(a) - tx.count(f)
-            if dif > 0:
-                tx += f * dif
-            return tx
-        s = _bal(s, '[', ']')
-        s = _bal(s, '{', '}')
-        return s
-
-    if not isinstance(resposta, str) or not resposta.strip():
-        return ('RESPOSTA_VAZIA', None)
-
-    bruto = _extrair_bloco_json_local(resposta)
-    if not bruto:
-        return ('FALHA_SEM_JSON', None)
-
-    try:
-        return ('SUCESSO', _json.loads(bruto))
-    except _json.JSONDecodeError:
-        pass
-
-    reparado = _sanitizar_json_like_local(bruto)
-    try:
-        return ('SUCESSO_REPARO', _json.loads(reparado))
-    except _json.JSONDecodeError:
-        pass
-
-    try:
-        last_close = max(reparado.rfind('}'), reparado.rfind(']'))
-        if last_close != -1:
-            truncado = reparado[:last_close + 1]
-            if truncado.strip().startswith('[') and truncado.strip().count('[') > truncado.strip().count(']'):
-                truncado += ']'
-            return ('SUCESSO_TRUNCAMENTO', _json.loads(truncado))
-    except _json.JSONDecodeError:
-        pass
-
-    return ('FALHA_PARSING_TOTAL', None)
+    """Wrapper de compatibilidade — delega para extrair_json_da_resposta."""
+    return extrair_json_da_resposta(resposta)
 
 # ---------------- GATING REMOVIDO - O V13 JÁ FAZ CLASSIFICAÇÃO SUPERIOR -----------------
 def _aplicar_gating_explicito_cluster(db: Session, cluster_id: int, debug: bool = True) -> None:

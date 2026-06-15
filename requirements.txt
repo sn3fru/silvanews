@@ -56,3 +56,8 @@ telethon
 rich
 APScheduler
 python-multipart
+
+# --- Google Drive (upload exportacoes via OAuth) ---
+google-api-python-client
+google-auth
+google-auth-oauthlib

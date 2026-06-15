@@ -38,7 +38,7 @@ _MAX_ITERATIONS = 15
 _MAX_TOOL_CALLS = 10
 _MAX_CRITIQUE_RETRIES = 2
 _MAX_OUTPUT_TOKENS = 16384
-_GEMINI_MODEL = "gemini-2.0-flash"
+_GEMINI_MODEL = "gemini-3-flash-preview"
 _TAG = "[Estagiario]"
 
 _STEP_LABELS = {

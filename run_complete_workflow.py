@@ -965,6 +965,71 @@ def run_resumo_diario():
         return True
 
 
+def run_export_and_upload_drive():
+    """
+    ETAPA 3.5: Exporta clusters do dia em Markdown e sobe para o Google Drive.
+    Roda depois do resumo (banco local ja tem clusters classificados) e antes da
+    migracao para producao (que e lenta). Nao bloqueia o pipeline em caso de falha.
+    """
+    try:
+        print(f"\n{'=' * 60}")
+        print("  ETAPA 3.5: EXPORTACAO MARKDOWN + UPLOAD GOOGLE DRIVE")
+        print(f"{'=' * 60}")
+
+        from backend.utils import get_date_brasil
+        target_date = get_date_brasil()
+
+        # --- Fase 1: Exportar markdowns locais ---
+        result_export = subprocess.run(
+            [sys.executable, "export_daily_markdown.py", "--date", target_date.isoformat(), "--clean"],
+            cwd=Path(__file__).parent,
+            capture_output=True, text=True, encoding='utf-8', errors='replace',
+            env=_subprocess_env(),
+        )
+        if result_export.returncode == 0:
+            for line in (result_export.stdout or "").strip().split("\n"):
+                if line.strip():
+                    print(f"  {line.strip()}")
+        else:
+            print(f"  [AVISO] Export markdown falhou (code={result_export.returncode})")
+            if result_export.stderr:
+                print(f"  {result_export.stderr[:200]}")
+            return True
+
+        # --- Fase 2: Upload para Google Drive ---
+        token_path = Path(__file__).parent / "backend" / "google_oauth_token.json"
+        client_path = Path(__file__).parent / "backend" / "google_oauth_client.json"
+        if not token_path.exists():
+            print("  [INFO] Token OAuth nao encontrado — upload ao Drive pulado.")
+            print(f"         Para ativar, rode: python scripts/upload_to_drive.py --check")
+            return True
+        if not client_path.exists():
+            print("  [INFO] OAuth client nao configurado — upload ao Drive pulado.")
+            return True
+
+        result_upload = subprocess.run(
+            [sys.executable, "scripts/upload_to_drive.py", "--date", target_date.isoformat()],
+            cwd=Path(__file__).parent,
+            capture_output=True, text=True, encoding='utf-8', errors='replace',
+            env=_subprocess_env(),
+        )
+        if result_upload.returncode == 0:
+            for line in (result_upload.stdout or "").strip().split("\n"):
+                stripped = line.strip()
+                if stripped and not stripped.startswith("Conexao OK"):
+                    print(f"  {stripped}")
+        else:
+            print(f"  [AVISO] Upload Drive falhou (code={result_upload.returncode})")
+            if result_upload.stderr:
+                print(f"  {result_upload.stderr[:200]}")
+
+        return True
+
+    except Exception as e:
+        print(f"  [AVISO] Export/Upload falhou: {e}")
+        return True
+
+
 _MICROBATCH_LOCK_FILE = ".microbatch.lock"
 
 
@@ -1124,6 +1189,9 @@ def run_single_cycle(skip_load: bool = False):
     
     # ETAPA 3: Resumo do dia (banco local — roda ANTES da migracao para liberar rapido)
     run_resumo_diario()
+
+    # ETAPA 3.5: Exporta markdowns e sobe para o Google Drive
+    run_export_and_upload_drive()
 
     # ETAPA 4: Migracao incremental (local → producao)
     if not run_migrate_incremental():

@@ -417,9 +417,9 @@ def _run_llm_with_tools(
                 ),
             ]
         )
-        model = genai.GenerativeModel("gemini-2.0-flash", tools=[tool_declaration])
+        model = genai.GenerativeModel("gemini-3-flash-preview", tools=[tool_declaration])
     else:
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel("gemini-3-flash-preview")
 
     print(f"{tag} Enviando contexto ao LLM ({len(prompt_text)} chars, tools={'sim' if tool_call_budget > 0 else 'nao'}, budget={tool_call_budget})...")
 
@@ -563,7 +563,7 @@ def _validate_and_fix(raw_json_str: str, persona_name: str = "") -> ResumoDiario
         if not api_key:
             raise RuntimeError("GEMINI_API_KEY ausente para fallback Pydantic.")
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel("gemini-3-flash-preview")
         resp = model.generate_content(
             prompt_correcao,
             generation_config={"temperature": 0.1, "max_output_tokens": 4096},
@@ -973,7 +973,7 @@ def _validate_and_fix_barretti(raw_json_str: str) -> ResumoBarrettiContract:
         if not api_key:
             raise RuntimeError("GEMINI_API_KEY ausente para fallback Pydantic.")
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel("gemini-3-flash-preview")
         resp = model.generate_content(
             prompt_correcao,
             generation_config={"temperature": 0.1, "max_output_tokens": _MAX_OUTPUT_TOKENS_RESUMO},

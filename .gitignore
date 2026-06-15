@@ -46,3 +46,9 @@ Thumbs.db
 # Arquivos temporarios de upload/processamento
 temp_uploads/
 *.lock
+
+# Google Drive — credenciais (NUNCA commitar)
+google_drive_credentials.json
+backend/google_drive_credentials.json
+backend/google_oauth_client.json
+backend/google_oauth_token.json
